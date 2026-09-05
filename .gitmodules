@@ -1,0 +1,20 @@
+[submodule "ICC-Pipes"]
+	path = ICC-Pipes
+	url = https://github.com/briancase1776/ICC-Pipes.git
+	branch = main
+[submodule "ICC-Frames"]
+	path = ICC-Frames
+	url = https://github.com/briancase1776/ICC-Frames.git
+	branch = main
+[submodule "ICC-Tee"]
+	path = ICC-Tee
+	url = https://github.com/briancase1776/ICC-Tee.git
+	branch = main
+[submodule "ICC-Merge"]
+	path = ICC-Merge
+	url = https://github.com/briancase1776/ICC-Merge.git
+	branch = main
+[submodule "ICC-Patch"]
+	path = ICC-Patch
+	url = https://github.com/briancase1776/ICC-Patch.git
+	branch = main

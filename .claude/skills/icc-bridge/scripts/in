@@ -1,0 +1,19 @@
+#!/bin/sh
+# .claude/skills/icc-bridge/scripts/in
+# in DIR SIDE < text: take the text a message carried and put the payload it
+# spells on the lanes SIDE writes. Whole or nothing: a character outside the
+# alphabet refuses the text, and the wire is untouched.
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT License text omitted for brevity, See LICENCE.TXT
+set -eu
+d=${1:?usage: in DIR SIDE}; s=${2:?usage: in DIR SIDE}
+top=$(cd "$(dirname "$0")/../../../.." && pwd)
+F=$(cd "${ICC_FRAMES:-$top/../ICC-Frames}/.claude/skills/icc-frames/scripts" && pwd)
+p=$(mktemp)
+trap 'rm -f "$p"' EXIT
+trap 'trap - EXIT INT TERM HUP; rm -f "$p"; exit 1' INT TERM HUP
+base64 -d > "$p" 2>/dev/null ||
+  { echo "in: not the alphabet; nothing put on the wire" >&2; exit 1; }
+"$F/write" "$d" "$s" < "$p"

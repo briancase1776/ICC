@@ -1,10 +1,11 @@
 # ICC
 
-Inter-Claude communication: five Claude Code skills, each its own repo,
+Inter-Claude communication: six Claude Code skills, each its own repo,
 pinned here side by side as submodules. This repo holds the pins and one
-harness that runs all five. That is the whole project.
+harness that runs all six. That is the whole project.
 
     what the bytes mean        someone else's, above all this
+    ICC-Bridge   the spelling  a payload as a message, and back
     ICC-Patch    the bay       shapes over N seats, and a map
     ICC-Frames   the payload   slice, carry, reassemble
     ICC-Tee      the fitting   copy one pipe onto many
@@ -19,7 +20,7 @@ where the others are.
 
 - **Code.** No script lives here. A change to a piece is a change in its
   repo, then a new pin here.
-- **A sixth skill.** Nothing above the bay belongs here either. Who sits
+- **A seventh skill.** Nothing above the bay belongs here either. Who sits
   where, whose turn it is, what the bytes mean: someone else's, in their
   own repo.
 

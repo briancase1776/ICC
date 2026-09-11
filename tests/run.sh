@@ -7,6 +7,6 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-for r in ICC-Pipes ICC-Frames ICC-Tee ICC-Merge ICC-Patch; do
+for r in ICC-Pipes ICC-Frames ICC-Tee ICC-Merge ICC-Patch ICC-Bridge; do
   printf '%-11s' "$r"; sh "$r/tests/run.sh"
 done

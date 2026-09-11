@@ -18,3 +18,7 @@
 	path = ICC-Patch
 	url = https://github.com/briancase1776/ICC-Patch.git
 	branch = main
+[submodule "ICC-Bridge"]
+	path = ICC-Bridge
+	url = https://github.com/briancase1776/ICC-Bridge.git
+	branch = main

@@ -75,6 +75,10 @@ of that and of the lanes. The skill adds nothing to them.
   list says up while every copier still has its lane of SRC, so one
   ended lane reads down for the whole fitting. remove it and create it
   again.
+- A copier opens its lane of SRC when it starts. A lane whose pipe has no
+  writer blocks that open, so the copier waits there and list says down.
+  create neither waits with it nor fails: it prints the tee either way,
+  and list is where the caller finds out.
 - remove kills the copiers where they stand, inside a write included, so
   a payload in flight can be left part-written on the outlets and short
   of its count. Nothing waits or drains: what is in flight is bytes.

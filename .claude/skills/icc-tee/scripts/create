@@ -58,8 +58,13 @@ while [ "$l" -lt "$n" ]; do
   # above: killing one from the handler ran the handler again, in it, racing
   # the shell that sent the signal. Clear them and exec, so a copier is
   # tee(1) and nothing else.
+  # Let go of the caller's stdout before opening the lane, not with it: a
+  # lane whose pipe has no writer blocks the open, and a copier still
+  # holding what it inherited held d=$(create ...) open with it. Its own
+  # output goes nowhere either way; only the order matters.
   ( trap - EXIT INT TERM HUP
-    exec tee -a -- "${outs[@]}" < "$src/$l" > /dev/null 2>&1 ) &
+    exec >/dev/null 2>&1
+    exec tee -a -- "${outs[@]}" < "$src/$l" ) &
   pids+=($!)
   echo $! >> "$d/pid"
   l=$((l + 2))

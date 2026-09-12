@@ -40,6 +40,15 @@ printf 'plain' > "$a/2"
 # two files it made, not the directory. A look-alike holding a stranger's pid
 # loses its own two files and nothing else; one with a file beside them is
 # left where it is. list does not announce a directory with no DIR/tee.
+# A lane with no writer does not hang create: the copier lets go of the
+# caller's stdout before it opens, so d=$(create ...) returns and list says
+# down. A writer lets the copier through, and it ends when that writer goes.
+y=$("$P/create" 6); kill "$(cat "$y/pid")"
+while kill -0 "$(cat "$y/pid")" 2>/dev/null; do :; done
+u=$(timeout 10 "$T/create" "$y" 0 "$b")
+"$T/list" | grep -qx "$u down $y 0 $b"
+: > "$y/0"
+"$T/remove" "$u"; [ ! -d "$u" ]; "$P/remove" "$y"
 sleep 60 & s=$!
 f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo "$s" > "$f/pid"

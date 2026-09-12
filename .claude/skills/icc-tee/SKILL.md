@@ -51,6 +51,11 @@ of that and of the lanes. The skill adds nothing to them.
 - Every lane is copied whole, in order, onto the same lane number, and
   every pipe has the same lane count. That is all icc-frames' rule
   needs, so a Frames read on any outlet yields the payload.
+- A copier writes 8192 bytes at a time, which is larger than PIPE_BUF;
+  Pipes' SKILL.md says what that means for a lane. So the line above
+  holds while the tee is the only writer on that outlet lane. Put a
+  second writer on it and both streams are torn, in pieces neither one
+  chose.
 - The tee is one more writer on each outlet lane. Everything Pipes says
   of a writer holds for it.
 - Each chunk read from a lane is written to that lane of every outlet,
@@ -63,11 +68,19 @@ of that and of the lanes. The skill adds nothing to them.
   Pipes' SKILL.md has the numbers.
 - A copier ends when its lane of SRC hits EOF or a write to an outlet
   lane fails. Held lanes never do either, so the tee runs until removed
-  or until a pipe on either end is removed. Then list says down. remove
-  it and create it again.
-- The outlet lanes are in each copier's argv; the inlet lane is not.
-  `pkill -f` on a DST path finds the tee. On the SRC path it finds
-  nothing.
+  or until a pipe on either end is removed. SRC's removal ends every
+  copier at once. An outlet's is found only by writing to it, so the
+  copiers end one at a time as traffic reaches their lanes, and a tee
+  that has lost an outlet goes on copying the lanes that are quiet.
+  list says up while every copier still has its lane of SRC, so one
+  ended lane reads down for the whole fitting. remove it and create it
+  again.
+- remove kills the copiers where they stand, inside a write included, so
+  a payload in flight can be left part-written on the outlets and short
+  of its count. Nothing waits or drains: what is in flight is bytes.
+- The outlet lanes are in each copier's argv, canonical, as list prints
+  them; the inlet lane is not. `pkill -f` on a DST path finds the tee.
+  On the SRC path it finds nothing.
 
 ## In Claude Code
 

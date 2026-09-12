@@ -22,6 +22,9 @@ no "$T/create" "$a" 0
 no "$T/create" "$a" 2 "$b"
 no "$T/create" "$a" 0 "$x"
 no "$T/create" "$a" 0 /tmp
+no "$T/create" "$a" 0 "$a"        # SRC as its own DST
+no "$T/create" "$a" 0 "$b" "$b"   # the same DST twice
+no "$T/create" "$a" 0 "$b" "$b/"  # the same DST spelled two ways
 t=$("$T/create" "$a" 0 "$b" "$c")
 trap '"$T/remove" "$t" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
 "$T/list" | grep -qx "$t up $a 0 $b $c"

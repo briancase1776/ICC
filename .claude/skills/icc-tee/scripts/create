@@ -15,19 +15,44 @@ src=$1; side=$2; shift 2
 for p in "$src" "$@"; do
   [ -p "$p/0" ] || { echo "not a pipe: $p" >&2; exit 1; }
 done
-n=$(ls "$src" | grep -c '^[0-9][0-9]*$')
+# Canonicalise before anything compares or is written: one pipe has many
+# spellings, the checks below are comparisons, and the outlets go in the
+# copiers' argv, which SKILL.md tells the caller pkill finds and list prints.
+src=$(readlink -f -- "$src")
+dsts=()
 for p; do
+  q=$(readlink -f -- "$p")
+  # SRC as its own DST copies a lane back into itself and spins on one byte
+  # forever. The same DST twice writes every byte to that lane twice, count
+  # line and all, so a Frames read there yields something nobody sent.
+  [ "$q" != "$src" ] || { echo "DST is SRC: $p" >&2; exit 1; }
+  for o in "${dsts[@]}"; do
+    [ "$q" != "$o" ] || { echo "DST twice: $p" >&2; exit 1; }
+  done
+  dsts+=("$q")
+done
+n=$(ls "$src" | grep -c '^[0-9][0-9]*$')
+for p in "${dsts[@]}"; do
   [ "$(ls "$p" | grep -c '^[0-9][0-9]*$')" -eq "$n" ] ||
     { echo "lanes differ: $p" >&2; exit 1; }
 done
 d=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
-src=$(readlink -f "$src")
-{ printf '%s\n' "$src" "$side"; for p; do readlink -f "$p"; done; } > "$d/tee"
+# Until the tee is whole it is not a tee: a create that cannot finish takes
+# its directory with it, and the copiers it started. pids stays empty until
+# there is one, because kill with no pid is not this shell's to send. The
+# handler exits: without that, a signal caught between the last copier and
+# the disarm would clean up and let create print the path it just deleted.
+pids=()
+trap '[ ${#pids[@]} -eq 0 ] || kill "${pids[@]}" 2>/dev/null || :
+      rm -rf "$d"; exit 1' EXIT INT TERM HUP
+{ printf '%s\n' "$src" "$side"; printf '%s\n' "${dsts[@]}"; } > "$d/tee"
 l=$side
 while [ "$l" -lt "$n" ]; do
-  outs=(); for p; do outs+=("$p/$l"); done
+  outs=(); for p in "${dsts[@]}"; do outs+=("$p/$l"); done
   tee -a -- "${outs[@]}" < "$src/$l" > /dev/null 2>&1 &
+  pids+=($!)
   echo $! >> "$d/pid"
   l=$((l + 2))
 done
+trap - EXIT INT TERM HUP
 echo "$d"

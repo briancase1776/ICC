@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # tests/run.sh
 # Prove the tee: get three pipes, tee side 0 of one into the other two, push
 # a Frames payload bigger than one lane holds, read it back whole from both

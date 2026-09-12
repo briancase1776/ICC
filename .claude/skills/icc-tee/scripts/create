@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-tee/scripts/create
 # create SRC SIDE DST...: copy what SIDE writes into pipe SRC onto the same
 # lanes of every pipe DST, byte for byte, in order, until removed. Print the
@@ -25,8 +25,8 @@ src=$(readlink -f "$src")
 { printf '%s\n' "$src" "$side"; for p; do readlink -f "$p"; done; } > "$d/tee"
 l=$side
 while [ "$l" -lt "$n" ]; do
-  outs=; for p; do outs="$outs '$p/$l'"; done
-  eval "tee -a -- $outs < '$src/$l' > /dev/null 2>&1 &"
+  outs=(); for p; do outs+=("$p/$l"); done
+  tee -a -- "${outs[@]}" < "$src/$l" > /dev/null 2>&1 &
   echo $! >> "$d/pid"
   l=$((l + 2))
 done

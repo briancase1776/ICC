@@ -14,10 +14,14 @@ F=${ICC_FRAMES:-../ICC-Frames}/.claude/skills/icc-frames/scripts
 T=.claude/skills/icc-tee/scripts
 a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
 trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
-! "$T/create" "$a" 0 2>/dev/null
-! "$T/create" "$a" 2 "$b" 2>/dev/null
-! "$T/create" "$a" 0 "$x" 2>/dev/null
-! "$T/create" "$a" 0 /tmp 2>/dev/null
+# set -e is ignored for a pipeline that begins with !, so `! cmd` states a
+# refusal without ever being able to fail the harness. no() runs the command
+# and stops here if it succeeds.
+no() { if "$@" 2>/dev/null; then echo "not refused: $*" >&2; exit 1; fi; }
+no "$T/create" "$a" 0
+no "$T/create" "$a" 2 "$b"
+no "$T/create" "$a" 0 "$x"
+no "$T/create" "$a" 0 /tmp
 t=$("$T/create" "$a" 0 "$b" "$c")
 trap '"$T/remove" "$t" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
 "$T/list" | grep -qx "$t up $a 0 $b $c"

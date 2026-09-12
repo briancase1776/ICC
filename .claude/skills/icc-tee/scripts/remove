@@ -7,7 +7,30 @@
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
-d=${1:?usage: remove DIR}
-[ -f "$d/tee" ] && [ -f "$d/pid" ] || { echo "not a tee: $d" >&2; exit 1; }
-kill $(cat "$d/pid") 2>/dev/null || :
-rm -rf "$d"
+a=${1:?usage: remove DIR}
+d=$(readlink -f -- "$a" 2>/dev/null || :)
+[ -n "$d" ] && [ -d "$d" ] && [ -s "$d/tee" ] && [ -s "$d/pid" ] ||
+  { echo "not a tee: $a" >&2; exit 1; }
+# What create wrote: SRC absolute, SIDE 0 or 1, a DST per line, and one pid
+# per lane SIDE writes, every one a number. A directory that does not hold
+# that was not made here, so its files are not this script's to delete.
+src=$(sed -n 1p "$d/tee"); side=$(sed -n 2p "$d/tee")
+np=$(grep -c '^[0-9][0-9]*$' "$d/pid" || :); nl=$(wc -l < "$d/pid")
+case $src:$side in /*:0|/*:1) ;; *) echo "not a tee: $a" >&2; exit 1 ;; esac
+[ "$np" -ge 1 ] && [ "$np" -eq "$nl" ] ||
+  { echo "not a tee: $a" >&2; exit 1; }
+# Kill a copier only when it is still this tee's: create gives each copier
+# its lane of SRC on stdin, which is what list reads. A stranger's pid, or a
+# recycled one, will not match, and a copier that has ended matches nothing.
+# A tee whose copiers are all gone still removes, which is SKILL.md's remedy.
+l=$side
+while read -r p; do
+  [ "$(readlink "/proc/$p/fd/0" 2>/dev/null)" = "$src/$l" ] &&
+    kill "$p" 2>/dev/null || :
+  l=$((l + 2))
+done < "$d/pid"
+# tee and pid are what create made; take those and nothing else. rmdir
+# refuses a directory with anything left in it, so a wrong path costs a
+# look-alike its own two files and never a stranger's tree.
+rm -f "$d/tee" "$d/pid"
+rmdir "$d" || { echo "not a tee, left in place: $a" >&2; exit 1; }

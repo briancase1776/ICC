@@ -36,6 +36,22 @@ printf 'plain' > "$a/2"
 [ "$(timeout 1 cat "$b/2")" = plain ] && [ "$(timeout 1 cat "$c/2")" = plain ]
 "$T/remove" "$t"
 [ ! -d "$t" ]
+# remove signals a copier, not whatever pid sits in the file, and takes the
+# two files it made, not the directory. A look-alike holding a stranger's pid
+# loses its own two files and nothing else; one with a file beside them is
+# left where it is. list does not announce a directory with no DIR/tee.
+sleep 60 & s=$!
+f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo "$s" > "$f/pid"
+"$T/remove" "$f"; [ ! -d "$f" ]; kill -0 "$s"; kill "$s"
+f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo 1 > "$f/pid"
+: > "$f/keep"; no "$T/remove" "$f"; [ -f "$f/keep" ]; rm -rf "$f"
+f=$(mktemp -d /tmp/icc-tee-XXXXXXXX); echo 1 > "$f/pid"
+[ -z "$("$T/list" 2>&1 >/dev/null)" ]
+"$T/list" 2>/dev/null | grep -q "$f" && exit 1
+rm -rf "$f"
+no "$T/remove" "$a"
 for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
 "$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"
 rm -f in out

@@ -46,11 +46,11 @@ printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo "$s" > "$f/pid"
 "$T/remove" "$f"; [ ! -d "$f" ]; kill -0 "$s"; kill "$s"
 f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo 1 > "$f/pid"
-: > "$f/keep"; no "$T/remove" "$f"; [ -f "$f/keep" ]; rm -rf "$f"
+: > "$f/keep"; no "$T/remove" "$f"; [ -f "$f/keep" ]; rm -f "$f"/*; rmdir "$f"
 f=$(mktemp -d /tmp/icc-tee-XXXXXXXX); echo 1 > "$f/pid"
 [ -z "$("$T/list" 2>&1 >/dev/null)" ]
 "$T/list" 2>/dev/null | grep -q "$f" && exit 1
-rm -rf "$f"
+rm -f "$f"/*; rmdir "$f"
 no "$T/remove" "$a"
 for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
 "$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"

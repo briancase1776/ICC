@@ -40,16 +40,26 @@ d=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 # Until the tee is whole it is not a tee: a create that cannot finish takes
 # its directory with it, and the copiers it started. pids stays empty until
 # there is one, because kill with no pid is not this shell's to send. The
-# handler exits: without that, a signal caught between the last copier and
-# the disarm would clean up and let create print the path it just deleted.
+# handler takes the two files create writes and rmdirs, never rm -rf, so a
+# directory that holds anything else is left where it is and says so. It
+# exits: without that, a signal caught between the last copier and the
+# disarm would clean up and let create print the path it just deleted.
 pids=()
-trap '[ ${#pids[@]} -eq 0 ] || kill "${pids[@]}" 2>/dev/null || :
-      rm -rf "$d"; exit 1' EXIT INT TERM HUP
+trap 'trap - EXIT INT TERM HUP
+      [ ${#pids[@]} -eq 0 ] || kill "${pids[@]}" 2>/dev/null || :
+      rm -f "$d/tee" "$d/pid"
+      rmdir "$d" 2>/dev/null || [ ! -d "$d" ] || echo "left in place: $d" >&2
+      exit 1' EXIT INT TERM HUP
 { printf '%s\n' "$src" "$side"; printf '%s\n' "${dsts[@]}"; } > "$d/tee"
 l=$side
 while [ "$l" -lt "$n" ]; do
   outs=(); for p in "${dsts[@]}"; do outs+=("$p/$l"); done
-  tee -a -- "${outs[@]}" < "$src/$l" > /dev/null 2>&1 &
+  # A copier is this shell's child until it execs, so it inherits the traps
+  # above: killing one from the handler ran the handler again, in it, racing
+  # the shell that sent the signal. Clear them and exec, so a copier is
+  # tee(1) and nothing else.
+  ( trap - EXIT INT TERM HUP
+    exec tee -a -- "${outs[@]}" < "$src/$l" > /dev/null 2>&1 ) &
   pids+=($!)
   echo $! >> "$d/pid"
   l=$((l + 2))

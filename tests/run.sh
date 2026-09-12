@@ -8,5 +8,5 @@
 set -eu
 cd "$(dirname "$0")/.."
 for r in ICC-Pipes ICC-Frames ICC-Tee ICC-Merge ICC-Patch ICC-Bridge; do
-  printf '%-11s' "$r"; sh "$r/tests/run.sh"
+  printf '%-11s' "$r"; "$r/tests/run.sh"
 done

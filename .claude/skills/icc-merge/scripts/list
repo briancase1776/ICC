@@ -13,6 +13,10 @@ for d in /tmp/icc-merge-*/; do
   [ -f "$d/merge" ] || continue
   side=$(sed -n 2p "$d/merge")
   mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
+  # A merge file with no SRC line is not one either, and saying so by dividing
+  # by zero would take the whole listing with it: the glob is sorted, so one
+  # such directory named early hides every merge after it from every caller.
+  [ "${#srcs[@]}" -ge 1 ] || continue
   m=${#srcs[@]}
   # Down until every copier answers, the way Pipes reads a hold: a merge with
   # no copiers yet, or none left, is not up, and only a positive check says

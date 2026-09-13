@@ -89,6 +89,10 @@ properties of that and of the lanes. The skill adds nothing to them.
   command line; it does not know what another merge is doing, and two merges
   from one inlet are two copiers reading one lane, which race as Pipes says
   two readers do. What one takes the other never sees.
+- list says up when every copier of a merge still has its inlet lane open,
+  and down otherwise. It is all or nothing: one copier gone reads the same
+  as all of them gone, and a merge whose copiers have not started yet, or
+  whose pipe has been removed, is down.
 - A copier is `cat(1)`. Its inlet lane is in its argv and, once it has
   opened it, on its fd 3; its outlet lane is its stdout and is never in
   its argv. Both are spelled canonically, the way list prints them, not

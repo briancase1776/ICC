@@ -2,9 +2,9 @@
 # .claude/skills/icc-merge/scripts/create
 # create DST SIDE SRC...: copy what SIDE writes into every pipe SRC onto the
 # same lanes of pipe DST, byte for byte, in order per inlet, until removed.
-# Print the merge's directory. Every pipe must exist and have the same lane
-# count; no inlet is the outlet and none is given twice; the merge makes
-# nothing but itself.
+# Print the merge's directory. Every pipe must exist, every lane of it must be
+# a lane, and all of them must have the same count; no inlet is the outlet and
+# none is given twice; the merge makes nothing but itself.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
@@ -13,19 +13,25 @@ set -eu
 [ $# -ge 3 ] || { echo "usage: create DST SIDE SRC..." >&2; exit 1; }
 dst=$1; side=$2; shift 2
 [ "$side" = 0 ] || [ "$side" = 1 ] || { echo "side is 0 or 1" >&2; exit 1; }
+[ -p "$dst/0" ] || { echo "not a pipe: $dst" >&2; exit 1; }
+n=$(ls -- "$dst" | grep -c '^[0-9][0-9]*$')
+# Every lane, not only the first. A numeric entry that is not a lane counts
+# toward the count and then kills its copier on open, where nothing can say
+# so: a copier's stderr goes nowhere and list only ever says down.
 for p in "$dst" "$@"; do
-  [ -p "$p/0" ] || { echo "not a pipe: $p" >&2; exit 1; }
-done
-n=$(ls "$dst" | grep -c '^[0-9][0-9]*$')
-for p; do
-  [ "$(ls "$p" | grep -c '^[0-9][0-9]*$')" -eq "$n" ] ||
+  [ "$(ls -- "$p" | grep -c '^[0-9][0-9]*$')" -eq "$n" ] ||
     { echo "lanes differ: $p" >&2; exit 1; }
+  l=0
+  while [ "$l" -lt "$n" ]; do
+    [ -p "$p/$l" ] || { echo "not a pipe: $p" >&2; exit 1; }
+    l=$((l + 1))
+  done
 done
 # One pipe, one spelling. The checks below, the merge file and the copiers'
 # argv all get the canonical path, so the path list prints is the path that
 # finds the copiers.
-dst=$(readlink -f "$dst")
-srcs=(); for p; do srcs+=("$(readlink -f "$p")"); done
+dst=$(readlink -f -- "$dst")
+srcs=(); for p; do srcs+=("$(readlink -f -- "$p")"); done
 for p in "${srcs[@]}"; do
   [ "$p" != "$dst" ] ||
     { echo "inlet is the outlet: $p" >&2; exit 1; }
@@ -36,9 +42,13 @@ dup=$(printf '%s\n' "${srcs[@]}" | sort | uniq -d | sed -n 1p)
 [ -z "$dup" ] || { echo "inlet twice: $dup" >&2; exit 1; }
 d=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 # Until the merge is whole it is not a merge: a create that cannot finish
-# takes its copiers and its directory with it. The handler exits so the EXIT
-# trap runs on a signal too.
-trap 'kill $(cat "$d/pid" 2>/dev/null) 2>/dev/null || :; rm -rf "$d"' EXIT
+# takes its copiers and its directory with it. It kills them from its own
+# list and not from the pid file, because the file can be gone by then -- a
+# remove can take this directory while the open below is still waiting, and
+# a copier forked after that would answer to nothing. The handler exits so
+# the EXIT trap runs on a signal too.
+pids=()
+trap 'kill "${pids[@]}" 2>/dev/null || :; rm -rf "$d"' EXIT
 trap 'exit 1' INT TERM HUP
 { printf '%s\n' "$dst" "$side"; printf '%s\n' "${srcs[@]}"; } > "$d/merge"
 # Both files from here on, so a merge is the same shape to list and to remove
@@ -59,10 +69,16 @@ while [ "$l" -lt "$n" ]; do
     # know a copier by.
     { trap - EXIT INT TERM HUP; exec >&3 2>/dev/null 3>&-
       exec cat -- "$p/$l" < /dev/null; } &
+    pids+=($!)
     echo $! >> "$d/pid"
   done
   exec 3>&-
   l=$((l + 2))
 done
+# Still ours? A remove that ran while an open above waited took the directory,
+# and these copiers are now merging into a merge that no longer exists, which
+# nothing can list and nothing can stop. They are this shell's to end.
+[ -d "$d" ] && [ -f "$d/merge" ] && [ -f "$d/pid" ] ||
+  { echo "removed while starting: $d" >&2; exit 1; }
 trap - EXIT INT TERM HUP
 echo "$d"

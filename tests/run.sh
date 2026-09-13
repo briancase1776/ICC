@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # tests/run.sh
 # Prove the merge: get three pipes, merge side 0 of two into the third, push a
 # Frames payload bigger than one lane holds through each inlet in turn, read it

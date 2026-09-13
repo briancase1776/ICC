@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-merge/scripts/remove
 # remove DIR: stop the merge, delete its directory. DIR is what create printed.
 # The pipes on either end are left exactly as they were.

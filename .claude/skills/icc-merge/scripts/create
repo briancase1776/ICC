@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-merge/scripts/create
 # create DST SIDE SRC...: copy what SIDE writes into every pipe SRC onto the
 # same lanes of pipe DST, byte for byte, in order per inlet, until removed.

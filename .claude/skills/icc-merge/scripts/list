@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-merge/scripts/list
 # list: one line per merge, "DIR up|down DST SIDE SRC...".
 # Up means every copier still has its lane of DST open to write.

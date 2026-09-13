@@ -85,6 +85,10 @@ must not grow into a client, protocol, or example app. If a test needs
 more than a few lines of setup, the merge is too complicated, not the
 test.
 
+The harness is bash. Run it as `./tests/run.sh`. `sh tests/run.sh`
+overrides the shebang and dies on the first bashism, which is the caller
+overriding the interpreter, not the harness being broken.
+
 ## Rules
 
 - **KISS.** One way to do each thing. Prefer the OS primitive over a
@@ -99,6 +103,11 @@ test.
   It does not tell the caller how to wait, poll, frame, or take turns.
 - **Never look at the bytes.** No option, header, or check in this repo
   may depend on what is in a lane.
+- **Bash, and the shebang decides.** Every script here is bash and says so
+  on its first line. Run one by its path and let that line choose the
+  interpreter. Never reach for `sh script` or `bash script`: that overrides
+  what the file declares, and a script that runs today only because the
+  caller forced dash on it will break the day it uses anything bash has.
 
 ## Layout
 

@@ -88,9 +88,11 @@ it, see nothing left. The harness must not grow into a client, protocol,
 or example app. If a test needs more than a few lines of setup, the bay
 is too complicated, not the test.
 
-The harness is bash. Run it as `./tests/run.sh`. `sh tests/run.sh`
-overrides the shebang and dies on the first bashism, which is the caller
-overriding the interpreter, not the harness being broken.
+The harness is bash. Run it as `./tests/run.sh` and let the shebang pick
+the interpreter. `sh tests/run.sh` overrides it, and so does zsh, or any
+other shell put in front of the path. Whether it happens to survive that
+today is not the point and is not promised: bash is the only shell this
+repo guarantees anything under.
 
 ## Rules
 
@@ -112,12 +114,14 @@ overriding the interpreter, not the harness being broken.
   the bay works means pushing a payload through it.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
-  interpreter. Never reach for `sh script` or `bash script`: that
-  overrides what the file declares, and a script that runs today only
-  because the caller forced dash on it will break the day it uses
-  anything bash has. The same goes for the pieces the bay runs: create
-  and remove call Pipes', Tee's and Merge's scripts by path, and their
-  own first lines pick their interpreters.
+  interpreter. Never reach for `sh script`, `zsh script` or even
+  `bash script`: that overrides what the file declares, and a script
+  that runs today only because the caller forced another shell on it
+  will break the day it uses anything that shell has not got. Only bash
+  is guaranteed, which is simpler than guaranteeing several. The same
+  goes for the pieces the bay runs: create and remove call Pipes', Tee's
+  and Merge's scripts by path, and their own first lines pick their
+  interpreters.
 
 ## Layout
 

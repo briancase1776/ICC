@@ -107,7 +107,9 @@ overriding the interpreter, not the harness being broken.
   reads.
 - **The shape decides the cables.** Nothing else does. No knob picks a
   fitting over a pipe; a fitting with one end on a side is no fitting.
-- **Never look at the bytes.** No script here reads a lane.
+- **Never look at the bytes.** No script in the skill reads a lane:
+  not create, not list, not remove. The harness does, because proving
+  the bay works means pushing a payload through it.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script` or `bash script`: that

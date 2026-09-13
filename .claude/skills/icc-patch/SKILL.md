@@ -40,11 +40,13 @@ is missing, create makes nothing.
              side 1, around the end back to 0
     mesh     a merge and a tee in the middle. Every seat writes one end
              into the merge; the tee hands what comes out to every
-             seat's read end, the writer's too
+             seat's read end, the writer's too. Where there is a tee:
+             mesh 2 collapses to one pipe and has none
     ring-p   ring, and each hop is a tee: one outlet to the next seat,
              one to a merge that seat p reads. p writes one end, and a
              tee hands it to a read end of its own at every seat, so a
-             seat holds two: one from the seat before it, one from p
+             seat holds three ends: its write end, a read end from the
+             seat before it, and a read end from p
     mesh-p   mesh, with seat p on it like any other
 
 N counts seats other than p. Fewer seats, fewer cables, by the shape
@@ -72,12 +74,17 @@ other side, comma separated. Pipes says what a side writes and reads.
 - A DIR on two seats' lines is a pipe those two share: what each writes
   there reaches the other and what it reads there came from the other,
   both ways. On a star every end is one of these, so p holds one end per
-  seat and knows which seat it is talking to.
+  seat and knows which seat it is talking to. ring 1 is the one shape
+  where both lines are the same seat's: seat 0 holds both sides.
+- A seat is in its own PEERS on a mesh of three or more, because the
+  merge and the tee reach every seat, the writer included. Filtering
+  PEERS for the others means taking your own number out.
 - A DIR on one line only is through a fitting, and goes one way. A write
   end, side 0, sends to PEERS and reads nothing. A read end, side 1,
   receives from PEERS and sends nowhere. Tee's and Merge's SKILL.md say
-  why. No pipe has two writers on it, in any shape, so the line is the
-  whole of it: two names, both ways; one name, one way.
+  why. No pipe the map names has two writers on it, in any shape, so the
+  line is the whole of it: two names, both ways; one name, one way. A
+  merge's outlet has one writer per inlet, and the map names it nowhere.
 
     grep '^3 ' "$x/patch"                          every end seat 3 holds
 
@@ -105,11 +112,17 @@ other side, comma separated. Pipes says what a side writes and reads.
   can come before them at any seat. On a ring-p nothing a seat writes
   comes back to that seat, and nothing p writes comes back to p, so
   there is no such moment — except on a ring-p 1, where the hop tee goes
-  round to the one seat there is, and its own words do come back. Whose turn it is, and whatever the seats
-  leave in DIR to agree it, is theirs; remove takes DIR whole.
+  round to the one seat there is, and its own words do come back.
+- Whose turn it is, and whatever the seats leave in DIR to agree it, is
+  theirs; remove takes DIR whole.
 - Through fittings, a seat that never reads stalls every writer once its
-  end fills. Read every end, or keep the payload inside one. Tee's and
-  Merge's SKILL.md have the numbers.
+  end fills. Read every end, or keep the payload inside one. How much
+  that is, is how many pipes lie between a write end and a read end,
+  which only the bay knows: a star or a ring one, a ring-p hop two, a
+  mesh of three or more three, and a shape that collapsed to one pipe
+  one. What one pipe holds is Pipes' fact, and Tee's and Merge's
+  SKILL.md say what a fitting adds. It is not one number: measured on a
+  mesh, 208K, 224K and 256K each went both ways on different runs.
 - A seat may sit in more than one patch. A ring and a mesh over the same
   seats is two patches.
 - list says up when every pipe and fitting says up. If one is down, the

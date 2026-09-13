@@ -9,15 +9,26 @@
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
+# Ask each skill once what it has, not once per piece it has: a sibling's list
+# names every piece of its kind on the box, so asking per piece makes listing
+# one patch cost as much as everyone else's work put together.
+u=$(mktemp); trap 'rm -f "$u"' EXIT
+cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u | while read -r sc; do
+  [ -x "$sc/list" ] && "$sc/list" | cut -d' ' -f1,2
+done > "$u" || :
+# A patch can go while this runs. That is a normal thing on a shared box, not
+# an error: read each file once, and skip a patch that is no longer there.
 for d in /tmp/icc-patch-*/; do
   d=${d%/}
-  [ -f "$d/patch" ] || continue
-  s=down
-  if [ -f "$d/made" ]; then
+  h=$(sed -n 1p "$d/patch" 2>/dev/null) || h=
+  [ -n "$h" ] || continue
+  if m=$(cat "$d/made" 2>/dev/null); then
     s=up
-    while read -r sc p; do
-      "$sc/list" | cut -d' ' -f1,2 | grep -qxF "$p up" || s=down
-    done < "$d/made"
+    [ -z "$m" ] || while read -r sc p; do
+      grep -qxF "$p up" "$u" || s=down
+    done <<< "$m"
+  else
+    s=down
   fi
-  echo "$d $s $(sed -n 1p "$d/patch")"
+  echo "$d $s $h"
 done

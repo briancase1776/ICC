@@ -40,6 +40,21 @@ printf 'plain' > "$a/2"
 # two files it made, not the directory. A look-alike holding a stranger's pid
 # loses its own two files and nothing else; one with a file beside them is
 # left where it is. list does not announce a directory with no DIR/tee.
+# The trap: a create cut off inside its lane loop takes its directory and the
+# copiers it started with it. A wide pipe makes that loop long enough to
+# signal into, and the signal waits for the directory to exist -- cutting a
+# create off before it made one proves nothing, and passes with no trap at all.
+w=$("$P/create" 200); v=$("$P/create" 200)
+n=$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)
+"$T/create" "$w" 0 "$v" >/dev/null 2>&1 & q=$!
+while [ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -le "$n" ]; do
+  kill -0 $q 2>/dev/null || break
+done
+kill -TERM $q 2>/dev/null || :
+wait $q 2>/dev/null || :
+[ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -eq "$n" ]
+"$P/remove" "$v"; "$P/remove" "$w"
+
 # A lane with no writer does not hang create: the copier lets go of the
 # caller's stdout before it opens, so d=$(create ...) returns and list says
 # down. A writer lets the copier through, and it ends when that writer goes.

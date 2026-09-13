@@ -1,10 +1,12 @@
 #!/bin/bash
 # .claude/skills/icc-patch/scripts/remove
 # remove DIR: remove the fittings, then the pipes, in the reverse of the order
-# create made them, then delete DIR. DIR is what create printed. A piece whose
-# directory is gone is nothing to remove; one that will not go is named, and
-# DIR is left standing with the made file that names the rest, so a second
-# remove can try again: the record outlives the attempt, or nothing can find
+# create made them, then delete DIR. DIR is what create printed. What the bay
+# can remove is what each piece's own skill still lists: a piece that skill no
+# longer knows is beyond removing by anything here, and is named where it lies
+# rather than tried for ever. One that is listed and will not go is named too,
+# and DIR is left standing with the made file that names the rest, so a second
+# remove can carry on: the record outlives the attempt, or nothing can find
 # what is left.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -15,8 +17,11 @@ d=${1:?usage: remove DIR}
 [ -f "$d/patch" ] && [ -f "$d/made" ] || { echo "not a patch: $d" >&2; exit 1; }
 left=0
 while read -r sc p; do
-  [ -e "$p" ] || continue
-  "$sc/remove" "$p" || { echo "would not go: $p" >&2; left=1; }
+  if "$sc/list" | cut -d' ' -f1 | grep -qxF "$p"; then
+    "$sc/remove" "$p" || { echo "would not go: $p" >&2; left=1; }
+  else
+    [ ! -e "$p" ] || echo "its own skill no longer knows it: $p" >&2
+  fi
 done < <(sed '1!G;h;$!d' "$d/made")
 [ "$left" -eq 0 ] || { echo "left standing: $d" >&2; exit 1; }
 rm -rf "$d"

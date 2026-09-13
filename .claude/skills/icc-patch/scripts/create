@@ -22,17 +22,24 @@ P=$(cd "${ICC_PIPES:-$top/../ICC-Pipes}/.claude/skills/icc-pipes/scripts" && pwd
 T=$(cd "${ICC_TEE:-$top/../ICC-Tee}/.claude/skills/icc-tee/scripts" && pwd)
 M=$(cd "${ICC_MERGE:-$top/../ICC-Merge}/.claude/skills/icc-merge/scripts" && pwd)
 d=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
+trap 'rm -rf "$d"' EXIT
 echo "$shape $n $lanes" > "$d/patch"; : > "$d/made"
 trap '"$(dirname "$0")/remove" "$d"' EXIT
-# Make a piece and write it down with the signals off. Interrupted between
-# the two, create would leave a piece no made file names, which its own list
-# cannot see and its own remove cannot reach. A failure inside $( ) is not
-# set -e's business here, so each says so itself.
+# Make a piece and write it down before a signal can part the two. Interrupted
+# between them, create would leave a piece no made file names, which its own
+# list cannot see and its own remove cannot reach. The signal is handled, not
+# ignored: an ignored signal is inherited through fork and exec and cannot be
+# put back by the child, so the hold Pipes starts here would come out deaf to
+# the TERM Pipes' own remove sends it. A handler is reset to default on exec,
+# and this one only sets a flag, so the piece is written down first and the
+# signal honoured after. A failure inside $( ) is not set -e's business here,
+# so each says so itself.
 piece() { m=$1; shift
-  trap '' INT TERM HUP
+  sig=; trap 'sig=1' INT TERM HUP
   z=$("$m/create" "$@") || exit 1
   echo "$m $z" >> "$d/made"
   trap - INT TERM HUP
+  [ -z "$sig" ] || exit 1
 }
 pipe() { piece "$P" "$lanes"; p=$z; }
 tee() { piece "$T" "$@"; }

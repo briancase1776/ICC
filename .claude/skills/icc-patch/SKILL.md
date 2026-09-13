@@ -53,8 +53,12 @@ pipe, and so is mesh-p 1, one seat with its parent, and so is star 1.
 ring 2 is mesh 2. ring 1 is one pipe with seat 0 on both ends. mesh 1 is
 no pipe. ring-p 1 is seat 0's hop tee round to itself, and a pipe it
 shares with p. Where a shape collapses to one pipe the two seats share
-it, so each holds one end and not two, and neither hears its own words
-back the way it does where a tee hands them round.
+it, and each writes and reads there: the lower numbered seat holds side
+0 and the other side 1, p counting as the higher, except on a ring-p 1,
+where the end p holds is the one p writes, so p holds side 0. ring 1 has
+no second seat: seat 0 holds both sides, and what it writes on one it
+reads on the other. On the rest a seat's own words do not come back to
+it, since there is no tee to hand them round.
 
 ## The map
 
@@ -100,7 +104,8 @@ other side, comma separated. Pipes says what a side writes and reads.
   before it reads the next, as Tee says, so nothing written after them
   can come before them at any seat. On a ring-p nothing a seat writes
   comes back to that seat, and nothing p writes comes back to p, so
-  there is no such moment. Whose turn it is, and whatever the seats
+  there is no such moment — except on a ring-p 1, where the hop tee goes
+  round to the one seat there is, and its own words do come back. Whose turn it is, and whatever the seats
   leave in DIR to agree it, is theirs; remove takes DIR whole.
 - Through fittings, a seat that never reads stalls every writer once its
   end fills. Read every end, or keep the payload inside one. Tee's and

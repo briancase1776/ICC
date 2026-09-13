@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-patch/scripts/remove
 # remove DIR: remove the fittings, then the pipes, in the reverse of the order
 # create made them, then delete DIR. DIR is what create printed.

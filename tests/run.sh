@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # tests/run.sh
 # Prove the bay: make each shape, see the map name the cables the shape says
 # and no more, push a Frames payload bigger than one lane holds from a seat

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-patch/scripts/list
 # list: one line per patch, "DIR up|down SHAPE N LANES".
 # Up means every pipe and fitting in it says up.

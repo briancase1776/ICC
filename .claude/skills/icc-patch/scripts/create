@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-patch/scripts/create
 # create SHAPE N [LANES]: make the pipes, tees and merges SHAPE needs over N
 # seats, LANES lanes each (even, default 2), write the map, print the patch's
@@ -21,12 +21,14 @@ M=$(cd "${ICC_MERGE:-$top/../ICC-Merge}/.claude/skills/icc-merge/scripts" && pwd
 d=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 echo "$shape $n $lanes" > "$d/patch"; : > "$d/made"
 trap '"$(dirname "$0")/remove" "$d"' EXIT
-pipe() { p=$("$P/create" "$lanes"); echo "$P $p" >> "$d/made"; echo "$p"; }
-tee() { t=$("$T/create" "$@"); echo "$T $t" >> "$d/made"; }
-merge() { g=$("$M/create" "$@"); echo "$M $g" >> "$d/made"; }
+# A failed $( ) in an assignment inside a function is not set -e's business,
+# so each of these says so itself and leaves p holding the pipe it made.
+pipe() { p=$("$P/create" "$lanes") || exit 1; echo "$P $p" >> "$d/made"; }
+tee() { t=$("$T/create" "$@") || exit 1; echo "$T $t" >> "$d/made"; }
+merge() { g=$("$M/create" "$@") || exit 1; echo "$M $g" >> "$d/made"; }
 end() { echo "$1 $2 $3 $(echo "$4" | tr ' ' ,)" >> "$d/patch"; }
 cable() {  # cable A B: one pipe, seat A on side 0, seat B on side 1
-  p=$(pipe); end "$1" 0 "$p" "$2"; end "$2" 1 "$p" "$1"
+  pipe; end "$1" 0 "$p" "$2"; end "$2" 1 "$p" "$1"
 }
 all=0; i=1; while [ "$i" -lt "$n" ]; do all="$all $i"; i=$((i + 1)); done
 case $shape in
@@ -37,18 +39,18 @@ case $shape in
   mesh|mesh-p)
     set -- $all; [ "$shape" = mesh ] || set -- "$@" p
     case $# in 1) ;; 2) cable "$1" "$2" ;;
-      *) b=$(pipe); ins=; outs=
-         for s; do w=$(pipe); r=$(pipe); ins="$ins $w"; outs="$outs $r"
+      *) pipe; b=$p; ins=; outs=
+         for s; do pipe; w=$p; pipe; r=$p; ins="$ins $w"; outs="$outs $r"
            end "$s" 0 "$w" "$*"; end "$s" 1 "$r" "$*"; done
          merge "$b" 0 $ins; tee "$b" 0 $outs ;; esac ;;
   ring-p)
     xs=; rs=
     for i in $all; do j=$(( (i + 1) % n ))
-      w=$(pipe); r=$(pipe); x=$(pipe); xs="$xs $x"; rs="$rs $r"
+      pipe; w=$p; pipe; r=$p; pipe; x=$p; xs="$xs $x"; rs="$rs $r"
       end "$i" 0 "$w" "$j p"; end "$j" 1 "$r" "$i p"; tee "$w" 0 "$r" "$x"
     done
     q=$x; v=$r
-    [ "$n" -eq 1 ] || { q=$(pipe); merge "$q" 0 $xs; v=$(pipe); tee "$v" 0 $rs; }
+    [ "$n" -eq 1 ] || { pipe; q=$p; merge "$q" 0 $xs; pipe; v=$p; tee "$v" 0 $rs; }
     end p 1 "$q" "$all"; end p 0 "$v" "$all" ;;
 esac
 trap - EXIT

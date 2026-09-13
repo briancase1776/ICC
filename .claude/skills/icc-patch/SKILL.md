@@ -107,6 +107,8 @@ other side, comma separated. Pipes says what a side writes and reads.
   patch is down; remove it and create it again.
 - Nothing holds a patch open. Its pipes and fittings do their own
   holding. Remove one of them by hand and list says down.
+- The scripts are bash, not sh. Run one by its path and let its first
+  line pick the interpreter; `sh scripts/create` overrides it.
 
 ## In Claude Code
 

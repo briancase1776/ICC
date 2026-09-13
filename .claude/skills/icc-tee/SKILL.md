@@ -82,9 +82,13 @@ of that and of the lanes. The skill adds nothing to them.
 - remove kills the copiers where they stand, inside a write included, so
   a payload in flight can be left part-written on the outlets and short
   of its count. Nothing waits or drains: what is in flight is bytes.
-- The outlet lanes are in each copier's argv, canonical, as list prints
-  them; the inlet lane is not. `pkill -f` on a DST path finds the tee.
-  On the SRC path it finds nothing.
+- A copier that is copying is `tee(1)`: its outlet lanes are in argv,
+  canonical, as list prints them, and its inlet lane is not, so
+  `pkill -f` on a DST lane finds it and on the SRC path finds nothing.
+  One still waiting on its lane of SRC has not reached that yet and
+  carries create's own argv — SRC, SIDE and the DSTs as the caller
+  spelled them, no lane numbers — so for that one the two searches
+  trade places.
 
 ## In Claude Code
 

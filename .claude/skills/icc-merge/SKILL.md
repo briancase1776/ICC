@@ -85,6 +85,10 @@ properties of that and of the lanes. The skill adds nothing to them.
   lane fails. Held lanes never do either, so the merge runs until removed
   or until a pipe on either end is removed. Then list says down. remove
   it and create it again.
+- One inlet, one merge. create refuses the same inlet twice on its own
+  command line; it does not know what another merge is doing, and two merges
+  from one inlet are two copiers reading one lane, which race as Pipes says
+  two readers do. What one takes the other never sees.
 - A copier is `cat(1)`. Its inlet lane is in its argv and, once it has
   opened it, on its fd 3; its outlet lane is its stdout and is never in
   its argv. Both are spelled canonically, the way list prints them, not

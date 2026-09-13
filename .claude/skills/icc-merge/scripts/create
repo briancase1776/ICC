@@ -41,6 +41,9 @@ d=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 trap 'kill $(cat "$d/pid" 2>/dev/null) 2>/dev/null || :; rm -rf "$d"' EXIT
 trap 'exit 1' INT TERM HUP
 { printf '%s\n' "$dst" "$side"; printf '%s\n' "${srcs[@]}"; } > "$d/merge"
+# Both files from here on, so a merge is the same shape to list and to remove
+# before the first copier is forked as after. The open below can wait forever.
+: > "$d/pid"
 l=$side
 while [ "$l" -lt "$n" ]; do
   # Open the outlet lane here, where a wait or a failure is this shell's own

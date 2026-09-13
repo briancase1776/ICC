@@ -14,14 +14,16 @@ for d in /tmp/icc-merge-*/; do
   side=$(sed -n 2p "$d/merge")
   mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
   m=${#srcs[@]}
-  s=up; i=0
+  # Down until every copier answers, the way Pipes reads a hold: a merge with
+  # no copiers yet, or none left, is not up, and only a positive check says
+  # otherwise. The mark is the inlet lane on fd 3, canonically spelled; the
+  # outlet lane would not do, since two merges onto one outlet share it.
+  s=down; i=0; ok=0
   for p in $(cat "$d/pid" 2>/dev/null); do
-    # The inlet lane is on fd 3, canonically spelled, and belongs to this
-    # copier alone. The outlet lane does not: two merges onto one outlet
-    # share it.
-    [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] ||
-      s=down
+    [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] &&
+      ok=$((ok + 1))
     i=$((i + 1))
   done
+  [ "$i" -gt 0 ] && [ "$ok" -eq "$i" ] && s=up
   echo "$d $s $(paste -sd ' ' < "$d/merge")"
 done

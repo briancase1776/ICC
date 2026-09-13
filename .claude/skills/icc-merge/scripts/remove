@@ -1,32 +1,53 @@
 #!/bin/bash
 # .claude/skills/icc-merge/scripts/remove
 # remove DIR: stop the merge, delete its directory. DIR is what create printed.
-# Only this merge's own copiers are killed, and only a directory create made
-# is deleted. The pipes on either end are left exactly as they were.
+# Only this merge's own copiers are killed, and only the two files create
+# wrote are deleted. The pipes on either end are left exactly as they were.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
-d=${1:?usage: remove DIR}
-d=${d%/}
-case $d in /tmp/icc-merge-*) ;; *) echo "not a merge: $d" >&2; exit 1;; esac
-[ -f "$d/merge" ] && [ -f "$d/pid" ] || { echo "not a merge: $d" >&2; exit 1; }
+a=${1:?usage: remove DIR}
+# Canonical first. A path is what it resolves to, not how it is spelled, and
+# the test below is about the path: /tmp/icc-merge-XXXXXXXX/../tree matches
+# the name and is not one.
+d=$(readlink -f -- "$a" 2>/dev/null || :)
+[ -n "$d" ] && [ -d "$d" ] && [ -s "$d/merge" ] && [ -f "$d/pid" ] ||
+  { echo "not a merge: $a" >&2; exit 1; }
+case $d in /tmp/icc-merge-*) ;; *) echo "not a merge: $a" >&2; exit 1 ;; esac
+# What create wrote: DST absolute, SIDE 0 or 1, a SRC per line, all absolute,
+# and a pid per copier, every one a number. A directory that does not hold
+# that was not made here, so its files are not this script's to delete. The
+# pid file is empty until the first copier is forked, and that is a merge too.
 side=$(sed -n 2p "$d/merge")
 mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
-m=${#srcs[@]}
-i=0
-for p in $(cat "$d/pid"); do
-  # A pid outlives nothing here: it can be gone, or another process by the
-  # time this runs. A copier of this merge is its own inlet lane, on fd 3
-  # once cat(1) has opened it and in its argv until then, and that pair of
-  # marks is this copier's and no other process's. Anything else in the file
-  # is not ours to kill.
+case $(sed -n 1p "$d/merge"):$side in /*:0|/*:1) ;;
+  *) echo "not a merge: $a" >&2; exit 1 ;; esac
+[ "${#srcs[@]}" -ge 1 ] || { echo "not a merge: $a" >&2; exit 1; }
+for p in "${srcs[@]}"; do
+  case $p in /*) ;; *) echo "not a merge: $a" >&2; exit 1 ;; esac
+done
+np=$(grep -c '^[0-9][0-9]*$' "$d/pid" || :)
+[ "$np" -eq "$(wc -l < "$d/pid")" ] || { echo "not a merge: $a" >&2; exit 1; }
+m=${#srcs[@]}; i=0
+while read -r p; do
+  # A pid outlives nothing here: it can be gone, or another process, by the
+  # time this runs. This merge's copiers are the pids in this merge's own pid
+  # file, and one of them is still a copier of ours if it is the cat(1) on the
+  # inlet lane its place in the file names: on fd 3 once cat has opened it,
+  # and in its argv while that open is still waiting. Neither mark is this
+  # merge's alone -- a second merge from the same inlet has copiers that look
+  # the same -- so it is the pid file that says which are ours.
   want=${srcs[i % m]}/$((side + 2 * (i / m)))
   if [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$want" ] ||
-     [ "$(tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | sed -n 3p)" = "$want" ]
+     [ "$(tr '\0' '\n' 2>/dev/null < "/proc/$p/cmdline" | sed -n 3p)" = "$want" ]
   then kill "$p" 2>/dev/null || :
   fi
   i=$((i + 1))
-done
-rm -rf -- "$d"
+done < "$d/pid"
+# merge and pid are what create made; take those and nothing else. rmdir
+# refuses a directory with anything left in it, so a wrong path costs a
+# look-alike its own two files and never a stranger's tree.
+rm -f "$d/merge" "$d/pid"
+rmdir "$d" || { echo "not a merge, left in place: $a" >&2; exit 1; }

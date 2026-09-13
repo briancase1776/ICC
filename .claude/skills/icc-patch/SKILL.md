@@ -17,7 +17,6 @@ whose desk a cable runs to. The parent, when it is in on it, is seat p.
 
     /tmp/icc-patch-XXXXXXXX/patch    SHAPE N LANES, then one line per end
     /tmp/icc-patch-XXXXXXXX/made     SCRIPTS DIR per pipe and fitting, in order
-    /tmp/icc-patch-XXXXXXXX/lock     while a seat holds the wire; see Facts
 
 ## Operations
 
@@ -44,14 +43,18 @@ is missing, create makes nothing.
              seat's read end, the writer's too
     ring-p   ring, and each hop is a tee: one outlet to the next seat,
              one to a merge that seat p reads. p writes one end, and a
-             tee hands it to every seat's read end
+             tee hands it to a read end of its own at every seat, so a
+             seat holds two: one from the seat before it, one from p
     mesh-p   mesh, with seat p on it like any other
 
 N counts seats other than p. Fewer seats, fewer cables, by the shape
 alone: a fitting with one end on a side is no fitting. mesh 2 is one
 pipe, and so is mesh-p 1, one seat with its parent, and so is star 1.
 ring 2 is mesh 2. ring 1 is one pipe with seat 0 on both ends. mesh 1 is
-no pipe.
+no pipe. ring-p 1 is seat 0's hop tee round to itself, and a pipe it
+shares with p. Where a shape collapses to one pipe the two seats share
+it, so each holds one end and not two, and neither hears its own words
+back the way it does where a tee hands them round.
 
 ## The map
 
@@ -62,13 +65,15 @@ After the first line, one line per end a seat holds:
 Seat SEAT holds side SIDE of the pipe at DIR. PEERS is the seats on the
 other side, comma separated. Pipes says what a side writes and reads.
 
-- On a pipe two seats share, what SEAT writes there reaches PEERS and
-  what it reads there came from PEERS. Both ways. On a star every end is
-  one of these, so p holds one end per seat and knows which seat it is
-  talking to.
-- Through fittings, an end goes one way. A write end, side 0, sends to
-  PEERS and reads nothing. A read end, side 1, receives from PEERS and
-  sends nowhere. Tee's and Merge's SKILL.md say why.
+- A DIR on two seats' lines is a pipe those two share: what each writes
+  there reaches the other and what it reads there came from the other,
+  both ways. On a star every end is one of these, so p holds one end per
+  seat and knows which seat it is talking to.
+- A DIR on one line only is through a fitting, and goes one way. A write
+  end, side 0, sends to PEERS and reads nothing. A read end, side 1,
+  receives from PEERS and sends nowhere. Tee's and Merge's SKILL.md say
+  why. No pipe has two writers on it, in any shape, so the line is the
+  whole of it: two names, both ways; one name, one way.
 
     grep '^3 ' "$x/patch"                          every end seat 3 holds
 
@@ -86,18 +91,17 @@ other side, comma separated. Pipes says what a side writes and reads.
 - On a read end with more than one PEER, nothing says which one a byte
   came from, and two writing at once interleave, as Pipes, Tee and Merge
   say. Whose turn it is, is agreed above this skill.
-- On a mesh or a ring-p every write meets every other write somewhere,
-  so the patch has one lock: `DIR/lock`, in the patch's directory. A seat
-  that wants the wire to itself makes it with mkdir(1) before it writes
-  and removes it with rmdir(1) after. mkdir is atomic: of two that try
-  at once, one gets it and the other fails. Nothing here looks at it;
-  remove deletes it with the rest. What the write left on the wire, as
-  Tee and Merge say, is still moving when it returns; the lock does not
-  wait for that. On a mesh it is past the merge once its end is back at
-  the writer's own read end: the tee puts each chunk on every outlet
-  before it reads the next, as Tee says, so nothing written after it
-  can come before it at any seat. A star and a ring have no fittings and
-  nothing to lock.
+- Where writes meet is the merge: the one in the middle of a mesh, the
+  one seat p reads on a ring-p. Two seats writing at once interleave
+  there, as Merge says, and nowhere else do two writers share a pipe. A
+  star and a ring have no fittings and nothing to meet at.
+- On a mesh the tee hands a writer its own words back, so a seat can see
+  its own go past the merge: the tee puts each chunk on every outlet
+  before it reads the next, as Tee says, so nothing written after them
+  can come before them at any seat. On a ring-p nothing a seat writes
+  comes back to that seat, and nothing p writes comes back to p, so
+  there is no such moment. Whose turn it is, and whatever the seats
+  leave in DIR to agree it, is theirs; remove takes DIR whole.
 - Through fittings, a seat that never reads stalls every writer once its
   end fills. Read every end, or keep the payload inside one. Tee's and
   Merge's SKILL.md have the numbers.

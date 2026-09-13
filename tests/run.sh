@@ -16,74 +16,79 @@ F=${ICC_FRAMES:-../ICC-Frames}/.claude/skills/icc-frames/scripts
 S=.claude/skills/icc-patch/scripts
 end() { awk -v s="$1" -v i="$2" -v p="$3" \
   '$1==s && $2==i && ("," $4 ",") ~ ("," p ",") {print $3}' "$x/patch"; }
+at() { e=$(end "$@"); [ -n "$e" ] || { echo "no end: $*" >&2; exit 1; }; echo "$e"; }
 made() { [ "$(grep -c "$1" "$x/made")" -eq "$2" ]; }
+mk() { x=$("$S/create" "$@"); mine="$mine $x"; }
 "$S/create" 2>/dev/null && exit 1
 "$S/create" bus 3 2>/dev/null && exit 1
 "$S/create" ring 0 2>/dev/null && exit 1
 "$S/create" ring 3 3 2>/dev/null && exit 1
-[ -z "$("$S/list")" ]
+"$S/create" mesh 1 banana 2>/dev/null && exit 1
+mine=
 head -c 150000 /dev/urandom > in
-trap 'for x in /tmp/icc-patch-*; do "$S/remove" "$x" 2>/dev/null || :; done; rm -f in out' EXIT
-x=$("$S/create" star 3 6)
+trap 'for q in $mine; do "$S/remove" "$q" 2>/dev/null || :; done; rm -f in out' EXIT
+mk star 3 6
 "$S/list" | grep -qx "$x up star 3 6"
 made icc-pipes 3; made icc-tee 0; made icc-merge 0
 [ "$(grep -c '^p ' "$x/patch")" -eq 3 ]
-"$F/write" "$(end 1 0 p)" 0 < in
-timeout 5 "$F/read" "$(end p 1 1)" 1 > out; cmp in out
-"$F/write" "$(end p 1 2)" 1 < in
-timeout 5 "$F/read" "$(end 2 0 p)" 0 > out; cmp in out
-printf 'me' > "$(end 0 0 p)/0"; [ "$(timeout 1 cat "$(end p 1 0)/0")" = me ]
+"$F/write" "$(at 1 0 p)" 0 < in
+timeout 5 "$F/read" "$(at p 1 1)" 1 > out; cmp in out
+"$F/write" "$(at p 1 2)" 1 < in
+timeout 5 "$F/read" "$(at 2 0 p)" 0 > out; cmp in out
+printf 'me' > "$(at 0 0 p)/0"; [ "$(timeout 1 cat "$(at p 1 0)/0")" = me ]
 [ -z "$(end 0 0 2)" ]; [ -z "$(end 0 1 p)" ]
 "$S/remove" "$x"; [ ! -d "$x" ]
-x=$("$S/create" star 1); made icc-pipes 1; "$S/remove" "$x"
-x=$("$S/create" ring 3 6)
+mk star 1; made icc-pipes 1; "$S/remove" "$x"
+mk ring 3 6
 "$S/list" | grep -qx "$x up ring 3 6"
 made icc-pipes 3; made icc-tee 0; made icc-merge 0
-"$F/write" "$(end 2 0 0)" 0 < in
-timeout 5 "$F/read" "$(end 0 1 2)" 1 > out; cmp in out
-"$F/write" "$(end 0 1 2)" 1 < in
-timeout 5 "$F/read" "$(end 2 0 0)" 0 > out; cmp in out
+"$F/write" "$(at 2 0 0)" 0 < in
+timeout 5 "$F/read" "$(at 0 1 2)" 1 > out; cmp in out
+"$F/write" "$(at 0 1 2)" 1 < in
+timeout 5 "$F/read" "$(at 2 0 0)" 0 > out; cmp in out
 [ -z "$(end 0 0 2)" ]
 "$S/remove" "$x"; [ ! -d "$x" ]
-x=$("$S/create" ring 2); made icc-pipes 1; "$S/remove" "$x"
-x=$("$S/create" ring 1); made icc-pipes 1
-printf 'me' > "$(end 0 0 0)/0"; [ "$(timeout 1 cat "$(end 0 1 0)/0")" = me ]
+mk ring 2; made icc-pipes 1; "$S/remove" "$x"
+mk ring 1; made icc-pipes 1
+printf 'me' > "$(at 0 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 0)/0")" = me ]
 "$S/remove" "$x"
-x=$("$S/create" mesh 4 6)
+mk mesh 4 6
 "$S/list" | grep -qx "$x up mesh 4 6"
 made icc-pipes 9; made icc-tee 1; made icc-merge 1
 [ "$(grep -c '^3 ' "$x/patch")" -eq 2 ]
-mkdir "$x/lock"; mkdir "$x/lock" 2>/dev/null && exit 1; rmdir "$x/lock"
-"$F/write" "$(end 1 0 3)" 0 < in
-for r in 0 1 2 3; do timeout 5 "$F/read" "$(end $r 1 1)" 1 > out; cmp in out; done
-printf 'a' > "$(end 0 0 2)/2"; printf 'b' > "$(end 2 0 0)/2"
-case $(timeout 1 cat "$(end 3 1 0)/2") in ab|ba) ;; *) exit 1;; esac
+"$F/write" "$(at 1 0 3)" 0 < in
+for r in 0 1 2 3; do timeout 5 "$F/read" "$(at $r 1 1)" 1 > out; cmp in out; done
+printf 'a' > "$(at 0 0 2)/2"; printf 'b' > "$(at 2 0 0)/2"
+case $(timeout 1 cat "$(at 3 1 0)/2") in ab|ba) ;; *) exit 1;; esac
 mkdir "$x/lock"; "$S/remove" "$x"; [ ! -d "$x" ]
-x=$("$S/create" mesh 2); made icc-pipes 1; made icc-tee 0; "$S/remove" "$x"
-x=$("$S/create" mesh 1); made icc-pipes 0; "$S/remove" "$x"
-x=$("$S/create" mesh-p 1); made icc-pipes 1; made icc-merge 0
-printf 'hi' > "$(end p 0 0)/0"; [ "$(timeout 1 cat "$(end 0 1 p)/0")" = hi ]
-printf 'yo' > "$(end 0 1 p)/1"; [ "$(timeout 1 cat "$(end p 0 0)/1")" = yo ]
+mk mesh 2; made icc-pipes 1; made icc-tee 0
+mv "$x/made" "$x/gone"; "$S/list" | grep -qx "$x down mesh 2 2"
+mv "$x/gone" "$x/made"; "$S/remove" "$x"
+mk mesh 1; made icc-pipes 0; "$S/remove" "$x"
+mk mesh-p 1; made icc-pipes 1; made icc-merge 0
+printf 'hi' > "$(at 0 0 p)/0"; [ "$(timeout 1 cat "$(at p 1 0)/0")" = hi ]
+printf 'yo' > "$(at p 1 0)/1"; [ "$(timeout 1 cat "$(at 0 0 p)/1")" = yo ]
 "$S/remove" "$x"
-x=$("$S/create" mesh-p 2); made icc-pipes 7; made icc-tee 1; made icc-merge 1
-printf 'all' > "$(end p 0 1)/0"
-for r in 0 1 p; do [ "$(timeout 1 cat "$(end $r 1 p)/0")" = all ]; done
+mk mesh-p 2; made icc-pipes 7; made icc-tee 1; made icc-merge 1
+printf 'all' > "$(at p 0 1)/0"
+for r in 0 1 p; do [ "$(timeout 1 cat "$(at $r 1 p)/0")" = all ]; done
 "$S/remove" "$x"
-x=$("$S/create" ring-p 3 6)
-made icc-pipes 11; made icc-tee 4; made icc-merge 1
-"$F/write" "$(end 1 0 2)" 0 < in
-timeout 5 "$F/read" "$(end 2 1 1)" 1 > out; cmp in out
-timeout 5 "$F/read" "$(end p 1 1)" 1 > out; cmp in out
+mk ring-p 3 6
+made icc-pipes 14; made icc-tee 4; made icc-merge 1
+[ "$(end 1 1 0)" != "$(end 1 1 p)" ]
+"$F/write" "$(at 1 0 2)" 0 < in
+timeout 5 "$F/read" "$(at 2 1 1)" 1 > out; cmp in out
+timeout 5 "$F/read" "$(at p 1 1)" 1 > out; cmp in out
 [ -z "$(end 0 1 1)" ]
-printf 'all' > "$(end p 0 1)/2"
-for r in 0 1 2; do [ "$(timeout 1 cat "$(end $r 1 p)/2")" = all ]; done
+printf 'all' > "$(at p 0 1)/2"
+for r in 0 1 2; do [ "$(timeout 1 cat "$(at $r 1 p)/2")" = all ]; done
 m=$(cut -d' ' -f2 "$x/made")
 "$S/remove" "$x"; [ ! -d "$x" ]
 for p in $m; do [ ! -e "$p" ]; done
-x=$("$S/create" ring-p 1); made icc-pipes 3; made icc-tee 1; made icc-merge 0
-printf 'hi' > "$(end p 0 0)/0"; [ "$(timeout 1 cat "$(end 0 1 p)/0")" = hi ]
+mk ring-p 1; made icc-pipes 4; made icc-tee 1; made icc-merge 0
+printf 'hi' > "$(at p 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 p)/0")" = hi ]
 "$S/remove" "$x"
-[ -z "$("$S/list")" ]
+for q in $mine; do [ ! -d "$q" ]; done
 rm -f in out
 trap - EXIT
 echo ok

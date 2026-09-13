@@ -1,7 +1,11 @@
 #!/bin/bash
 # .claude/skills/icc-patch/scripts/remove
 # remove DIR: remove the fittings, then the pipes, in the reverse of the order
-# create made them, then delete DIR. DIR is what create printed.
+# create made them, then delete DIR. DIR is what create printed. A piece whose
+# directory is gone is nothing to remove; one that will not go is named, and
+# DIR is left standing with the made file that names the rest, so a second
+# remove can try again: the record outlives the attempt, or nothing can find
+# what is left.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
@@ -9,5 +13,10 @@
 set -eu
 d=${1:?usage: remove DIR}
 [ -f "$d/patch" ] && [ -f "$d/made" ] || { echo "not a patch: $d" >&2; exit 1; }
-sed '1!G;h;$!d' "$d/made" | while read -r sc p; do "$sc/remove" "$p" 2>/dev/null || :; done
+left=0
+while read -r sc p; do
+  [ -e "$p" ] || continue
+  "$sc/remove" "$p" || { echo "would not go: $p" >&2; left=1; }
+done < <(sed '1!G;h;$!d' "$d/made")
+[ "$left" -eq 0 ] || { echo "left standing: $d" >&2; exit 1; }
 rm -rf "$d"

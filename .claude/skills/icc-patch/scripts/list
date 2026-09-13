@@ -1,16 +1,23 @@
 #!/bin/bash
 # .claude/skills/icc-patch/scripts/list
 # list: one line per patch, "DIR up|down SHAPE N LANES".
-# Up means every pipe and fitting in it says up.
+# Up means every pipe and fitting in it says up. A patch whose made file is
+# gone is down: nothing can say its pieces are up, and its pieces cannot be
+# reached to remove.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+set -eu
 for d in /tmp/icc-patch-*/; do
-  [ -d "$d" ] || continue
-  d=${d%/}; s=up
-  while read -r sc p; do
-    "$sc/list" | cut -d' ' -f1,2 | grep -qx "$p up" || s=down
-  done < "$d/made"
+  d=${d%/}
+  [ -f "$d/patch" ] || continue
+  s=down
+  if [ -f "$d/made" ]; then
+    s=up
+    while read -r sc p; do
+      "$sc/list" | cut -d' ' -f1,2 | grep -qxF "$p up" || s=down
+    done < "$d/made"
+  fi
   echo "$d $s $(sed -n 1p "$d/patch")"
 done

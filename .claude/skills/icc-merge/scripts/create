@@ -3,7 +3,8 @@
 # create DST SIDE SRC...: copy what SIDE writes into every pipe SRC onto the
 # same lanes of pipe DST, byte for byte, in order per inlet, until removed.
 # Print the merge's directory. Every pipe must exist and have the same lane
-# count; the merge makes nothing but itself.
+# count; no inlet is the outlet and none is given twice; the merge makes
+# nothing but itself.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
@@ -20,15 +21,45 @@ for p; do
   [ "$(ls "$p" | grep -c '^[0-9][0-9]*$')" -eq "$n" ] ||
     { echo "lanes differ: $p" >&2; exit 1; }
 done
-d=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
+# One pipe, one spelling. The checks below, the merge file and the copiers'
+# argv all get the canonical path, so the path list prints is the path that
+# finds the copiers.
 dst=$(readlink -f "$dst")
-{ printf '%s\n' "$dst" "$side"; for p; do readlink -f "$p"; done; } > "$d/merge"
+srcs=(); for p; do srcs+=("$(readlink -f "$p")"); done
+for p in "${srcs[@]}"; do
+  [ "$p" != "$dst" ] ||
+    { echo "inlet is the outlet: $p" >&2; exit 1; }
+done
+# Two copiers on one inlet lane are two readers of it, and the order it went
+# in on that inlet is the one thing a merge promises.
+dup=$(printf '%s\n' "${srcs[@]}" | sort | uniq -d | sed -n 1p)
+[ -z "$dup" ] || { echo "inlet twice: $dup" >&2; exit 1; }
+d=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
+# Until the merge is whole it is not a merge: a create that cannot finish
+# takes its copiers and its directory with it. The handler exits so the EXIT
+# trap runs on a signal too.
+trap 'kill $(cat "$d/pid" 2>/dev/null) 2>/dev/null || :; rm -rf "$d"' EXIT
+trap 'exit 1' INT TERM HUP
+{ printf '%s\n' "$dst" "$side"; printf '%s\n' "${srcs[@]}"; } > "$d/merge"
 l=$side
 while [ "$l" -lt "$n" ]; do
-  for p; do
-    cat -- "$p/$l" < /dev/null > "$dst/$l" 2>&1 &
+  # Open the outlet lane here, where a wait or a failure is this shell's own
+  # and the caller's bound reaches it. Opened in the copier instead, an
+  # outlet whose hold is dead blocks a forked shell that still holds this
+  # one's stdout, and $(create) never returns though create has.
+  exec 3> "$dst/$l"
+  for p in "${srcs[@]}"; do
+    # The copier inherits the open lane as its stdout and never opens it. Its
+    # stderr goes nowhere: the outlet carries what the inlets wrote, and a
+    # diagnostic on it would be bytes no inlet ever wrote. Closing fd 3 leaves
+    # it for cat(1) to open the inlet lane on, which is what list and remove
+    # know a copier by.
+    { trap - EXIT INT TERM HUP; exec >&3 2>/dev/null 3>&-
+      exec cat -- "$p/$l" < /dev/null; } &
     echo $! >> "$d/pid"
   done
+  exec 3>&-
   l=$((l + 2))
 done
+trap - EXIT INT TERM HUP
 echo "$d"

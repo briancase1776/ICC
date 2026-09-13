@@ -1,13 +1,32 @@
 #!/bin/bash
 # .claude/skills/icc-merge/scripts/remove
 # remove DIR: stop the merge, delete its directory. DIR is what create printed.
-# The pipes on either end are left exactly as they were.
+# Only this merge's own copiers are killed, and only a directory create made
+# is deleted. The pipes on either end are left exactly as they were.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 d=${1:?usage: remove DIR}
+d=${d%/}
+case $d in /tmp/icc-merge-*) ;; *) echo "not a merge: $d" >&2; exit 1;; esac
 [ -f "$d/merge" ] && [ -f "$d/pid" ] || { echo "not a merge: $d" >&2; exit 1; }
-kill $(cat "$d/pid") 2>/dev/null || :
-rm -rf "$d"
+side=$(sed -n 2p "$d/merge")
+mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
+m=${#srcs[@]}
+i=0
+for p in $(cat "$d/pid"); do
+  # A pid outlives nothing here: it can be gone, or another process by the
+  # time this runs. A copier of this merge is its own inlet lane, on fd 3
+  # once cat(1) has opened it and in its argv until then, and that pair of
+  # marks is this copier's and no other process's. Anything else in the file
+  # is not ours to kill.
+  want=${srcs[i % m]}/$((side + 2 * (i / m)))
+  if [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$want" ] ||
+     [ "$(tr '\0' '\n' < "/proc/$p/cmdline" 2>/dev/null | sed -n 3p)" = "$want" ]
+  then kill "$p" 2>/dev/null || :
+  fi
+  i=$((i + 1))
+done
+rm -rf -- "$d"

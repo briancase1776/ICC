@@ -1,19 +1,26 @@
 #!/bin/bash
 # .claude/skills/icc-merge/scripts/list
 # list: one line per merge, "DIR up|down DST SIDE SRC...".
-# Up means every copier still has its lane of DST open to write.
+# Up means every copier still has its own inlet lane open to read.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 for d in /tmp/icc-merge-*/; do
-  [ -d "$d" ] || continue
   d=${d%/}
-  dst=$(sed -n 1p "$d/merge"); side=$(sed -n 2p "$d/merge")
-  m=$(( $(wc -l < "$d/merge") - 2 ))
+  # A directory of the right name is not a merge. An unfinished create and a
+  # stray mkdir both look like one from here, and neither is.
+  [ -f "$d/merge" ] || continue
+  side=$(sed -n 2p "$d/merge")
+  mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
+  m=${#srcs[@]}
   s=up; i=0
   for p in $(cat "$d/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$p/fd/1" 2>/dev/null)" = "$dst/$((side + 2 * (i / m)))" ] || s=down
+    # The inlet lane is on fd 3, canonically spelled, and belongs to this
+    # copier alone. The outlet lane does not: two merges onto one outlet
+    # share it.
+    [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] ||
+      s=down
     i=$((i + 1))
   done
   echo "$d $s $(paste -sd ' ' < "$d/merge")"

@@ -3,7 +3,8 @@
 # Prove the merge: get three pipes, merge side 0 of two into the third, push a
 # Frames payload bigger than one lane holds through each inlet in turn, read it
 # back whole from the outlet each time, then plain bytes on one lane from both
-# inlets, remove it. The pipes stay up.
+# inlets, remove it. The pipes stay up. An inlet that is the outlet, and
+# one given twice, are refused.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
@@ -19,6 +20,8 @@ trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in
 "$M/create" "$c" 2 "$a" 2>/dev/null && exit 1
 "$M/create" "$c" 0 "$x" 2>/dev/null && exit 1
 "$M/create" "$c" 0 /tmp 2>/dev/null && exit 1
+"$M/create" "$c" 0 "$c" 2>/dev/null && exit 1
+"$M/create" "$c" 0 "$a" "$a" 2>/dev/null && exit 1
 m=$("$M/create" "$c" 0 "$a" "$b")
 trap '"$M/remove" "$m" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
 "$M/list" | grep -qx "$m up $c 0 $a $b"

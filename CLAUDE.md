@@ -92,6 +92,10 @@ back whole, compare bytes, both directions, remove the pipe. The harness must no
 grow into a client, protocol, or example app. If a test needs more than
 a few lines of setup, read or write is too complicated, not the test.
 
+The harness is bash. Run it as `./tests/run.sh`. `sh tests/run.sh`
+overrides the shebang and dies on the first bashism, which is the caller
+overriding the interpreter, not the harness being broken.
+
 ## Rules
 
 - **KISS.** One way to do each thing. Prefer the OS primitive over a
@@ -106,6 +110,13 @@ a few lines of setup, read or write is too complicated, not the test.
   like it needs a third, it belongs above or below this layer.
 - **One number.** The only bytes Frames adds are a payload's count, in
   front. No header ever grows on a frame to say what the payload is.
+- **Bash, and the shebang decides.** Every script here is bash and says
+  so on its first line. Run one by its path and let that line choose the
+  interpreter. Never reach for `sh script` or `bash script`: that
+  overrides what the file declares, and a script that runs today only
+  because the caller forced dash on it will break the day it uses
+  anything bash has. ICC's runner called every piece with `sh` and
+  failed the moment Pipes' harness stopped being POSIX.
 
 ## Layout
 

@@ -25,6 +25,11 @@ read -r size 0<> "$d/$r" ||
   { echo "read: no count where a payload should start" >&2; exit 1; }
 [[ $size =~ ^[0-9]+$ ]] ||
   { echo "read: not a count: $size" >&2; exit 1; }
+# Bash counts in 64 bits. A longer run of digits wraps there, and read sets
+# off after a payload nobody sent, on a lane that never says EOF. Eighteen
+# digits always fit; the zeros are the leading ones the note below is about.
+[[ $size =~ ^0*[0-9]{1,18}$ ]] ||
+  { echo "read: count too big: $size" >&2; exit 1; }
 # Base ten, said out loud: the shape above lets a leading zero through and
 # arithmetic would take it for octal, leaving the rest of the payload on
 # the lane as the head of the next one.

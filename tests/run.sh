@@ -3,7 +3,8 @@
 # Prove read and write: get a pipe, push a payload bigger than one lane holds
 # through it, read it back whole, compare bytes, both directions; push one
 # far bigger with a read draining it; refuse a SIDE that is not a side and a
-# count that is not a count; remove the pipe. Runs in a directory of its own
+# count that is not a count, too big to count among them; remove the pipe.
+# Runs in a directory of its own
 # and touches nothing else.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -41,6 +42,8 @@ was=$(ls "$d")
 [ ! -e pwned ]; [ "$(ls "$d")" = "$was" ]
 # A count that is not a count is a failure, and a leading zero is base ten.
 printf 'garbage\n' 1<> "$d/0"
+timeout 5 "$F/read" "$d" 1 >/dev/null 2>&1 && exit 1
+printf '99999999999999999999\n' 1<> "$d/0"
 timeout 5 "$F/read" "$d" 1 >/dev/null 2>&1 && exit 1
 printf '010\n0123456789' 1<> "$d/0"
 [[ $(timeout 5 "$F/read" "$d" 1) == 0123456789 ]]

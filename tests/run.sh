@@ -27,7 +27,9 @@ printf 'done' | "$F/write" "$d" 0
 [[ $(timeout 5 "$F/read" "$d" 1) == done ]]
 # Bigger than the lanes hold, with a read draining it: the write cannot
 # return until the read has taken enough, and both must still be exact.
-head -c 1000000 /dev/urandom > big
+# Sized inside the hold's depth, which is what bounds a write a read is
+# already draining; SKILL.md says what that depth is.
+head -c 262144 /dev/urandom > big
 timeout 60 "$F/write" "$d" 0 < big & w=$!
 timeout 60 "$F/read" "$d" 1 > bigout & r=$!
 wait $w; wait $r; cmp big bigout

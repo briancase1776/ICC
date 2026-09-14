@@ -47,17 +47,24 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   when the kernel has shrunk its buffer.
 - Write returns with nobody reading as long as the payload fits in
   flight: the lanes one side writes, times what each holds. Bigger than
-  that, write waits for read. Pipes' SKILL.md has the numbers, and a
-  lane's buffer can be grown as far as `/proc/sys/fs/pipe-max-size`,
-  which moves what a write can leave and walk away from.
+  that, write waits for read, as far as the hold below allows. Pipes'
+  SKILL.md has the numbers.
 - Read waits on an empty lane. Bound the call with `timeout`, as Pipes
   says. A read that stops halfway leaves the rest on the wire.
-- Write spools the whole payload while it counts it, because the count
-  goes in front. The spool is made, opened both ways, and unlinked
-  before a byte goes into it, so it lives on its descriptors alone: no
-  name survives for a bystander to read or a signal to strand, and
-  there is nothing to clean up. It is not a limit on what a write can
-  carry. With a read running, a payload of any size goes through.
+- Write holds the whole payload while it counts it, because the count
+  goes in front. The hold is a chain of cats, one per lane this side
+  writes, and it is deeper than those lanes: with nobody reading, the
+  lanes fill first and the hold never shows. With a read running the
+  lanes stop being the limit and the hold becomes it — 131072 bytes
+  through one cat, 196608 through two, 327680 through three. Past that
+  a write does not return, and a read cannot free it, because nothing
+  reaches the lanes until the count does.
+- That the hold never shows depends on a lane being 64K, since a cat
+  holds more than that. A lane's buffer can be grown as far as
+  `/proc/sys/fs/pipe-max-size` and the size sticks for later openers, so
+  a wider buffer moves the limit here: with six lanes grown to a
+  megabyte each, a write that could leave 2M on the wire and walk away
+  leaves 512K. Nothing in this project can grow its own chain to match.
 - `1<>` is dropped, silently, as an outer redirection on `$( )` or
   `>( )`. `1>` and `1>>` are not. A lane write wrapped in a command
   substitution therefore goes to the substitution's own pipe instead of

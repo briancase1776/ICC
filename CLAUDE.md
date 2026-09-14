@@ -111,6 +111,10 @@ overriding the interpreter, not the harness being broken.
   like it needs a third, it belongs above or below this layer.
 - **One number.** The only bytes Frames adds are a payload's count, in
   front. No header ever grows on a frame to say what the payload is.
+- **No wire in a file.** Nothing that came off a wire, or is on its way
+  to one, is ever written to a file. The payload is weighed in flight.
+  The hold's depth is the price of that, paid on purpose: going to disk
+  to get past it is not a fix, it is this rule broken.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script` or `bash script`: that

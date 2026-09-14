@@ -47,7 +47,20 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   when the kernel has shrunk its buffer.
 - Write returns with nobody reading as long as the payload fits in
   flight: the lanes one side writes, times what each holds. Bigger than
-  that, write waits for read. Pipes' SKILL.md has the numbers.
+  that, write waits for read, as far as the hold below allows. Pipes'
+  SKILL.md has the numbers.
 - Read waits on an empty lane. Bound the call with `timeout`, as Pipes
   says. A read that stops halfway leaves the rest on the wire.
+- Write holds the whole payload while it counts it, because the count
+  goes in front. The hold is a chain of cats, one per lane this side
+  writes, and it is deeper than those lanes: with nobody reading, the
+  lanes fill first and the hold never shows. With a read running the
+  lanes stop being the limit and the hold becomes it — 131072 bytes
+  through one cat, 196608 through two, 327680 through three. Past that
+  a write does not return, and a read cannot free it, because nothing
+  reaches the lanes until the count does.
+- `1<>` is dropped, silently, as an outer redirection on `$( )` or
+  `>( )`. `1>` and `1>>` are not. A lane write wrapped in a command
+  substitution therefore goes to the substitution's own pipe instead of
+  the wire, and whoever is waiting for it waits for bytes nobody sent.
 - Two lanes is one straw each way and the same script.

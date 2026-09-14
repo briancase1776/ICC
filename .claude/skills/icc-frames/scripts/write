@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-frames/scripts/write
 # write DIR SIDE < bytes: slice stdin into frames and put them on the lanes
 # SIDE writes. A count goes first. Frames go round-robin, lane order.
@@ -14,7 +14,7 @@ f=$(mktemp); trap 'rm -f "$f"' EXIT
 cat > "$f"; size=$(wc -c < "$f")
 printf '%s\n' "$size" 1<> "$d/$s"
 k=0
-while [ $((k * b)) -lt "$size" ]; do
+while (( k * b < size )); do
   dd if="$f" bs="$b" skip="$k" count=1 2>/dev/null 1<> "$d/$(( (k % n) * 2 + s ))"
-  k=$((k + 1))
+  k=$(( k + 1 ))
 done

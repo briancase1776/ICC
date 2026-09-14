@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # tests/run.sh
 # Prove read and write: get a pipe, push a payload bigger than one lane holds
 # through it, read it back whole, compare bytes, both directions, remove it.
@@ -20,7 +20,7 @@ cmp in out
 timeout 5 "$F/read" "$d" 0 > out
 cmp in out
 printf 'done' | "$F/write" "$d" 0
-[ "$(timeout 5 "$F/read" "$d" 1)" = done ]
+[[ $(timeout 5 "$F/read" "$d" 1) == done ]]
 "$P/remove" "$d"
 rm -f in out
 trap - EXIT

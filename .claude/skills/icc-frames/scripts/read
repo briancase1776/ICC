@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-frames/scripts/read
 # read DIR SIDE > bytes: take frames off the lanes SIDE reads and put them
 # back together. The count comes first. Frames come round-robin, lane order.
@@ -15,11 +15,11 @@ b=$(getconf PIPE_BUF "$d")
 r=$(( 1 - s ))
 read -r size 0<> "$d/$r" ||
   { echo "read: no count where a payload should start" >&2; exit 1; }
-case $size in ''|*[!0-9]*)
-  echo "read: not a count: $size" >&2; exit 1;; esac
+[[ $size =~ ^[0-9]+$ ]] ||
+  { echo "read: not a count: $size" >&2; exit 1; }
 k=0; left=$size
-while [ "$left" -gt 0 ]; do
-  want=$b; [ "$left" -lt "$b" ] && want=$left
+while (( left > 0 )); do
+  (( want = left < b ? left : b ))
   head -c "$want" 0<> "$d/$(( (k % n) * 2 + r ))"
-  left=$((left - want)); k=$((k + 1))
+  left=$(( left - want )); k=$(( k + 1 ))
 done

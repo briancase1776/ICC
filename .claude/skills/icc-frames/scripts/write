@@ -61,9 +61,12 @@ hold() {
   # and would outlive this script with nothing able to end it. Stdout is let
   # go first: a background shell keeps close-on-exec dups of what it
   # inherited until it execs, and those hold a caller's $( ) open.
-  # Its own process group, so a signal can reach the whole chain at once.
+  # A group rather than another shell: on a two lane pipe, where the chain is
+  # one cat, bash runs it in place and the job is the cat itself, one process
+  # instead of two. Its own process group either way, so a signal reaches the
+  # whole chain at once.
   set -m
-  bash -c "$cmd" >/dev/null 3>&- 5>&- &
+  eval "{ $cmd ; } >/dev/null 3>&- 5>&- &"
   h=$!
   set +m
   exec 6<&- 7>&-

@@ -13,92 +13,22 @@ lanes=("$d"/[0-9]*); n=$(( ${#lanes[@]} / 2 ))
 (( n > 0 )) || { echo "write: no lanes in $d" >&2; exit 1; }
 b=$(getconf PIPE_BUF "$d")
 
-# The count goes in front, so the whole payload is held while it is weighed.
-# The hold is a chain of cats, one per lane this side writes, so it is as deep
-# as the wire it feeds. Detached on purpose: a chain in this shell's own tree
-# holds nothing, because the shell waits for its own pipeline before going on.
-h=; c=
-# The chain ends itself when the hold is closed, so this is only for a signal
-# arriving mid-write. It signals the job, not the shell that forked it: that
-# shell is a pipeline's parent, and killing it alone orphans every cat in the
-# chain with nothing left able to end them.
-release() {
-  [ -n "$h" ] && kill -- -"$h" 2>/dev/null || :
-  # The counting pair is not in the chain's group: bash gives a process
-  # substitution the caller's group whatever job control says, so it has to
-  # be taken by name, children first -- tee holds the hold's input open and
-  # nothing downstream can end while it does.
-  [ -n "$c" ] && { pkill -P "$c" 2>/dev/null; kill "$c" 2>/dev/null; } || :
-}
-trap 'release; exit 1' INT TERM HUP
-trap release EXIT
+# The count goes in front, so the whole payload is spooled while it is
+# weighed. Made, opened both ways, and unlinked before a byte is written:
+# the spool lives on its descriptors alone, so no name survives for a
+# bystander to read or a signal to strand, and there is nothing to clean up.
+# The reading end is opened before anything is put there, so it sits at the
+# start and the frames come off it in order.
+t=$(mktemp "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
+exec 3> "$t" 4< "$t"
+rm -f "$t"
+cat >&3; exec 3>&-
+size=$(stat -Lc %s /proc/self/fd/4)
 
-hold() {
-  # Made, opened, and unlinked before anything is written to it: the hold
-  # lives on its descriptors alone, so no name survives for a bystander to
-  # read or a signal to strand, and there is nothing to clean up.
-  local t; t=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
-  mkfifo -m 600 "$t/i" "$t/o"
-  # <> to start with, because it is the open that never blocks and there is
-  # nobody at the other end yet.
-  exec 3<> "$t/o" 5<> "$t/i"
-  # The chain's own ends, and they are one-way on purpose: given a <> dup it
-  # would be a writer on its own input and could never see EOF.
-  exec 6< "$t/i" 7> "$t/o"
-  # Now that each lane has somebody on the far side, take this script's ends
-  # one-way too. A <> end is its own reader as well as its own writer, and
-  # anything inheriting it can neither be refused nor see EOF: that is what
-  # left a killed write's counting pair alive with nothing able to end it.
-  exec 5>&-; exec 5> "$t/i"
-  exec 3>&-; exec 3< "$t/o"
-  rm -f "$t/i" "$t/o"; rmdir "$t"
-  # Each stage keeps only the end it uses. Given both, every cat in the chain
-  # is a writer on the hold's far end, so the chain keeps the thing it is
-  # draining into alive and cannot be ended by closing anything.
-  local cmd k
-  if (( n == 1 )); then
-    cmd="cat <&6 >&7"
-  else
-    cmd="cat <&6 7>&-"
-    for (( k=1; k<n-1; k++ )); do cmd="$cmd | cat 6<&- 7>&-"; done
-    cmd="$cmd | cat 6<&- >&7"
-  fi
-  # The chain is handed descriptors, never paths: nothing a caller controls
-  # is pasted into text a shell will parse. It gets 6 and 7 as its own ends
-  # and neither 3 nor 5, because a chain holding those could never see EOF
-  # and would outlive this script with nothing able to end it. Stdout is let
-  # go first: a background shell keeps close-on-exec dups of what it
-  # inherited until it execs, and those hold a caller's $( ) open.
-  # A group rather than another shell: on a two lane pipe, where the chain is
-  # one cat, bash runs it in place and the job is the cat itself, one process
-  # instead of two. Its own process group either way, so a signal reaches the
-  # whole chain at once.
-  set -m
-  eval "{ $cmd ; } >/dev/null 3>&- 5>&- &"
-  h=$!
-  set +m
-  exec 6<&- 7>&-
-}
-
-hold
-# The counting pair must not hold the hold's far end. Given fd 3 it is a
-# reader on the output as well as a writer on the input, so it pins the ring
-# from both sides: the chain's tail blocks instead of being refused, its head
-# never sees EOF, and a write that dies without running its trap leaves the
-# whole lot alive on descriptors nothing can name.
-exec 4< <( exec 3>&-; tee "/dev/fd/5" | wc -c )
-c=$!
-read -r size <&4; exec 4<&-
-c=
-# Closing the last writer is what ends the chain: its head opened the hold
-# read-only, so it sees EOF, drains what it has, and exits by itself.
-exec 5>&-
 printf '%s\n' "$size" 1<> "$d/$s"
 k=0; left=$size
 while (( left > 0 )); do
   (( want = left < b ? left : b ))
-  head -c "$want" <&3 1<> "$d/$(( (k % n) * 2 + s ))"
+  head -c "$want" <&4 1<> "$d/$(( (k % n) * 2 + s ))"
   left=$(( left - want )); k=$(( k + 1 ))
 done
-wait "$h" || { echo "write: the hold failed" >&2; exit 1; }
-h=; c=

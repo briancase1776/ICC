@@ -44,10 +44,9 @@ holds 64K in flight. In Claude Code a write must finish inside one tool
 call, with nobody guaranteed to be reading yet, so what a write can
 leave on the wire and walk away from is the lanes that side writes,
 half the lane count, times 64K, less the count line. Past that, write
-waits for a read. That
-is why the bundle exists, and Frames is the stick. Build for the
-bundle. Two lanes is a bundle of one straw each way, and the same
-script.
+waits for a read. That is why the bundle exists, and Frames is the
+stick. Build for the bundle. Two lanes is a bundle of one straw each
+way, and the same script.
 
 Both operations take a pipe directory that ICC-Pipes handed out. Both
 open lanes with `<>`. That open never blocks, with or without anyone on

@@ -9,8 +9,9 @@
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
+shopt -s nullglob
 d=${1:?usage: read DIR SIDE}; s=${2:?usage: read DIR SIDE}
-n=$(( $(ls "$d" | grep -c '^[0-9][0-9]*$') / 2 ))
+lanes=("$d"/[0-9]*); n=$(( ${#lanes[@]} / 2 ))
 b=$(getconf PIPE_BUF "$d")
 r=$(( 1 - s ))
 read -r size 0<> "$d/$r" ||

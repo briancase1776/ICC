@@ -39,10 +39,18 @@ hold() {
   # read or a signal to strand, and there is nothing to clean up.
   local t; t=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
   mkfifo -m 600 "$t/i" "$t/o"
+  # <> to start with, because it is the open that never blocks and there is
+  # nobody at the other end yet.
   exec 3<> "$t/o" 5<> "$t/i"
   # The chain's own ends, and they are one-way on purpose: given a <> dup it
   # would be a writer on its own input and could never see EOF.
   exec 6< "$t/i" 7> "$t/o"
+  # Now that each lane has somebody on the far side, take this script's ends
+  # one-way too. A <> end is its own reader as well as its own writer, and
+  # anything inheriting it can neither be refused nor see EOF: that is what
+  # left a killed write's counting pair alive with nothing able to end it.
+  exec 5>&-; exec 5> "$t/i"
+  exec 3>&-; exec 3< "$t/o"
   rm -f "$t/i" "$t/o"; rmdir "$t"
   # Each stage keeps only the end it uses. Given both, every cat in the chain
   # is a writer on the hold's far end, so the chain keeps the thing it is
@@ -73,7 +81,12 @@ hold() {
 }
 
 hold
-exec 4< <( tee "/dev/fd/5" | wc -c )
+# The counting pair must not hold the hold's far end. Given fd 3 it is a
+# reader on the output as well as a writer on the input, so it pins the ring
+# from both sides: the chain's tail blocks instead of being refused, its head
+# never sees EOF, and a write that dies without running its trap leaves the
+# whole lot alive on descriptors nothing can name.
+exec 4< <( exec 3>&-; tee "/dev/fd/5" | wc -c )
 c=$!
 read -r size <&4; exec 4<&-
 c=

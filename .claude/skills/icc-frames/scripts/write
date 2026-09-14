@@ -47,13 +47,13 @@ hold() {
   # Each stage keeps only the end it uses. Given both, every cat in the chain
   # is a writer on the hold's far end, so the chain keeps the thing it is
   # draining into alive and cannot be ended by closing anything.
-  local c k
+  local cmd k
   if (( n == 1 )); then
-    c='cat <&6 >&7'
+    cmd="cat <&6 >&7"
   else
-    c='cat <&6 7>&-'
-    for (( k=1; k<n-1; k++ )); do c="$c | cat 6<&- 7>&-"; done
-    c="$c | cat 6<&- >&7"
+    cmd="cat <&6 7>&-"
+    for (( k=1; k<n-1; k++ )); do cmd="$cmd | cat 6<&- 7>&-"; done
+    cmd="$cmd | cat 6<&- >&7"
   fi
   # The chain is handed descriptors, never paths: nothing a caller controls
   # is pasted into text a shell will parse. It gets 6 and 7 as its own ends
@@ -63,7 +63,7 @@ hold() {
   # inherited until it execs, and those hold a caller's $( ) open.
   # Its own process group, so a signal can reach the whole chain at once.
   set -m
-  bash -c "$c" >/dev/null 3>&- 5>&- &
+  bash -c "$cmd" >/dev/null 3>&- 5>&- &
   h=$!
   set +m
   exec 6<&- 7>&-

@@ -50,4 +50,9 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   that, write waits for read. Pipes' SKILL.md has the numbers.
 - Read waits on an empty lane. Bound the call with `timeout`, as Pipes
   says. A read that stops halfway leaves the rest on the wire.
+- Write holds the whole payload while it counts it, in a chain of cats
+  one per lane this side writes, about 64K a lane. Up to that, write
+  behaves as the lanes do: it returns what fits and waits for a read
+  past it. Beyond the hold it waits for a read that cannot come, because
+  nothing is on the wire until the count is.
 - Two lanes is one straw each way and the same script.

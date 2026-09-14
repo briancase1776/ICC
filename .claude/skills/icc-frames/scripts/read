@@ -11,14 +11,24 @@
 set -eu
 shopt -s nullglob
 d=${1:?usage: read DIR SIDE}; s=${2:?usage: read DIR SIDE}
+# SIDE before it is used, for the reason write says.
+case $s in 0|1) ;; *) echo "read: SIDE is 0 or 1, not $s" >&2; exit 1 ;; esac
 lanes=("$d"/[0-9]*); n=$(( ${#lanes[@]} / 2 ))
-b=$(getconf PIPE_BUF "$d")
+(( n > 0 )) || { echo "read: no lanes in $d" >&2; exit 1; }
 r=$(( 1 - s ))
+for (( j=0; j<n; j++ )); do
+  [ -p "$d/$(( j * 2 + r ))" ] ||
+    { echo "read: not a lane: $d/$(( j * 2 + r ))" >&2; exit 1; }
+done
+b=$(getconf PIPE_BUF "$d")
 read -r size 0<> "$d/$r" ||
   { echo "read: no count where a payload should start" >&2; exit 1; }
 [[ $size =~ ^[0-9]+$ ]] ||
   { echo "read: not a count: $size" >&2; exit 1; }
-k=0; left=$size
+# Base ten, said out loud: the shape above lets a leading zero through and
+# arithmetic would take it for octal, leaving the rest of the payload on
+# the lane as the head of the next one.
+k=0; left=$(( 10#$size ))
 while (( left > 0 )); do
   (( want = left < b ? left : b ))
   head -c "$want" 0<> "$d/$(( (k % n) * 2 + r ))"

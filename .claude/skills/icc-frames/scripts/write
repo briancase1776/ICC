@@ -11,45 +11,11 @@ shopt -s nullglob
 d=${1:?usage: write DIR SIDE}; s=${2:?usage: write DIR SIDE}
 lanes=("$d"/[0-9]*); n=$(( ${#lanes[@]} / 2 ))
 b=$(getconf PIPE_BUF "$d")
-
-# The count goes in front, so the whole payload is held while it is weighed.
-# The hold is a chain of cats, one per lane this side writes, so it is as deep
-# as the wire it feeds. Detached on purpose: a chain in this shell's own tree
-# holds nothing, because the shell waits for its own pipeline before going on.
-# Armed before anything is made, and h stays empty until there is a chain to
-# kill, because kill with no pid is not this shell's to send.
-h=; i=; o=
-release() {
-  [ -n "$h" ] && kill "$h" 2>/dev/null || :
-  rm -f "$i" "$o"
-}
-trap 'release; exit 1' INT TERM HUP
-trap release EXIT
-
-hold() {
-  i=$(mktemp -u "${TMPDIR:-/tmp}/icc-frames-i-XXXXXXXX")
-  o=$(mktemp -u "${TMPDIR:-/tmp}/icc-frames-o-XXXXXXXX")
-  mkfifo "$i" "$o"
-  # Held open here so neither end blocks on an open and neither sees EOF.
-  exec 3<> "$o" 5<> "$i"
-  local c="cat 0<> '$i'" k
-  for (( k=1; k<n; k++ )); do c="$c | cat"; done
-  # Let go of this shell's stdout before the chain opens anything: a
-  # background shell keeps close-on-exec dups of what it inherited until it
-  # execs, and those hold a caller's command substitution open.
-  bash -c "$c > '$o'" >/dev/null 2>&1 &
-  h=$!
-  # h is an unreaped child for as long as this script runs, so the kernel
-  # cannot hand its number to anything else and release's kill stays ours.
-}
-
-hold
-exec 4< <( tee "/dev/fd/5" | wc -c )
-read -r size <&4; exec 4<&- 5>&-
+f=$(mktemp); trap 'rm -f "$f"' EXIT
+cat > "$f"; size=$(wc -c < "$f")
 printf '%s\n' "$size" 1<> "$d/$s"
-k=0; left=$size
-while (( left > 0 )); do
-  (( want = left < b ? left : b ))
-  head -c "$want" <&3 1<> "$d/$(( (k % n) * 2 + s ))"
-  left=$(( left - want )); k=$(( k + 1 ))
+k=0
+while (( k * b < size )); do
+  dd if="$f" bs="$b" skip="$k" count=1 2>/dev/null 1<> "$d/$(( (k % n) * 2 + s ))"
+  k=$(( k + 1 ))
 done

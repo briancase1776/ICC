@@ -27,12 +27,16 @@ b=$(getconf PIPE_BUF "$d")
 # The hold is a chain of cats, one per lane this side writes, so it is as deep
 # as the wire it feeds. Detached on purpose: a chain in this shell's own tree
 # holds nothing, because the shell waits for its own pipeline before going on.
-h=; c=
+h=; c=; hd=
 # The chain ends itself when the hold is closed, so this is only for a signal
 # arriving mid-write. It signals the job, not the shell that forked it: that
 # shell is a pipeline's parent, and killing it alone orphans every cat in the
 # chain with nothing left able to end them.
 release() {
+  # The hold's directory outlives a signal that lands before its lanes are
+  # unlinked, and that window is the documented `timeout N` usage, so it is
+  # named out here where release can reach it rather than kept in hold().
+  [ -n "$hd" ] && rm -rf -- "$hd" 2>/dev/null || :
   [ -n "$h" ] && kill -- -"$h" 2>/dev/null || :
   # The counting pair is not in the chain's group: bash gives a process
   # substitution the caller's group whatever job control says, so it has to
@@ -47,21 +51,21 @@ hold() {
   # Made, opened, and unlinked before anything is written to it: the hold
   # lives on its descriptors alone, so no name survives for a bystander to
   # read or a signal to strand, and there is nothing to clean up.
-  local t; t=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
-  mkfifo -m 600 "$t/i" "$t/o"
+  hd=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
+  mkfifo -m 600 "$hd/i" "$hd/o"
   # <> to start with, because it is the open that never blocks and there is
   # nobody at the other end yet.
-  exec 3<> "$t/o" 5<> "$t/i"
+  exec 3<> "$hd/o" 5<> "$hd/i"
   # The chain's own ends, and they are one-way on purpose: given a <> dup it
   # would be a writer on its own input and could never see EOF.
-  exec 6< "$t/i" 7> "$t/o"
+  exec 6< "$hd/i" 7> "$hd/o"
   # Now that each lane has somebody on the far side, take this script's ends
   # one-way too. A <> end is its own reader as well as its own writer, and
   # anything inheriting it can neither be refused nor see EOF: that is what
   # left a killed write's counting pair alive with nothing able to end it.
-  exec 5>&-; exec 5> "$t/i"
-  exec 3>&-; exec 3< "$t/o"
-  rm -f "$t/i" "$t/o"; rmdir "$t"
+  exec 5>&-; exec 5> "$hd/i"
+  exec 3>&-; exec 3< "$hd/o"
+  rm -f "$hd/i" "$hd/o"; rmdir "$hd"; hd=
   # A group is a command with one stdin and one stdout, so the chain's ends
   # are the group's ends: the head reads the group's stdin, the tail writes
   # its stdout, and every stage between is a bare cat. The ends are put on

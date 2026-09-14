@@ -59,6 +59,12 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   through one cat, 196608 through two, 327680 through three. Past that
   a write does not return, and a read cannot free it, because nothing
   reaches the lanes until the count does.
+- That the hold never shows depends on a lane being 64K, since a cat
+  holds more than that. A lane's buffer can be grown as far as
+  `/proc/sys/fs/pipe-max-size` and the size sticks for later openers, so
+  a wider buffer moves the limit here: with six lanes grown to a
+  megabyte each, a write that could leave 2M on the wire and walk away
+  leaves 512K. Nothing in this project can grow its own chain to match.
 - `1<>` is dropped, silently, as an outer redirection on `$( )` or
   `>( )`. `1>` and `1>>` are not. A lane write wrapped in a command
   substitution therefore goes to the substitution's own pipe instead of

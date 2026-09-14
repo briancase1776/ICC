@@ -101,8 +101,14 @@ c=
 # Closing the last writer is what ends the chain: its head opened the hold
 # read-only, so it sees EOF, drains what it has, and exits by itself.
 exec 5>&-
-printf '%s\n' "$size" 1<> "$d/$s"
-k=0; left=$size
+# The count and the head of the payload go out as one write, so the count
+# does not take a whole page of the first lane that a 4096-byte frame can
+# never share. Frame 0 is short by the count's own length; every frame
+# after it is PIPE_BUF, and the last is short as ever.
+left=$size
+first=$(( b - ${#size} - 1 )); (( first > left )) && first=$left
+{ printf '%s\n' "$size"; (( first > 0 )) && head -c "$first" <&3; } 1<> "$d/$s"
+left=$(( left - first )); k=1
 while (( left > 0 )); do
   (( want = left < b ? left : b ))
   head -c "$want" <&3 1<> "$d/$(( (k % n) * 2 + s ))"

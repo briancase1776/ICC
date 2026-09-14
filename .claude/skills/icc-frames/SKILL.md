@@ -32,11 +32,15 @@ side you are is agreed outside this skill.
 Both ends follow it; nothing on the wire says it.
 
 - The payload's byte count goes first, as a decimal line, on the first
-  lane the side writes.
-- Then the payload in frames of PIPE_BUF bytes, the last one shorter.
-  Frame k goes on the k-th lane the side writes, round-robin, lane order.
-- Read takes the count, then frame k from the same lane, never skipping,
-  until it has that many bytes.
+  lane the side writes, and the head of the payload goes out in the same
+  write. A pipe gives out whole pages, so a count on its own would take
+  a page no frame could ever share.
+- Then the payload in frames of PIPE_BUF bytes. Frame 0 is short by what
+  the count took, the last one is short by what is left, the rest are
+  full. Frame k goes on the k-th lane the side writes, round-robin, lane
+  order.
+- Read takes the count and the rest of that first write, then frame k
+  from the k-th lane, never skipping, until it has that many bytes.
 
 That count is the only thing Frames adds. Bytes in, the same bytes out.
 

@@ -28,7 +28,12 @@ read -r size 0<> "$d/$r" ||
 # Base ten, said out loud: the shape above lets a leading zero through and
 # arithmetic would take it for octal, leaving the rest of the payload on
 # the lane as the head of the next one.
-k=0; left=$(( 10#$size ))
+# Frame 0 shares its write with the count, so it is short by the count's
+# own length. Every frame after it is PIPE_BUF until the last.
+left=$(( 10#$size ))
+first=$(( b - ${#size} - 1 )); (( first > left )) && first=$left
+(( first > 0 )) && head -c "$first" 0<> "$d/$r"
+left=$(( left - first )); k=1
 while (( left > 0 )); do
   (( want = left < b ? left : b ))
   head -c "$want" 0<> "$d/$(( (k % n) * 2 + r ))"

@@ -10,12 +10,70 @@ set -eu
 shopt -s nullglob
 d=${1:?usage: write DIR SIDE}; s=${2:?usage: write DIR SIDE}
 lanes=("$d"/[0-9]*); n=$(( ${#lanes[@]} / 2 ))
+(( n > 0 )) || { echo "write: no lanes in $d" >&2; exit 1; }
 b=$(getconf PIPE_BUF "$d")
-f=$(mktemp); trap 'rm -f "$f"' EXIT
-cat > "$f"; size=$(wc -c < "$f")
+
+# The count goes in front, so the whole payload is held while it is weighed.
+# The hold is a chain of cats, one per lane this side writes, so it is as deep
+# as the wire it feeds. Detached on purpose: a chain in this shell's own tree
+# holds nothing, because the shell waits for its own pipeline before going on.
+h=
+# The chain ends itself when the hold is closed, so this is only for a signal
+# arriving mid-write. It signals the job, not the shell that forked it: that
+# shell is a pipeline's parent, and killing it alone orphans every cat in the
+# chain with nothing left able to end them.
+release() { [ -n "$h" ] && kill -- -"$h" 2>/dev/null || :; }
+trap 'release; exit 1' INT TERM HUP
+trap release EXIT
+
+hold() {
+  # Made, opened, and unlinked before anything is written to it: the hold
+  # lives on its descriptors alone, so no name survives for a bystander to
+  # read or a signal to strand, and there is nothing to clean up.
+  local t; t=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
+  mkfifo -m 600 "$t/i" "$t/o"
+  exec 3<> "$t/o" 5<> "$t/i"
+  # The chain's own ends, and they are one-way on purpose: given a <> dup it
+  # would be a writer on its own input and could never see EOF.
+  exec 6< "$t/i" 7> "$t/o"
+  rm -f "$t/i" "$t/o"; rmdir "$t"
+  # Each stage keeps only the end it uses. Given both, every cat in the chain
+  # is a writer on the hold's far end, so the chain keeps the thing it is
+  # draining into alive and cannot be ended by closing anything.
+  local c k
+  if (( n == 1 )); then
+    c='cat <&6 >&7'
+  else
+    c='cat <&6 7>&-'
+    for (( k=1; k<n-1; k++ )); do c="$c | cat 6<&- 7>&-"; done
+    c="$c | cat 6<&- >&7"
+  fi
+  # The chain is handed descriptors, never paths: nothing a caller controls
+  # is pasted into text a shell will parse. It gets 6 and 7 as its own ends
+  # and neither 3 nor 5, because a chain holding those could never see EOF
+  # and would outlive this script with nothing able to end it. Stdout is let
+  # go first: a background shell keeps close-on-exec dups of what it
+  # inherited until it execs, and those hold a caller's $( ) open.
+  # Its own process group, so a signal can reach the whole chain at once.
+  set -m
+  bash -c "$c" >/dev/null 3>&- 5>&- &
+  h=$!
+  set +m
+  exec 6<&- 7>&-
+}
+
+hold
+exec 4< <( tee "/dev/fd/5" | wc -c )
+read -r size <&4; exec 4<&-
+# Closing the last writer is what ends the chain: its head opened the hold
+# read-only, so it sees EOF, drains what it has, and exits by itself.
+exec 5>&-
 printf '%s\n' "$size" 1<> "$d/$s"
-k=0
-while (( k * b < size )); do
-  dd if="$f" bs="$b" skip="$k" count=1 2>/dev/null 1<> "$d/$(( (k % n) * 2 + s ))"
-  k=$(( k + 1 ))
+k=0; left=$size
+while (( left > 0 )); do
+  (( want = left < b ? left : b ))
+  head -c "$want" <&3 1<> "$d/$(( (k % n) * 2 + s ))"
+  left=$(( left - want )); k=$(( k + 1 ))
 done
+wait "$h" || { echo "write: the hold failed" >&2; exit 1; }
+h=

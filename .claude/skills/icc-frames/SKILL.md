@@ -53,12 +53,16 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   says. A read that stops halfway leaves the rest on the wire.
 - Write holds the whole payload while it counts it, because the count
   goes in front. The hold is a chain of cats, one per lane this side
-  writes, and it is deeper than those lanes: with nobody reading, the
-  lanes fill first and the hold never shows. With a read running the
-  lanes stop being the limit and the hold becomes it — 131072 bytes
-  through one cat, 196608 through two, 327680 through three. Past that
-  a write does not return, and a read cannot free it, because nothing
-  reaches the lanes until the count does.
+  writes, and what it holds is the pipes between them and the two at
+  its ends, about 64K apiece. With nobody reading, the lanes fill first
+  and the hold never shows. With a read running the lanes stop being
+  the limit and the hold becomes it.
+- Where the hold stops is a band, not a number. It is a race between the
+  chain draining and the lanes filling, so at the edge the same size
+  goes through some runs and not others: on two lanes, five runs each,
+  131072 went through five times and 196608 twice. Stay well inside it.
+  Past it a write does not return, and a read cannot free it, because
+  nothing reaches the lanes until the count does.
 - That the hold never shows depends on a lane being 64K, since a cat
   holds more than that. A lane's buffer can be grown as far as
   `/proc/sys/fs/pipe-max-size` and the size sticks for later openers, so

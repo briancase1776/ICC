@@ -22,6 +22,15 @@ for (( j=0; j<n; j++ )); do
     { echo "write: not a lane: $d/$(( j * 2 + s ))" >&2; exit 1; }
 done
 b=$(getconf PIPE_BUF "$d")
+# The hold is n+1 fifos this script makes, and one it makes holds 65536
+# whatever the lanes have been grown to, so what fits is that number either
+# way. A payload past it never reaches a lane, so no read can free it and
+# nothing comes back at all. When stdin is a file the size is known before
+# anything is made: say so here, while there is still something to say. A
+# pipe does not give its size, and that case is as it was.
+(( hold = (n + 1) * 65536 ))
+[ -f /dev/stdin ] && z=$(stat -Lc %s /dev/stdin) && (( z > hold )) &&
+  { echo "write: $z bytes is past the hold: these lanes carry $hold, and more lanes is the only remedy" >&2; exit 1; }
 
 # The count goes in front, so the whole payload is held while it is weighed.
 # The hold is a chain of cats, one per lane this side writes, so it is as deep

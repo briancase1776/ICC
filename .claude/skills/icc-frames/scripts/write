@@ -120,7 +120,7 @@ z=$(head -c 1 | wc -c)
 [[ $z =~ ^[0-9]+$ ]] ||
   { echo "write: cannot tell whether the payload is past the hold" >&2; exit 1; }
 (( z > 0 )) &&
-  { echo "write: the payload is past the hold: these lanes carry $hold, and more lanes is the only remedy" >&2; exit 1; }
+  { echo "write: the payload is past the hold: this bundle carries $hold, and more lanes is the only remedy" >&2; exit 1; }
 # Closing the last writer is what ends the chain: its head opened the hold
 # read-only, so it sees EOF, drains what it has, and exits by itself.
 exec 5>&-

@@ -18,6 +18,12 @@ t=$(mktemp -d); cd "$t"
 d=$("$P/create" 6); made=$d
 trap 'for x in $made; do "$P/remove" "$x" 2>/dev/null || :; done
       cd /; rm -rf "$t"' EXIT
+# A read with nothing on its lane waits for the writer, and that is the
+# usage: <> means the lane never says EOF, so a count that has not come
+# cannot be told from one that never will. What it must not do is come back
+# empty and call it a payload.
+rc=0; timeout 1 "$F/read" "$d" 1 >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 124 ]
 head -c 150000 /dev/urandom > in
 "$F/write" "$d" 0 < in
 timeout 5 "$F/read" "$d" 1 > out

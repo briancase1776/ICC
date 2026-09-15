@@ -2,8 +2,11 @@
 # .claude/skills/icc-frames/scripts/read
 # read DIR SIDE > bytes: take frames off the lanes SIDE reads and put them
 # back together. The count comes first. Frames come round-robin, lane order.
-# A count that is missing or is not a count is a failure, not an empty
-# payload: bytes in, the same bytes out, or say so.
+# A count that is not a count is a failure, not an empty payload: bytes in,
+# the same bytes out, or say so. A count that has not come is a different
+# thing and is not failed: the lane is opened <> so it never says EOF, and a
+# read started before its writer waits, which is what makes that usage work.
+# Bound the call, as SKILL.md says.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
@@ -21,8 +24,12 @@ for (( j=0; j<n; j++ )); do
     { echo "read: not a lane: $d/$(( j * 2 + r ))" >&2; exit 1; }
 done
 b=$(getconf PIPE_BUF "$d")
+# Not the nothing-was-sent case: this lane never says EOF, so a count that
+# has not come is waited for here rather than failed. The branch is for a
+# read that fails some other way, which set -e would otherwise take out
+# without a word.
 read -r size 0<> "$d/$r" ||
-  { echo "read: no count where a payload should start" >&2; exit 1; }
+  { echo "read: the count line could not be read" >&2; exit 1; }
 [[ $size =~ ^[0-9]+$ ]] ||
   { echo "read: not a count: $size" >&2; exit 1; }
 # Bash counts in 64 bits. A longer run of digits wraps there, and read sets

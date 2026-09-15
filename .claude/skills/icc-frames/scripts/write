@@ -110,7 +110,16 @@ c=
 # before the count goes out, so nothing of it is on the wire. Stdin says
 # this whether it is a file or a pipe: the size was never the question, the
 # byte after the last one it could hold is.
-(( $(head -c 1 | wc -c) > 0 )) &&
+# Read the probe before testing it. An arithmetic test cannot say it does
+# not know: given nothing it is a syntax error, and a syntax error here
+# returns non-zero, which as the left arm of && is exempt from set -e and
+# passes the payload. Every other fault in this script fails closed, and
+# this is the only test in front of the hold, so what it cannot read it
+# refuses rather than waves through.
+z=$(head -c 1 | wc -c)
+[[ $z =~ ^[0-9]+$ ]] ||
+  { echo "write: cannot tell whether the payload is past the hold" >&2; exit 1; }
+(( z > 0 )) &&
   { echo "write: the payload is past the hold: these lanes carry $hold, and more lanes is the only remedy" >&2; exit 1; }
 # Closing the last writer is what ends the chain: its head opened the hold
 # read-only, so it sees EOF, drains what it has, and exits by itself.

@@ -39,14 +39,22 @@ that the caller did not.
 
 Pipes alone ties processes together fine when what goes through is a
 sentence. Frames is for the other case: something big pushed down a
-bundle of narrow lanes and coming out whole at the far end. One lane
-holds 64K in flight. In Claude Code a write must finish inside one tool
-call, with nobody guaranteed to be reading yet, so what a write can
-leave on the wire and walk away from is the lanes that side writes,
-half the lane count, times 64K, less the count line. Past that, write
-waits for a read. That is why the bundle exists, and Frames is the
-stick. Build for the bundle. Two lanes is a bundle of one straw each
-way, and the same script.
+bundle of narrow lanes and coming out whole at the far end. In Claude
+Code a write must finish inside one tool call, with nobody guaranteed
+to be reading yet, so what it can leave on the wire and walk away from
+is the lanes that side writes, what Pipes says a lane holds apiece,
+less the count line. Past that it waits, and a read frees it.
+
+What a read cannot free is the hold. The count goes in front, so the
+whole payload is held while it is weighed, and the chain that holds it
+is this project's own: one pipe more than the lanes this side writes,
+64K apiece, which nothing here grows and no width of lane changes. Past
+what that carries, nothing has reached a lane for a read to take, so
+write refuses before the count goes out rather than wait on a read that
+cannot help. That figure, and not the lanes, is what this layer
+carries. Build for the bundle: a lane per 32K of payload. That is why
+the bundle exists, and Frames is the stick. Two lanes is a bundle of
+one straw each way, and the same script.
 
 Both operations take a pipe directory that ICC-Pipes handed out. Both
 open lanes with `<>`. That open never blocks, with or without anyone on

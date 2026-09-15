@@ -56,39 +56,38 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   go out until the payload is already in the chain. No split has been
   seen in any trace taken, under load or idle. Nothing in the code
   forbids one.
-- Write returns with nobody reading as long as the payload fits in
-  flight: the lanes one side writes, times what each holds. Bigger than
-  that, write waits for read, as far as the hold below allows. Pipes'
-  SKILL.md has the numbers.
+- The hold, and not the lanes, is what this layer carries: n+1 times
+  64K, n being the lanes this side writes. Write takes that much and
+  then looks for one byte more; a byte there is a payload past the hold,
+  refused before the count goes out, so nothing of it reaches a lane. A
+  file and a pipe alike, since the byte after the last one that fitted
+  says it either way.
 - Read waits on an empty lane. Bound the call with `timeout`, as Pipes
   says. A read that stops halfway leaves the rest on the wire.
 - Write holds the whole payload while it counts it, because the count
   goes in front. The hold is a chain of cats, one per lane this side
   writes, and what it holds is the pipes between them and the two at
-  its ends, about 64K apiece. With nobody reading, the lanes fill first
-  and the hold never shows. With a read running the lanes stop being
-  the limit and the hold becomes it.
-- Where the hold stops is a band, not a number. It is a race between the
-  chain draining and the lanes filling, so at the edge the same size
-  goes through some runs and not others: on two lanes, five runs each,
-  131072 went through five times and 196608 twice. Stay well inside it.
-  Past it a write does not return, and a read cannot free it, because
-  nothing reaches the lanes until the count does.
-- That the hold never shows depends on a lane being 64K, since a cat
-  holds more than that. A lane's buffer can be grown as far as
-  `/proc/sys/fs/pipe-max-size` and the size sticks for later openers, so
-  a wider lane moves the walk-away figure -- but only up to where the
-  hold stops, and no further. Six lanes grown to a megabyte each is
-  sixteen times the wire and buys about 128K: three runs a size, nobody
-  reading, 327680 still goes and 393216 does not, where the same six
-  lanes at 64K stop at 196601. Nothing in this project grows its
-  own chain to match.
-- Because nothing grows the chain, what the hold carries is the same number
-  however wide the lanes are: n+1 times 64K, n being the lanes this side
-  writes. Write takes that much and then looks for one byte more; a byte
-  there is a payload past the hold, and it is refused before the count goes
-  out, so nothing of it reaches a lane. A file and a pipe alike, since the
-  byte after the last one that fitted says it either way.
+  its ends, about 64K apiece. This project makes those pipes and never
+  grows them, which is why the figure above does not move with the wire.
+- Under that figure a read decides between two regions. What a write can
+  leave on the wire and walk away from is the lanes this side writes,
+  what Pipes says a lane holds apiece, less the count line; past that it
+  waits, and a read frees it, as far as the hold. Six default lanes:
+  196601 returns with nobody reading, 196602 waits, 262144 round trips
+  with a read draining, 262145 is refused.
+- Where the hold stops is a number, not a band. The refusal enforces it
+  instead of sampling a race, so the same size does the same thing every
+  run: two lanes with a read draining, five runs each, 131071 and 131072
+  went through every time and 131073 and 196608 were refused every time,
+  the last two without a read being needed to tell. A write past it
+  returns 1 and says so. It does not hang, and no read can or need free
+  it.
+- A lane's buffer can be grown as far as `/proc/sys/fs/pipe-max-size`
+  and the size sticks for later openers. That moves the walk-away figure
+  and nothing else. Six lanes grown to a megabyte each is sixteen times
+  the wire and buys about 64K of it: nobody reading, 196602 and 262144
+  return where they used to wait, and 262145 is refused as it was. The
+  chain is not grown with them, so the ceiling does not move.
 - `1<>` is dropped, silently, as an outer redirection on `$( )` or
   `>( )`. `1>` and `1>>` are not. A lane write wrapped in a command
   substitution therefore goes to the substitution's own pipe instead of

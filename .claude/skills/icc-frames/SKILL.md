@@ -78,9 +78,10 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   own chain to match.
 - Because nothing grows the chain, what the hold carries is the same number
   however wide the lanes are: n+1 times 64K, n being the lanes this side
-  writes. Given a file, write knows the size before it makes anything and
-  refuses one past that, saying both numbers. Given a pipe it cannot know,
-  and there a payload past the hold still does not return.
+  writes. Write takes that much and then looks for one byte more; a byte
+  there is a payload past the hold, and it is refused before the count goes
+  out, so nothing of it reaches a lane. A file and a pipe alike, since the
+  byte after the last one that fitted says it either way.
 - `1<>` is dropped, silently, as an outer redirection on `$( )` or
   `>( )`. `1>` and `1>>` are not. A lane write wrapped in a command
   substitution therefore goes to the substitution's own pipe instead of

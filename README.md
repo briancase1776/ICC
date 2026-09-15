@@ -50,15 +50,14 @@ Build for the payload: roughly a lane per 32K. Two lanes carry 128K and
 sixty-four carry two megabytes, byte for byte.
 
 Past that figure there is nothing to be done at the far end — a reader
-cannot rescue it — so ask for a wider bundle instead. Given a file, `write`
-refuses one it cannot carry before it starts:
+cannot rescue it — so ask for a wider bundle instead. `write` will not start
+what it cannot finish, whether the bytes come from a file or a pipe:
 
     $ write "$d" 0 < too-big.bin
-    write: 200000 bytes is past the hold: these lanes carry 131072, and more lanes is the only remedy
+    write: the payload is past the hold: these lanes carry 131072, and more lanes is the only remedy
 
-Given bytes piped in rather than a file, there is no size to check in
-advance, and a payload past the figure hangs instead of being refused. That
-one is open.
+Nothing of a refused payload goes on the wire, so the pipe is left as it
+was.
 
 ## What it does not do
 

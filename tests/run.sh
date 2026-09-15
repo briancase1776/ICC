@@ -59,12 +59,14 @@ printf '010\n0123456789' 1<> "$d/0"
 # cannot be left on the wire here at all, so the read drains while the write
 # runs, as above; sized inside the hold's depth, which is one pipe more.
 d2=$("$P/create" 2); made="$made $d2"
-# Past the hold nothing reaches a lane, so no read can free it. From a file
-# the size is known before anything is made, and the write is refused with
-# the number instead of waiting on a read that cannot help. The round trip
-# after it proves the wire was left alone.
+# Past the hold nothing reaches a lane, so no read can free it, and the
+# write is refused instead of waiting on a read that cannot help. A file and
+# a pipe both, since what says so is the byte after the last one the hold
+# took, not the size. The round trip after proves the wire was left alone.
 head -c 200000 /dev/urandom > past
-timeout 5 "$F/write" "$d2" 0 < past 2>/dev/null && exit 1
+timeout 20 "$F/write" "$d2" 0 < past 2>/dev/null && exit 1
+timeout 20 "$F/write" "$d2" 0 < <(cat past) 2>/dev/null && exit 1
+cat past | timeout 20 "$F/write" "$d2" 0 2>/dev/null && exit 1
 head -c 100000 /dev/urandom > in2
 timeout 60 "$F/write" "$d2" 0 < in2 & w=$!
 timeout 60 "$F/read" "$d2" 1 > out2 & r=$!

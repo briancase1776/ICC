@@ -24,13 +24,8 @@ done
 b=$(getconf PIPE_BUF "$d")
 # The hold is n+1 fifos this script makes, and one it makes holds 65536
 # whatever the lanes have been grown to, so what fits is that number either
-# way. A payload past it never reaches a lane, so no read can free it and
-# nothing comes back at all. When stdin is a file the size is known before
-# anything is made: say so here, while there is still something to say. A
-# pipe does not give its size, and that case is as it was.
+# way, and it is known before a byte is read.
 (( hold = (n + 1) * 65536 ))
-[ -f /dev/stdin ] && z=$(stat -Lc %s /dev/stdin) && (( z > hold )) &&
-  { echo "write: $z bytes is past the hold: these lanes carry $hold, and more lanes is the only remedy" >&2; exit 1; }
 
 # The count goes in front, so the whole payload is held while it is weighed.
 # The hold is a chain of cats, one per lane this side writes, so it is as deep
@@ -103,10 +98,20 @@ hold
 # from both sides: the chain's tail blocks instead of being refused, its head
 # never sees EOF, and a write that dies without running its trap leaves the
 # whole lot alive on descriptors nothing can name.
-exec 4< <( exec 3>&-; tee "/dev/fd/5" | wc -c )
+# Capped at what the hold can take. head -c reads exactly what it is asked
+# for and leaves the rest where it was, so what is still on stdin after this
+# is what would not have fitted.
+exec 4< <( exec 3>&-; head -c "$hold" | tee "/dev/fd/5" | wc -c )
 c=$!
 read -r size <&4; exec 4<&-
 c=
+# One byte more than the hold can take is a payload that never reaches a
+# lane, so no read can free it and waiting cannot end it. Refused here,
+# before the count goes out, so nothing of it is on the wire. Stdin says
+# this whether it is a file or a pipe: the size was never the question, the
+# byte after the last one it could hold is.
+(( $(head -c 1 | wc -c) > 0 )) &&
+  { echo "write: the payload is past the hold: these lanes carry $hold, and more lanes is the only remedy" >&2; exit 1; }
 # Closing the last writer is what ends the chain: its head opened the hold
 # read-only, so it sees EOF, drains what it has, and exits by itself.
 exec 5>&-

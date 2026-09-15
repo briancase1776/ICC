@@ -70,9 +70,12 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
 - That the hold never shows depends on a lane being 64K, since a cat
   holds more than that. A lane's buffer can be grown as far as
   `/proc/sys/fs/pipe-max-size` and the size sticks for later openers, so
-  a wider buffer moves the limit here: with six lanes grown to a
-  megabyte each, a write that could leave 2M on the wire and walk away
-  leaves 512K. Nothing in this project can grow its own chain to match.
+  a wider lane moves the walk-away figure -- but only up to where the
+  hold stops, and no further. Six lanes grown to a megabyte each is
+  sixteen times the wire and buys about 128K: three runs a size, nobody
+  reading, 327680 still goes and 393216 does not, where the same six
+  lanes at 64K stop at 196601. Nothing in this project grows its
+  own chain to match.
 - Because nothing grows the chain, what the hold carries is the same number
   however wide the lanes are: n+1 times 64K, n being the lanes this side
   writes. Given a file, write knows the size before it makes anything and

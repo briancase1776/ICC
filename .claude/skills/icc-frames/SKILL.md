@@ -32,9 +32,11 @@ side you are is agreed outside this skill.
 Both ends follow it; nothing on the wire says it.
 
 - The payload's byte count goes first, as a decimal line, on the first
-  lane the side writes, and the head of the payload goes out in the same
-  write. A pipe gives out whole pages, so a count on its own would take
-  a page no frame could ever share.
+  lane the side writes, and the head of the payload follows it into the
+  same page. A pipe gives out whole pages, so a count on its own would
+  take a page no frame could ever share. It is two writes and not one,
+  the shell's then head's on one descriptor, and they share a page
+  because nothing reads between them.
 - Then the payload in frames of PIPE_BUF bytes. Frame 0 is short by what
   the count took, the last one is short by what is left, the rest are
   full. Frame k goes on the k-th lane the side writes, round-robin, lane
@@ -48,7 +50,12 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
 
 - Every lane opens with `<>`. Nothing here blocks on open.
 - A frame is at most PIPE_BUF so it lands whole, and fits a lane even
-  when the kernel has shrunk its buffer.
+  when the kernel has shrunk its buffer. That every frame after the
+  first is one write is true and not enforced: head -c writes what its
+  read returned, and what makes the read whole is that the count cannot
+  go out until the payload is already in the chain. No split has been
+  seen in any trace taken, under load or idle. Nothing in the code
+  forbids one.
 - Write returns with nobody reading as long as the payload fits in
   flight: the lanes one side writes, times what each holds. Bigger than
   that, write waits for read, as far as the hold below allows. Pipes'

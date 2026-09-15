@@ -29,13 +29,13 @@ Order holds across every lane, not just within one. That is the whole
 point of the layer. Pipes only promises order within a lane; Frames
 promises it for the payload.
 
-A **frame** is one write to one lane of at most PIPE_BUF bytes, so it
-lands whole. Frames carry no header. Where a frame goes comes from a
-rule both sides already share: frames go round-robin over the lanes in
-lane order, starting at the first. Where the payload ends comes from
-one number written in front of it, its byte count, because a held pipe
-never says EOF. That count is the only thing Frames puts on the wire
-that the caller did not.
+A **frame** is at most PIPE_BUF bytes, which is what a lane takes in
+one piece, and it goes to one lane. Frames carry no header. Where a
+frame goes comes from a rule both sides already share: frames go
+round-robin over the lanes in lane order, starting at the first. Where
+the payload ends comes from one number written in front of it, its byte
+count, because a held pipe never says EOF. That count is the only thing
+Frames puts on the wire that the caller did not.
 
 Pipes alone ties processes together fine when what goes through is a
 sentence. Frames is for the other case: something big pushed down a

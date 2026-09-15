@@ -96,25 +96,6 @@ to put one in, on purpose.
 It does not route, retry, queue, replay, persist, or tell you whether anyone
 is on the other end.
 
-## What a moot found
-
-The issues here are mostly the output of sittings of
-[Moot](https://github.com/briancase1776/Moot) — three cold agents auditing
-this repo, each reporting alone, then arguing every other seat's position in
-turn before voting. Three seats looked for a bug in the slicing and
-reassembly and none of them found one: round trips are byte-exact at every
-size and lane count tried, both directions, empty payload included, and
-nothing leaks under any signal.
-
-What they did find was silence. All three of this layer's real failures
-returned nothing and said nothing, in a project where every other fault
-prints a reason and exits 1. One of those is now fixed, one is narrowed to
-the case where the size cannot be known before the write starts, and one — a
-read handed no count at all — is still open. They also overturned the thing all three seats believed at the start — that
-the layer carries far less than its framing implies. It carries what the
-bundle is built for, and what was missing was the sentence telling you how
-wide to build it.
-
 ## Licence
 
 MIT. See LICENCE.TXT.

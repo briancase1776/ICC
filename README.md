@@ -3,65 +3,15 @@
 Push something big down a bundle of narrow pipes and take it off whole at
 the other end.
 
-Two operations. `write` slices what you give it into frames and puts them
-on the lanes its side writes. `read` takes them off the lanes its side
-reads and hands the bytes back. What goes in comes out, the same bytes in
-the same order, across every lane and not just within one.
+Two operations. `write` takes bytes and puts them on the lanes its side
+writes. `read` takes them off the lanes its side reads and hands the bytes
+back. What goes in comes out: the same bytes in the same order, across the
+whole bundle and not merely within one lane. A JPEG goes in as a JPEG and
+comes out as a JPEG, top at the top.
 
-The pipes are made by [ICC-Pipes](https://github.com/briancase1776/ICC-Pipes),
-which is the layer below. This one never makes a pipe and never looks at
-what is going through it.
-
-## What is on the wire
-
-One number. The payload's byte count, in front, because a held pipe never
-says EOF and the far end has to know when to stop. Nothing else is added:
-no header, no type, no length per frame, no mark of who sent it.
-
-Everything else both ends already know. A frame is one write of at most
-`PIPE_BUF`, so the kernel lands it whole. Frame *k* goes on the *k*th lane
-this side writes, round-robin, lane order, starting at the first. The far
-end takes them back off in the same order. Nothing on the wire says any of
-that, and nothing needs to.
-
-## What it carries
-
-The payload is weighed in flight. Nothing that came off a wire, or is on
-its way to one, is written to a file — so the count in front is paid for by
-holding the whole payload in pipes while it is counted. That hold is what
-caps the layer, and it is worth knowing before you build:
-
-| lanes | this side writes | carries |
-|---|---|---|
-| 2 | 1 | 131072 |
-| 6 | 3 | 262144 |
-| 8 | 4 | 327680 |
-| 64 | 32 | 2162688 |
-| 128 | 64 | 4259840 |
-
-One more than the lanes this side writes, times 64K. The hold is a chain of
-`cat`, one per lane, and the pipes between them are made by this project and
-never grown — so that figure is the same however wide the lanes themselves
-have been made. Growing six lanes to a megabyte each, sixteen times the
-wire, moves it not at all.
-
-So the bundle is the whole point. Two lanes carries 128K; sixty-four lanes
-carries two megabytes, byte for byte, measured. **More lanes is the only
-remedy**, and the arithmetic for building one is a lane per 32K of payload.
-
-A second, smaller number matters if nobody is reading yet: what a write can
-leave on the wire and walk away from is the lanes its own side writes, times
-what a lane holds, less the count line. Past that it waits for a read, which
-is fine — a reader frees it. Past the hold nothing frees it, because nothing
-has reached the lanes for a reader to take.
-
-`write` knows that figure and will not start a file it cannot finish:
-
-    $ write "$d" 0 < too-big.bin
-    write: 200000 bytes is past the hold: these lanes carry 131072, and more lanes is the only remedy
-
-Given a pipe rather than a file there is no size to read in advance, and a
-payload past the hold still hangs. That one is open.
+The pipes come from
+[ICC-Pipes](https://github.com/briancase1776/ICC-Pipes), the layer below.
+This one never makes a pipe and never looks at what is going through it.
 
 ## Using it
 
@@ -71,30 +21,57 @@ It is a Claude Code skill. Get a pipe from Pipes, then:
     icc-frames/scripts/write "$d" 0 < photo.jpg          # one side
     timeout 60 icc-frames/scripts/read "$d" 1 > photo.jpg # the other
 
-`SIDE` is 0 or 1 and decides which lanes you write and which you read; Pipes
-says which is which. Both ends open every lane with `<>`, so nothing here
-blocks on open, and a frame written through one comes back with nobody
-reading. The one thing that waits is a read on an empty lane — bound it with
-`timeout`, as Pipes says.
+`SIDE` is 0 or 1 and says which lanes you write and which you read; Pipes
+says which is which, and which side you are is agreed outside this skill.
+Nothing here blocks on opening a pipe. The one thing that waits is a read
+with nothing to read yet, so bound it with `timeout`.
 
-`.claude/skills/icc-frames/SKILL.md` is the rest: the rule both ends follow,
-and the facts that cost an afternoon each.
+Both ends follow one rule and nothing on the wire announces it, so both
+ends have to be this layer.
+`.claude/skills/icc-frames/SKILL.md` is that rule.
 
     tests/run.sh    prove it: a payload bigger than one lane holds, both
                     directions, on six lanes and on two
 
+## How much it carries
+
+A bundle carries what its width allows, and the figure does not change with
+anything else you do to the pipe:
+
+| lanes | carries |
+|---|---|
+| 2 | 131072 |
+| 6 | 262144 |
+| 8 | 327680 |
+| 64 | 2162688 |
+| 128 | 4259840 |
+
+Build for the payload: roughly a lane per 32K. Two lanes carry 128K and
+sixty-four carry two megabytes, byte for byte.
+
+Past that figure there is nothing to be done at the far end — a reader
+cannot rescue it — so ask for a wider bundle instead. Given a file, `write`
+refuses one it cannot carry before it starts:
+
+    $ write "$d" 0 < too-big.bin
+    write: 200000 bytes is past the hold: these lanes carry 131072, and more lanes is the only remedy
+
+Given bytes piped in rather than a file, there is no size to check in
+advance, and a payload past the figure hangs instead of being refused. That
+one is open.
+
 ## What it does not do
 
-It does not make, list, remove or hold pipes. It does not choose lane counts
-or decide which side you are. That is Pipes, and this repo does not wrap it,
-copy it or vendor it.
+It does not make, list, remove or hold pipes, and it does not choose lane
+counts or decide which side you are. That is Pipes, and this repo does not
+wrap it, copy it or vendor it.
 
 It does not know what your bytes mean. No message types, no schemas, no
-encodings, no timestamps, no tag saying what a payload is. There is no field
-to put one in, on purpose.
+encodings, no timestamps, no tag saying what a payload is. There is nowhere
+to put one, on purpose.
 
 It does not route, retry, queue, replay, persist, or tell you whether anyone
-is on the other end.
+is listening at the other end.
 
 ## Licence
 

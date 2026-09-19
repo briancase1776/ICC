@@ -52,10 +52,12 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
 - A frame is at most PIPE_BUF so it lands whole, and fits a lane even
   when the kernel has shrunk its buffer. That every frame after the
   first is one write is true and not enforced: head -c writes what its
-  read returned, and what makes the read whole is that the count cannot
-  go out until the payload is already in the chain. No split has been
-  seen in any trace taken, under load or idle. Nothing in the code
-  forbids one.
+  read returned, as dd does, and what makes the read whole is that the
+  count cannot go out until the payload is already in the chain. head -c
+  and not dd on a lane because dd's `count=` counts reads and stops at
+  a short one, and the spelling that would not, iflag=fullblock, is the
+  one Pipes says never to add. No split has been seen in any trace
+  taken, under load or idle. Nothing in the code forbids one.
 - The hold, and not the lanes, is what this layer carries: n+1 times
   64K, n being the lanes this side writes. Write takes that much and
   then looks for one byte more; a byte there is a payload past the hold,
@@ -65,10 +67,13 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
 - Read waits on an empty lane. Bound the call with `timeout`, as Pipes
   says. A read that stops halfway leaves the rest on the wire.
 - Write holds the whole payload while it counts it, because the count
-  goes in front. The hold is a chain of cats, one per lane this side
-  writes, and what it holds is the pipes between them and the two at
-  its ends, about 64K apiece. This project makes those pipes and never
-  grows them, which is why the figure above does not move with the wire.
+  goes in front. The hold is a chain of `dd bs=4096`, one per lane this
+  side writes, and what it holds is the pipes between them and the two
+  at its ends, about 64K apiece, and a page in each copier. dd and not
+  cat, as Pipes says: cat's store is a size nobody chose, and the figure
+  above is one this layer enforces. This project makes those pipes and
+  never grows them, which is why that figure does not move with the
+  wire.
 - Under that figure a read decides between two regions. What a write can
   leave on the wire and walk away from is the lanes this side writes,
   what Pipes says a lane holds apiece, less the count line; past that it

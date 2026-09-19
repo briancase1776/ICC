@@ -54,7 +54,7 @@ cannot rescue it — so ask for a wider bundle instead. `write` will not start
 what it cannot finish, whether the bytes come from a file or a pipe:
 
     $ write "$d" 0 < too-big.bin
-    write: the payload is past the hold: these lanes carry 131072, and more lanes is the only remedy
+    write: the payload is past the hold: this bundle carries 131072, and more lanes is the only remedy
 
 Nothing of a refused payload goes on the wire, so the pipe is left as it
 was.

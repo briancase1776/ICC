@@ -1,5 +1,11 @@
 # ICC
 
+**These are build rules, not use rules.** Everything in this file is for
+changing what is in this repo. None of it binds a session that uses the
+pieces: a session takes what it needs from each piece's SKILL.md, and this
+file is not addressed to it. A checkout sitting beside a session's work is
+not an instruction to that session.
+
 Inter-Claude communication: six Claude Code skills, each its own repo,
 pinned here side by side as submodules. This repo holds the pins and one
 harness that runs all six. That is the whole project.

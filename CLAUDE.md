@@ -112,6 +112,13 @@ repo guarantees anything under.
 - **Never look at the bytes.** No script in the skill reads a lane:
   not create, not list, not remove. The harness does, because proving
   the bay works means pushing a payload through it.
+- **The session defines the skill. The skill does not define the
+  session.** Which shape, how many seats, how many lanes, who sits
+  where, and what a seat does with the ends it is handed — all the
+  session's. This file says what a shape is and hands out the map, and
+  stops there. A bay that starts telling a session how to be arranged
+  has stopped being the bay and become one of the things patched into
+  it.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script`, `zsh script` or even

@@ -44,9 +44,10 @@ the other side. There is nothing else to do.
 
 ## Facts about the merge
 
-Each lane SIDE writes, of each SRC, has its own `cat(1)`, that lane of
-that SRC as its file and that lane of DST as its stdout. These are
-properties of that and of the lanes. The skill adds nothing to them.
+Each lane SIDE writes, of each SRC, has its own `dd(1)` at `bs=4096`,
+that lane of that SRC as its `if=` and that lane of DST as its stdout.
+These are properties of that and of the lanes. The skill adds nothing to
+them.
 
 - A merge copies one direction of each inlet. The lanes the other side
   writes are not touched. Nothing goes back through it; the way back
@@ -64,12 +65,13 @@ properties of that and of the lanes. The skill adds nothing to them.
   the outlet says which inlet a byte came from. Two inlets writing the
   same lane at once is two writers on one lane, as Pipes says.
 - Each chunk read from an inlet lane is written to the outlet lane
-  before the next chunk is read. A chunk is at most what one read of a
-  lane returns, which is what a lane holds; of that, only PIPE_BUF is
-  proof against another inlet's write. Pipes' SKILL.md has both numbers.
-  An outlet lane that is full and not being drained stalls every copier
-  writing to it, so that lane of every inlet stalls behind it once it
-  fills. Nothing is kept.
+  before the next chunk is read, and a chunk is at most `bs`, which is
+  PIPE_BUF. Every write a copier makes therefore lands whole, so no
+  inlet's chunk lands inside another's. Pipes' SKILL.md has the number,
+  and says why the copier is not cat. An outlet lane that is full and
+  not being drained stalls every copier writing to it, so that lane of
+  every inlet stalls behind it once it fills. Nothing is kept between
+  the two lanes.
 - What a write into an inlet can leave on the wire and walk away from is
   that inlet's lanes plus, while its copiers can move, the outlet's
   lanes, which every inlet shares. Pipes' SKILL.md has the numbers.
@@ -93,15 +95,16 @@ properties of that and of the lanes. The skill adds nothing to them.
   and down otherwise. It is all or nothing: one copier gone reads the same
   as all of them gone, and a merge whose copiers have not started yet, or
   whose pipe has been removed, is down.
-- A copier is `cat(1)`. Its inlet lane is in its argv and, once it has
-  opened it, on its fd 3; its outlet lane is its stdout and is never in
-  its argv. Both are spelled canonically, the way list prints them, not
-  the way the caller spelled them. `pkill -f` on a SRC path finds that
-  inlet's copiers; on the DST path it finds nothing but a create that is
-  still running. list and remove know a copier by that fd, the way Pipes
-  finds a holder.
+- A copier is `dd(1)`. Its inlet lane is `if=` in its argv and, once it
+  has opened it, on its fd 0, which is /dev/null until then; its outlet
+  lane is its stdout and is never in its argv. Both are spelled
+  canonically, the way list prints them, not the way the caller spelled
+  them. `pkill -f` on a SRC path finds that inlet's copiers; on the DST
+  path it finds nothing but a create that is still running. list and
+  remove know a copier by that fd, the way Pipes finds a holder.
 - A copier's stderr goes nowhere. The outlet carries what the inlets
-  wrote and nothing else, so a diagnostic has no lane to go out on.
+  wrote and nothing else, so a diagnostic, dd's summary included, has no
+  lane to go out on.
 
 ## In Claude Code
 

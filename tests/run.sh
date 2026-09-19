@@ -51,7 +51,7 @@ timeout 5 "$F/read" "$c" 1 > out; cmp in out
 "$F/write" "$b" 0 < in
 timeout 5 "$F/read" "$c" 1 > out; cmp in out
 printf 'a' > "$a/2"; printf 'b' > "$b/2"
-case $(timeout 1 cat "$c/2") in ab|ba) ;; *) exit 1;; esac
+case $(timeout 1 dd if="$c/2" bs=4096 status=none) in ab|ba) ;; *) exit 1;; esac
 "$M/remove" "$m"
 [ ! -d "$m" ]
 for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done

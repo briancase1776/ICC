@@ -62,13 +62,16 @@ while [ "$l" -lt "$n" ]; do
   # one's stdout, and $(create) never returns though create has.
   exec 3> "$dst/$l"
   for p in "${srcs[@]}"; do
-    # The copier inherits the open lane as its stdout and never opens it. Its
-    # stderr goes nowhere: the outlet carries what the inlets wrote, and a
-    # diagnostic on it would be bytes no inlet ever wrote. Closing fd 3 leaves
-    # it for cat(1) to open the inlet lane on, which is what list and remove
-    # know a copier by.
+    # The copier inherits the open lane as its stdout and never opens it, and
+    # fd 3 is closed because it has that lane already. It is dd at bs=4096,
+    # which is PIPE_BUF, so each chunk it writes lands whole against the other
+    # inlets' copiers on this lane; Pipes says why it is not cat. Its stderr
+    # goes nowhere -- the outlet carries what the inlets wrote, and a
+    # diagnostic on it would be bytes no inlet ever wrote -- so dd's summary
+    # needs no status=none. dd opens if= onto its stdin, which is /dev/null
+    # until it has, and that fd is what list and remove know a copier by.
     { trap - EXIT INT TERM HUP; exec >&3 2>/dev/null 3>&-
-      exec cat -- "$p/$l" < /dev/null; } &
+      exec dd if="$p/$l" bs=4096 < /dev/null; } &
     pids+=($!)
     echo $! >> "$d/pid"
   done

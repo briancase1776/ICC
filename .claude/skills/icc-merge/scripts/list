@@ -20,11 +20,12 @@ for d in /tmp/icc-merge-*/; do
   m=${#srcs[@]}
   # Down until every copier answers, the way Pipes reads a hold: a merge with
   # no copiers yet, or none left, is not up, and only a positive check says
-  # otherwise. The mark is the inlet lane on fd 3, canonically spelled; the
-  # outlet lane would not do, since two merges onto one outlet share it.
+  # otherwise. The mark is the inlet lane on fd 0, where dd puts if=,
+  # canonically spelled; the outlet lane would not do, since two merges onto
+  # one outlet share it.
   s=down; i=0; ok=0
   for p in $(cat "$d/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] &&
+    [ "$(readlink "/proc/$p/fd/0" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] &&
       ok=$((ok + 1))
     i=$((i + 1))
   done

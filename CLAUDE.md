@@ -25,7 +25,7 @@ count or a frame.
 
 ## What this is
 
-- A **merge**: N inlet pipes, one outlet pipe, one `cat(1)` per inlet per
+- A **merge**: N inlet pipes, one outlet pipe, one `dd(1)` per inlet per
   lane the chosen side writes, copying every byte from that inlet lane to
   the same lane of the outlet, in order, until removed.
 - The skill covers creating, listing, and removing merges. Using one is
@@ -51,7 +51,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   The outlet carries bytes. Who is talking is agreed outside.
 - Filtering, transforming, or selecting what comes from each inlet.
   Every byte from every inlet reaches the outlet.
-- Buffering, rate control, fairness, or backpressure beyond what cat(1)
+- Buffering, rate control, fairness, or backpressure beyond what dd(1)
   and the lanes already give.
 - Anything Pipes already lists as out of scope for itself: routing,
   discovery, persistence, replay, liveness, auth, retries, queues, other
@@ -99,7 +99,7 @@ overriding the interpreter, not the harness being broken.
 - **No speculative work.** Build what is asked, not what might be asked
   later.
 - **No abstraction until there are two real callers.**
-- **Facts, not recipes.** SKILL.md states what cat(1) and the lanes do.
+- **Facts, not recipes.** SKILL.md states what dd(1) and the lanes do.
   It does not tell the caller how to wait, poll, frame, or take turns.
 - **Never look at the bytes.** No option, header, or check in this repo
   may depend on what is in a lane.

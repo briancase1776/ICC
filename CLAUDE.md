@@ -115,6 +115,12 @@ the transcription is too complicated, not the test.
 - **Facts, not recipes.** SKILL.md says what the text is and what
   SendMessage does with text. It does not say when to send, whom to
   send to, or what to do with what comes back.
+- **The session defines the skill. The skill does not define the
+  session.** What crosses, where it goes, who is at the far end and
+  what they do with it — all the session's. This file says what the
+  text is and stops there. The moment it starts telling a session how
+  to be arranged, it has stopped being the crossing and become
+  something on one side of it.
 
 ## Layout
 

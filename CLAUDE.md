@@ -93,6 +93,12 @@ overriding the interpreter, not the harness being broken.
   It does not tell the caller how to wait, poll, frame, or pick outlets.
 - **Never look at the bytes.** No option, header, or check in this repo
   may depend on what is in a lane.
+- **The session defines the skill. The skill does not define the
+  session.** How many outlets, what they feed, who holds them, what
+  goes down one — all the session's. This file says what the fitting
+  does and stops there. The moment it starts telling a session how to
+  be arranged, it has stopped being the fitting and become something
+  bolted to it.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script` or `bash script`: that

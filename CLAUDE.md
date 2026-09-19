@@ -54,7 +54,10 @@ overriding the interpreter, not the harness being broken.
 - **No abstraction until there are two real callers.**
 - **Facts, not recipes.** SKILL.md states what the OS primitive does. It does
   not tell the caller how to wait, poll, frame, or spread a payload over
-  lanes. The read-and-write section is two commands and never grows.
+  lanes. The read-and-write section grows when something is measured and
+  never when something is advised. It said "two commands and never grows"
+  until the measurements arrived; the count was standing in for the rule,
+  and enforcing the count would have deleted what the rule was for.
 - **The session defines the skill. The skill does not define the session.**
   How many pipes, how wide, how deep, who holds which end, what goes down
   one — all the session's. This file says what the primitive does and stops

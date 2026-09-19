@@ -40,10 +40,37 @@ To attach, open the path. There is nothing else to do.
 
 ## Bytes on, bytes off
 
-A lane is a file. Write it with >. Read it with <, bounded.
+A lane is a file. Move bytes with `dd bs=4096`. Do not use `cat`.
 
-    printf '%s' "$bytes" > "$d/0"
-    timeout 1 cat "$d/1"
+    dd if="$src/0" of="$dst/0" bs=4096 status=none       lane to lane
+    printf '%s' "$b" | dd of="$d/0" bs=4096 status=none  stdout to a lane
+    timeout 1 dd if="$d/1" bs=4096 status=none           a lane to stdout
+
+`bs=4096` is PIPE_BUF and the page both; `getconf PIPE_BUF /tmp` and
+`getconf PAGESIZE` say so. Two things follow.
+
+Every write dd makes is at most PIPE_BUF, so it lands whole and no
+other writer's can land inside it. cat picks its own buffer, 128K on
+GNU coreutils, and a write that size can be torn.
+
+dd writes exactly what each read returned, at once, and holds nothing
+else. Fed a lane in 100-byte dribbles it reports `0+20 records in,
+0+20 records out`: twenty short reads, twenty short writes, nothing
+accumulated. cat holds whatever its read returned, so between two
+lanes it is a third store whose size nobody chose.
+
+That store is the chain's capacity. Two lanes joined by a copier with
+nobody draining the far end: `dd bs=4096` takes 135168 bytes and
+blocks at 139264, every run, which is the two lanes and one page. cat
+takes 163840 in four runs of six and blocks in the other two. Only one
+of them answers the same way twice.
+
+Do not add `iflag=fullblock`. It makes dd wait for a whole block
+before passing anything on: latency on a lane that dribbles, a stall
+on one that stops.
+
+One write under PIPE_BUF needs no copier at all. `printf '%s' "$b" >
+"$d/0"` is a single write and lands whole.
 
 ## Facts about the pipe
 
@@ -61,7 +88,7 @@ Linux and POSIX differ, both are given; this skill is Linux.
   up, because the hold keeps a writer open. Bound every read (timeout,
   nonblocking) or the call hangs.
 - A bounded read spends its whole bound. With no EOF the reader is still
-  waiting when the bound runs out, so `timeout 1 cat` prints what it got
+  waiting when the bound runs out, so `timeout 1 dd` prints what it got
   and exits 124. That status is the bound, not a failure, and the read
   costs the bound every time.
 - Bytes read are gone. Nothing is kept.
@@ -75,6 +102,9 @@ Linux and POSIX differ, both are given; this skill is Linux.
   here checks it.
 - The scripts are bash, not sh. dash cannot redirect a two-digit fd, so
   under sh create holds no lane past 6.
+- The dd above is GNU. `status=none` is a coreutils extension; the
+  portable spelling is `2>/dev/null`, which hides the message and not
+  the exit status. `dd` itself, and `bs=`, are POSIX.
 - The holder is `sleep infinity`. The pipe's path is in its open file
   descriptors, not its argv, so `pkill -f` on the path finds nothing
   but the shell that expanded it. Find a holder under /proc/PID/fd,

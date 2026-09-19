@@ -33,6 +33,15 @@ where the others are.
 
 ## Rules
 
-The rules in each piece's CLAUDE.md apply in that piece. Here there is
-one: this repo holds pins, a license, and the harness. If a file wants to
-be added, it belongs in a piece, or above the stack.
+The rules in each piece's CLAUDE.md apply in that piece. Here there are
+two.
+
+This repo holds pins, a license, and the harness. If a file wants to be
+added, it belongs in a piece, or above the stack.
+
+And the session defines the skill; the skill does not define the session.
+What gets built out of these pieces, how many of each, which ends go
+where and what goes down them, is the session's. A piece says what it
+does and stops there. Every piece states this for itself, because a
+CLAUDE.md is read alone and a piece that is read without this one still
+has to know it.

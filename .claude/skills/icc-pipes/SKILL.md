@@ -50,14 +50,16 @@ A lane is a file. Move bytes with `dd bs=4096`. Do not use `cat`.
 `getconf PAGESIZE` say so. Two things follow.
 
 Every write dd makes is at most PIPE_BUF, so it lands whole and no
-other writer's can land inside it. cat picks its own buffer, 128K on
-GNU coreutils, and a write that size can be torn.
+other writer's can land inside it. cat promises no such bound, so a
+write of cat's can be torn.
 
 dd writes exactly what each read returned, at once, and holds nothing
 else. Fed a lane in 100-byte dribbles it reports `0+20 records in,
 0+20 records out`: twenty short reads, twenty short writes, nothing
 accumulated. cat holds whatever its read returned, so between two
-lanes it is a third store whose size nobody chose.
+lanes it is a third store whose size nobody chose. Why cat's varies
+is not written here: that it varies was measured, the reason was
+not.
 
 That store is the chain's capacity. Two lanes joined by a copier with
 nobody draining the far end: `dd bs=4096` takes 135168 bytes and

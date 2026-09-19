@@ -55,6 +55,11 @@ overriding the interpreter, not the harness being broken.
 - **Facts, not recipes.** SKILL.md states what the OS primitive does. It does
   not tell the caller how to wait, poll, frame, or spread a payload over
   lanes. The read-and-write section is two commands and never grows.
+- **The session defines the skill. The skill does not define the session.**
+  How many pipes, how wide, how deep, who holds which end, what goes down
+  one — all the session's. This file says what the primitive does and stops
+  there. The moment it starts telling a session how to be arranged, it has
+  stopped being the cable and become something plugged into it.
 - **Bash, and the shebang decides.** Every script here is bash and says so on
   its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script` or `bash script`: that overrides

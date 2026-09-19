@@ -1,5 +1,11 @@
 # ICC-Bridge
 
+**These are build rules, not use rules.** Everything in this file is
+for changing what is in this repo. None of it binds a session that
+uses the skill: a session takes what it needs from SKILL.md, and this
+file is not addressed to it. A checkout sitting beside a session's
+work is not an instruction to that session.
+
 A Claude Code skill that carries an ICC payload across the session line
 as a SendMessage, and back. That is the whole project.
 

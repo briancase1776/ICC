@@ -123,6 +123,12 @@ overriding the interpreter, not the harness being broken.
   to one, is ever written to a file. The payload is weighed in flight.
   The hold's depth is the price of that, paid on purpose: going to disk
   to get past it is not a fix, it is this rule broken.
+- **The session defines the skill. The skill does not define the
+  session.** How big a payload is, what is in it, how often one goes,
+  who reads it at the far end — all the session's. This file says what
+  a frame is and stops there. The moment it starts telling a session
+  how to be arranged, it has stopped being the carrier and become
+  something carried.
 - **Bash, and the shebang decides.** Every script here is bash and says
   so on its first line. Run one by its path and let that line choose the
   interpreter. Never reach for `sh script` or `bash script`: that

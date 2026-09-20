@@ -63,7 +63,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
 - **Delivery.** Acknowledgements, retries, order between messages,
   duplicates, liveness, a reply.
 - Other alphabets, compression, options. One alphabet.
-- Anything Pipes and Frames list as out of scope for themselves.
+- Config files, plugins, or extension points.
 
 If a request touches any of the above, stop and say it is out of scope.
 Before adding anything, ask: is this the wire, what goes through it,

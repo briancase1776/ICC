@@ -39,6 +39,11 @@ If a request touches any of the above, stop and say it is out of scope. Do
 not add it. Before adding anything, ask: is this the cable, or something
 that plugs into the cable? Only the cable belongs here.
 
+This list says what does not belong in a cable. It is not the
+project's list, and no other piece inherits it. A sibling that keeps
+what it carries, or carries it some other way, is not forbidden by
+anything here. It is simply not Pipes.
+
 ## Testing
 
 A test harness is allowed **only to prove the pipe works**: create it, push

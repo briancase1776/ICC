@@ -79,6 +79,9 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   encodings, field names, timestamps, or any tag that says what a
   payload is. The frame header is not a place to sneak these in. Bytes
   in, the same bytes out.
+- Anything a sibling already does. Use it where it is; never copy,
+  wrap, or reimplement it here. A sibling written after this file is
+  still a sibling.
 - Config files, plugins, options, or extension points.
 - Deciding what a Claude writes or how it interprets what it reads.
 

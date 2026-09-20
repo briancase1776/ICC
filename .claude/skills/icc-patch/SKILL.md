@@ -12,8 +12,8 @@ description: >-
 
 A patch is pipes that icc-pipes made, tees that icc-tee made and merges
 that icc-merge made, plugged into a shape over N seats, and a map. A seat
-is a number. Which Claude holds it is agreed outside this skill, like
-whose desk a cable runs to. The parent, when it is in on it, is seat p.
+is a number. Who holds it is agreed outside this skill, like whose desk
+a cable runs to. The parent, when it is in on it, is seat p.
 
     /tmp/icc-patch-XXXXXXXX/patch    SHAPE N LANES, then one line per end
     /tmp/icc-patch-XXXXXXXX/made     SCRIPTS DIR per pipe and fitting, in order

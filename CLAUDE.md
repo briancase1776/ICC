@@ -56,8 +56,8 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   That is Tee and Merge. Same rule.
 - **The payload.** Slicing, counts, frames. That is Frames.
 - **The content.** What the bytes mean. Formats, protocols, envelopes.
-- **Who sits where.** Which Claude is seat 3, how it learns that, how it
-  finds the map. Discovery, registries, naming.
+- **Who sits where.** Who holds seat 3, how that is learned, how the map
+  is found. Discovery, registries, naming.
 - **What a seat does.** Sending, waiting, polling, forwarding around a
   ring, hop counts, tokens, turn taking. A seat holds ends; what it does
   with them is its business.

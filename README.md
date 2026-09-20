@@ -8,18 +8,22 @@ agent, a program, or a person at a terminal — the name says Claude for
 historical reasons and only one piece still means it.
 
     # four parties on a mesh, six lanes each
-    x=$(ICC-Patch/.claude/skills/icc-patch/scripts/create mesh 4 6)
+    x=$(.claude/skills/icc-patch/scripts/create mesh 4 6)
 
     # seat 0 sends a photo
-    e=$(awk '$1==0 && $2==0 {print $3}' "$x/patch")
-    ICC-Frames/.claude/skills/icc-frames/scripts/write "$e" 0 < photo.jpg
+    w=$(awk '$1==0 && $2==0 {print $3}' "$x/patch")
+    .claude/skills/icc-frames/scripts/write "$w" 0 < photo.jpg
 
-    # seat 2 gets it whole, and so does everyone else
-    e=$(awk '$1==2 && $2==1 {print $3}' "$x/patch")
-    timeout 5 ICC-Frames/.claude/skills/icc-frames/scripts/read "$e" 1 \
-      > out.jpg
+    # every seat reads it whole, the sender included -- and every seat
+    # must read, because the one that does not stalls the rest
+    for s in 0 1 2 3; do
+      r=$(awk -v s=$s '$1==s && $2==1 {print $3}' "$x/patch")
+      timeout 5 .claude/skills/icc-frames/scripts/read "$r" 1 > "seat$s.jpg"
+    done
 
-Nothing between those two commands looked at a byte.
+Nothing in the middle looked at a byte. Six lanes carry about 200K across
+a mesh that size; a bigger payload wants more lanes, and `write` refuses
+rather than hangs when you ask for more than the wire holds.
 
 ## The pieces
 
@@ -30,8 +34,7 @@ Nothing between those two commands looked at a byte.
     ICC-Merge    the fitting   copy many pipes onto one
     ICC-Pipes    the lane      a bidirectional channel at a path
 
-Six Claude Code skills, one repo each, pinned here as submodules so they
-sit beside each other the way they expect. Each has its own README.
+Six Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage, and only a Claude can call that.
@@ -49,7 +52,7 @@ first.
 
 ## Running it
 
-    git clone --recurse-submodules https://github.com/briancase1776/ICC
+    git clone https://github.com/briancase1776/ICC
     ./tests/run.sh
 
 Every piece's harness, bottom up: a payload bigger than one lane holds,

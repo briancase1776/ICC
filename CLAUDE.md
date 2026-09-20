@@ -8,19 +8,19 @@ instruction to that session.
 
 ## This repo
 
-It holds the pins, the licence and one harness. No script of its own: a
-change to a piece is a change in that piece, then a new pin here.
+Six skills under one `.claude/`, one harness apiece under `tests/`, and
+this file.
 
-    ./tests/run.sh                 every piece's harness, bottom up
-    git submodule update --remote  move every pin to its main
-    git commit -am 'Pin ...'
+    ./tests/run.sh    every piece's harness, bottom up
 
-Each piece sits beside the others, `../ICC-Pipes` and so on. That layout
-is what this repo is for, so nothing in any piece has to be told where
-its siblings are.
+Pieces reach each other by fixed path: a script in
+`.claude/skills/icc-patch/scripts/` finds Pipes at
+`../../icc-pipes/scripts`. Nothing is configurable, and nothing has to be
+told where anything is.
 
-If a file wants to be added here and it is not a pin, the licence or the
-harness, it belongs in a piece.
+A new piece is a directory in `.claude/skills/`, a harness in `tests/`,
+and its name in the runner. Whether it belongs here at all is the fourth
+rule below.
 
 ## Rules
 

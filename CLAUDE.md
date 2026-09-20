@@ -1,53 +1,46 @@
 # ICC
 
 **These are build rules, not use rules.** Everything in this file is for
-changing what is in this repo. None of it binds a session that uses the
-pieces: a session takes what it needs from each piece's SKILL.md, and this
-file is not addressed to it. A checkout sitting beside a session's work is
-not an instruction to that session.
+changing what is here. None of it binds a session that uses a skill: a
+session takes what it needs from each SKILL.md, and this file is not
+addressed to it. A checkout sitting beside a session's work is not an
+instruction to that session.
 
-Inter-Claude communication: six Claude Code skills, each its own repo,
-pinned here side by side as submodules. This repo holds the pins and one
-harness that runs all six. That is the whole project.
+## This repo
 
-    what the bytes mean        someone else's, above all this
-    ICC-Bridge   the spelling  a payload as a message, and back
-    ICC-Patch    the bay       shapes over N seats, and a map
-    ICC-Frames   the payload   slice, carry, reassemble
-    ICC-Tee      the fitting   copy one pipe onto many
-    ICC-Merge    the fitting   copy many pipes onto one
-    ICC-Pipes    the lane      a bidirectional channel at a path
+It holds the pins, the licence and one harness. No script of its own: a
+change to a piece is a change in that piece, then a new pin here.
 
-Each piece finds its siblings beside it, `../ICC-Pipes` and so on. That
-is the layout this repo makes, so nothing in any piece needs telling
-where the others are.
-
-## What this is not
-
-- **Code.** No script lives here. A change to a piece is a change in its
-  repo, then a new pin here.
-- **A seventh skill.** Nothing above the bay belongs here either. Who sits
-  where, whose turn it is, what the bytes mean: someone else's, in their
-  own repo.
-
-## Working in it
-
-    git clone --recurse-submodules https://github.com/briancase1776/ICC
-    sh tests/run.sh                          every piece's harness, in order
-    git submodule update --remote            move every pin to its main
+    ./tests/run.sh                 every piece's harness, bottom up
+    git submodule update --remote  move every pin to its main
     git commit -am 'Pin ...'
+
+Each piece sits beside the others, `../ICC-Pipes` and so on. That layout
+is what this repo is for, so nothing in any piece has to be told where
+its siblings are.
+
+If a file wants to be added here and it is not a pin, the licence or the
+harness, it belongs in a piece.
 
 ## Rules
 
-The rules in each piece's CLAUDE.md apply in that piece. Here there are
-two.
-
-This repo holds pins, a license, and the harness. If a file wants to be
-added, it belongs in a piece, or above the stack.
-
-And the session defines the skill; the skill does not define the session.
-What gets built out of these pieces, how many of each, which ends go
-where and what goes down them, is the session's. A piece says what it
-does and stops there. Every piece states this for itself, because a
-CLAUDE.md is read alone and a piece that is read without this one still
-has to know it.
+- **KISS.** One way to do each thing. Prefer the OS primitive over a
+  library. Prefer a shell script over a program. Prefer no dependency
+  over one.
+- **Small.** If a file is getting long, you are adding scope, not
+  features.
+- **No speculative work.** Build what is asked, not what might be asked
+  later.
+- **Keep the lines sharp.** Between one piece and the next, and between
+  all of them and the session using them. Change is not what this guards
+  against: add a piece, change what one does, retire one, that is the
+  work. Blurring is. Before adding something, ask whose job it is. If the
+  honest answer is "this one, and a bit of that one," or "this one, and a
+  bit of the session's," it belongs to neither and the line has moved.
+  Move it on purpose and in the open, or leave it where it is.
+- **Bash, and the shebang decides.** Every script is bash and says so on
+  its first line. Run one by its path and let that line choose the
+  interpreter. Never reach for `sh script` or `bash script`: that
+  overrides what the file declares, and a script that runs today only
+  because the caller forced dash on it will break the day it uses
+  anything bash has.

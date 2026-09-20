@@ -50,9 +50,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   Every outlet gets every byte.
 - Buffering, rate control, or backpressure beyond what tee(1) and the
   lanes already give.
-- Anything Pipes already lists as out of scope for itself: routing,
-  discovery, persistence, replay, liveness, auth, retries, queues, other
-  transports, config, plugins, options.
+- Config files, plugins, options, or extension points.
 
 If a request touches any of the above, stop and say it is out of scope.
 Before adding anything, ask: is this the cable, is this what goes through

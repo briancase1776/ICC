@@ -1,5 +1,5 @@
-#!/bin/sh
-# tests/run.sh
+#!/bin/bash
+# tests/bridge.sh
 # Prove the transcription: get two pipes from Pipes, put a Frames payload
 # bigger than one lane holds on one, take it off as text, see the text is
 # the alphabet and nothing else, put it on the other, read it back whole,
@@ -12,12 +12,13 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=.claude/skills/icc-pipes/scripts
-F=.claude/skills/icc-frames/scripts
-B=.claude/skills/icc-bridge/scripts
+P=$(cd .claude/skills/icc-pipes/scripts && pwd)
+F=$(cd .claude/skills/icc-frames/scripts && pwd)
+B=$(cd .claude/skills/icc-bridge/scripts && pwd)
+t=$(mktemp -d); cd "$t"
 a=$("$P/create" 6); b=$("$P/create" 6)
 trap '"$P/remove" "$a" 2>/dev/null || :; "$P/remove" "$b" 2>/dev/null || :
-  rm -f in out text' EXIT
+  cd /; rm -rf "$t"' EXIT
 head -c 150000 /dev/urandom > in
 "$F/write" "$a" 0 < in
 timeout 5 "$B/out" "$a" 1 > text
@@ -35,6 +36,6 @@ echo 'not the alphabet' | "$B/in" "$a" 0 2>/dev/null && exit 1
 timeout 1 "$B/out" "$a" 1 > text 2>/dev/null && exit 1
 [ ! -s text ]
 "$P/remove" "$a"; "$P/remove" "$b"
-rm -f in out text
+cd /; rm -rf "$t"
 trap - EXIT
 echo ok

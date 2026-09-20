@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-bridge/scripts/in
 # in DIR SIDE < text: take the text a message carried and put the payload it
 # spells on the lanes SIDE writes. Whole or nothing: a character outside the

@@ -1,10 +1,11 @@
-#!/bin/sh
+#!/bin/bash
 # .claude/skills/icc-bridge/scripts/out
 # out DIR SIDE > text: take one payload off the lanes SIDE reads and print it
 # in the alphabet a message can carry. Whole or nothing: a payload that does
-# not come off whole prints nothing, and Frames says what it left. This
-# shell is sh, and sh does not run an EXIT trap when it dies on a signal, so
-# the signals a timeout sends are trapped too.
+# not come off whole prints nothing, and Frames says what it left. The
+# signals a timeout sends are trapped as well as EXIT, and the signal trap
+# clears EXIT before it runs, so the temporary goes exactly once whichever
+# way the script ends.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #

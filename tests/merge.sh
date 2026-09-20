@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/run.sh
+# tests/merge.sh
 # Prove the merge: get three pipes, merge side 0 of two into the third, push a
 # Frames payload bigger than one lane holds through each inlet in turn, read it
 # back whole from the outlet each time, then plain bytes on one lane from both
@@ -13,11 +13,13 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=.claude/skills/icc-pipes/scripts
-F=.claude/skills/icc-frames/scripts
-M=.claude/skills/icc-merge/scripts
+P=$(cd .claude/skills/icc-pipes/scripts && pwd)
+F=$(cd .claude/skills/icc-frames/scripts && pwd)
+M=$(cd .claude/skills/icc-merge/scripts && pwd)
+t=$(mktemp -d); cd "$t"
 a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
-trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
+trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
+      cd /; rm -rf "$t"' EXIT
 "$M/create" "$c" 0 2>/dev/null && exit 1
 "$M/create" "$c" 2 "$a" 2>/dev/null && exit 1
 "$M/create" "$c" 0 "$x" 2>/dev/null && exit 1
@@ -28,7 +30,8 @@ y=$("$P/create" 6); rm -f "$y/2"; mkdir "$y/2"
 "$M/create" "$c" 0 "$y" 2>/dev/null && exit 1   # a lane that is not a lane
 rmdir "$y/2"; "$P/remove" "$y"
 m=$("$M/create" "$c" 0 "$a" "$b")
-trap '"$M/remove" "$m" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
+trap '"$M/remove" "$m" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
+      cd /; rm -rf "$t"' EXIT
 "$M/list" | grep -qx "$m up $c 0 $a $b"
 # remove takes what create made and nothing else, and list answers for every
 # merge whatever else is in /tmp.
@@ -56,6 +59,6 @@ case $(timeout 1 dd if="$c/2" bs=4096 status=none) in ab|ba) ;; *) exit 1;; esac
 [ ! -d "$m" ]
 for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
 "$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"
-rm -f in out
+cd /; rm -rf "$t"
 trap - EXIT
 echo ok

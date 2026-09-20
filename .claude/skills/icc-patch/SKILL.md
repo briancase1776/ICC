@@ -27,10 +27,11 @@ a cable runs to. The parent, when it is in on it, is seat p.
     scripts/remove DIR              remove the fittings, then the pipes,
                                     then DIR
 
-create runs the create scripts in `$ICC_PIPES`, `$ICC_TEE` and
-`$ICC_MERGE`, by default `../ICC-Pipes`, `../ICC-Tee` and `../ICC-Merge`
-beside this repo. remove runs the remove scripts create used. If a piece
-is missing, create makes nothing.
+create runs icc-pipes', icc-tee' and icc-merge' create scripts from
+beside this one, `../../icc-pipes/scripts` and so on under the same
+`.claude/skills`. There is nothing to configure and nothing to set.
+remove runs the remove scripts create used. If a piece is missing,
+create makes nothing and says which.
 
 ## Shapes
 

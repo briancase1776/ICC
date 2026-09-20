@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/run.sh
+# tests/tee.sh
 # Prove the tee: get three pipes, tee side 0 of one into the other two, push
 # a Frames payload bigger than one lane holds, read it back whole from both
 # outlets, then plain bytes on one lane, remove it. The pipes stay up.
@@ -9,11 +9,13 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=.claude/skills/icc-pipes/scripts
-F=.claude/skills/icc-frames/scripts
-T=.claude/skills/icc-tee/scripts
+P=$(cd .claude/skills/icc-pipes/scripts && pwd)
+F=$(cd .claude/skills/icc-frames/scripts && pwd)
+T=$(cd .claude/skills/icc-tee/scripts && pwd)
+t=$(mktemp -d); cd "$t"
 a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
-trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
+trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
+      cd /; rm -rf "$t"' EXIT
 # set -e is ignored for a pipeline that begins with !, so `! cmd` states a
 # refusal without ever being able to fail the harness. no() runs the command
 # and stops here if it succeeds.
@@ -26,7 +28,8 @@ no "$T/create" "$a" 0 "$a"        # SRC as its own DST
 no "$T/create" "$a" 0 "$b" "$b"   # the same DST twice
 no "$T/create" "$a" 0 "$b" "$b/"  # the same DST spelled two ways
 t=$("$T/create" "$a" 0 "$b" "$c")
-trap '"$T/remove" "$t" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT
+trap '"$T/remove" "$t" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
+      cd /; rm -rf "$t"' EXIT
 "$T/list" | grep -qx "$t up $a 0 $b $c"
 head -c 150000 /dev/urandom > in
 "$F/write" "$a" 0 < in
@@ -78,6 +81,6 @@ rm -f "$f"/*; rmdir "$f"
 no "$T/remove" "$a"
 for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
 "$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"
-rm -f in out
+cd /; rm -rf "$t"
 trap - EXIT
 echo ok

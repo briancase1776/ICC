@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/run.sh
+# tests/patch.sh
 # Prove the bay: make each shape, see the map name the cables the shape says
 # and no more, push a Frames payload bigger than one lane holds from a seat
 # to its peers and read it back whole at every one, plain bytes back the

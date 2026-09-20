@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/run.sh
+# tests/frames.sh
 # Prove read and write: get a pipe, push a payload bigger than one lane holds
 # through it, read it back whole, compare bytes, both directions; push one
 # far bigger with a read draining it; refuse a SIDE that is not a side and a

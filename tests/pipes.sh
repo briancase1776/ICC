@@ -1,5 +1,5 @@
 #!/bin/bash
-# tests/run.sh
+# tests/pipes.sh
 # Prove the pipe: create it, refuse a bad lane count, hand bytes from one
 # process to another and back again on every pair, remove it.
 # Copyright (c) 2026 Brian Case. All rights reserved.

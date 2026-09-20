@@ -27,12 +27,12 @@ rather than hangs when you ask for more than the wire holds.
 
 ## The pieces
 
-    ICC-Bridge   the spelling  a payload as a message, and back
-    ICC-Patch    the bay       shapes over N seats, and a map
-    ICC-Frames   the payload   slice, carry, reassemble
-    ICC-Tee      the fitting   copy one pipe onto many
-    ICC-Merge    the fitting   copy many pipes onto one
-    ICC-Pipes    the lane      a bidirectional channel at a path
+    icc-bridge   the spelling  a payload as a message, and back
+    icc-patch    the bay       shapes over N seats, and a map
+    icc-frames   the payload   slice, carry, reassemble
+    icc-tee      the fitting   copy one pipe onto many
+    icc-merge    the fitting   copy many pipes onto one
+    icc-pipes    the lane      a bidirectional channel at a path
 
 Six Claude Code skills in one repo, under one `.claude/skills/`.
 
@@ -54,6 +54,16 @@ first.
 
     git clone https://github.com/briancase1776/ICC
     ./tests/run.sh
+
+If you had this repo while the pieces were submodules, pulling leaves
+all six of them in your working tree and says nothing: git drops the
+link and leaves the directory, so `git status` is clean while six stale
+checkouts sit beside the new `.claude/`, their old scripts still
+running from their old paths. Take them out once:
+
+    git submodule deinit -f . 2>/dev/null || :
+    rm -rf ICC-Pipes ICC-Frames ICC-Tee ICC-Merge ICC-Patch ICC-Bridge
+    rm -rf .git/modules
 
 Every piece's harness, bottom up: a payload bigger than one lane holds,
 pushed through pipes, fittings and shapes, and compared byte for byte at

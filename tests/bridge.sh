@@ -12,8 +12,8 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=${ICC_PIPES:-../ICC-Pipes}/.claude/skills/icc-pipes/scripts
-F=${ICC_FRAMES:-../ICC-Frames}/.claude/skills/icc-frames/scripts
+P=.claude/skills/icc-pipes/scripts
+F=.claude/skills/icc-frames/scripts
 B=.claude/skills/icc-bridge/scripts
 a=$("$P/create" 6); b=$("$P/create" 6)
 trap '"$P/remove" "$a" 2>/dev/null || :; "$P/remove" "$b" 2>/dev/null || :

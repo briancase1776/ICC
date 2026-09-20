@@ -10,7 +10,7 @@
 set -eu
 d=${1:?usage: in DIR SIDE}; s=${2:?usage: in DIR SIDE}
 top=$(cd "$(dirname "$0")/../../../.." && pwd)
-F=$(cd "${ICC_FRAMES:-$top/../ICC-Frames}/.claude/skills/icc-frames/scripts" && pwd)
+F=$(cd "$top/.claude/skills/icc-frames/scripts" && pwd)
 p=$(mktemp)
 trap 'rm -f "$p"' EXIT
 trap 'trap - EXIT INT TERM HUP; rm -f "$p"; exit 1' INT TERM HUP

@@ -79,9 +79,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   encodings, field names, timestamps, or any tag that says what a
   payload is. The frame header is not a place to sneak these in. Bytes
   in, the same bytes out.
-- Anything Pipes already lists as out of scope for itself: routing,
-  discovery, persistence, replay, liveness, auth, retries, queues, other
-  transports, config, plugins, options.
+- Config files, plugins, options, or extension points.
 - Deciding what a Claude writes or how it interprets what it reads.
 
 If a request touches any of the above, stop and say it is out of scope.

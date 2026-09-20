@@ -1,0 +1,17 @@
+#!/bin/bash
+# .claude/skills/icc-pipes/scripts/list
+# list: one line per pipe, "DIR up" or "DIR down".
+# Up means the hold still has lane 0 open.
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT License text omitted for brevity, See LICENCE.TXT
+for d in /tmp/icc-pipes-*/; do
+  [ -d "$d" ] || continue
+  d=${d%/}
+  [ -p "$d/0" ] || continue
+  p=$(cat "$d/pid" 2>/dev/null)
+  s=down
+  [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$d/0" ] && s=up
+  echo "$d $s"
+done

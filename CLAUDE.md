@@ -65,7 +65,10 @@ overriding the interpreter, not the harness being broken.
   Prefer a shell script over a program. Prefer no dependency over one.
 - **Small.** If a file is getting long, you are adding scope, not features.
 - **No speculative work.** Build what is asked, not what might be asked later.
-- **No abstraction until there are two real callers.**
+- **Do not generalize what you have one of.** One shape needs no shape
+  language, one transport no transport interface, one caller no options.
+  This is about factoring what is here, not about what may be built. A
+  piece that does not exist yet has no callers, and neither did this one.
 - **Facts, not recipes.** SKILL.md states what the OS primitive does. It does
   not tell the caller how to wait, poll, frame, or spread a payload over
   lanes. The read-and-write section grows when something is measured and

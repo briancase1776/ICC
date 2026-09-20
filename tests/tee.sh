@@ -9,8 +9,8 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=${ICC_PIPES:-../ICC-Pipes}/.claude/skills/icc-pipes/scripts
-F=${ICC_FRAMES:-../ICC-Frames}/.claude/skills/icc-frames/scripts
+P=.claude/skills/icc-pipes/scripts
+F=.claude/skills/icc-frames/scripts
 T=.claude/skills/icc-tee/scripts
 a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
 trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done; rm -f in out' EXIT

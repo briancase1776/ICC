@@ -12,7 +12,7 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=$(cd "${ICC_PIPES:-../ICC-Pipes}/.claude/skills/icc-pipes/scripts" && pwd)
+P=$(cd ".claude/skills/icc-pipes/scripts" && pwd)
 F=$PWD/.claude/skills/icc-frames/scripts
 t=$(mktemp -d); cd "$t"
 d=$("$P/create" 6); made=$d

@@ -121,7 +121,10 @@ overriding the interpreter, not the harness being broken.
   features.
 - **No speculative work.** Build what is asked, not what might be asked
   later.
-- **No abstraction until there are two real callers.**
+- **Do not generalize what you have one of.** One shape needs no shape
+  language, one transport no transport interface, one caller no options.
+  This is about factoring what is here, not about what may be built. A
+  piece that does not exist yet has no callers, and neither did this one.
 - **Two operations.** read and write. Not a third. If something looks
   like it needs a third, it belongs above or below this layer.
 - **One number.** The only bytes Frames adds are a payload's count, in

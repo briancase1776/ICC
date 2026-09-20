@@ -23,9 +23,9 @@ case $lanes in ''|*[!0-9]*) echo "lanes must be a whole number: $lanes" >&2; exi
 n=$((10#$n)); lanes=$((10#$lanes))
 [ "$n" -ge 1 ] || { echo "seats must be 1 or more" >&2; exit 1; }
 top=$(cd "$(dirname "$0")/../../../.." && pwd)
-P=$(cd "${ICC_PIPES:-$top/../ICC-Pipes}/.claude/skills/icc-pipes/scripts" && pwd)
-T=$(cd "${ICC_TEE:-$top/../ICC-Tee}/.claude/skills/icc-tee/scripts" && pwd)
-M=$(cd "${ICC_MERGE:-$top/../ICC-Merge}/.claude/skills/icc-merge/scripts" && pwd)
+P=$(cd "$top/.claude/skills/icc-pipes/scripts" && pwd)
+T=$(cd "$top/.claude/skills/icc-tee/scripts" && pwd)
+M=$(cd "$top/.claude/skills/icc-merge/scripts" && pwd)
 d=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 trap 'rm -rf "$d"' EXIT
 echo "$shape $n $lanes" > "$d/patch"; : > "$d/made"

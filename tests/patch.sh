@@ -11,8 +11,8 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=${ICC_PIPES:-../ICC-Pipes}/.claude/skills/icc-pipes/scripts
-F=${ICC_FRAMES:-../ICC-Frames}/.claude/skills/icc-frames/scripts
+P=.claude/skills/icc-pipes/scripts
+F=.claude/skills/icc-frames/scripts
 S=.claude/skills/icc-patch/scripts
 end() { awk -v s="$1" -v i="$2" -v p="$3" \
   '$1==s && $2==i && ("," $4 ",") ~ ("," p ",") {print $3}' "$x/patch"; }

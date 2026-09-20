@@ -83,7 +83,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
   wrap, or reimplement it here. A sibling written after this file is
   still a sibling.
 - Config files, plugins, options, or extension points.
-- Deciding what a Claude writes or how it interprets what it reads.
+- Deciding what a writer writes or how a reader takes it.
 
 If a request touches any of the above, stop and say it is out of scope.
 Before adding anything, ask: is this the cable, is this what goes through

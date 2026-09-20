@@ -1,0 +1,89 @@
+#!/bin/bash
+# .claude/skills/icc-patch/scripts/create
+# create SHAPE N [LANES]: make the pipes, tees and merges SHAPE needs over N
+# seats, LANES lanes each (even, default 2), write the map, print the patch's
+# directory. The pieces come from icc-pipes, icc-tee and icc-merge, found in
+# sibling checkouts; the bay makes nothing but the map.
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT License text omitted for brevity, See LICENCE.TXT
+set -eu
+[ $# -ge 2 ] || { echo "usage: create SHAPE N [LANES]" >&2; exit 1; }
+shape=$1; n=$2; lanes=${3:-2}
+case $shape in star|ring|mesh|ring-p|mesh-p) ;;
+  *) echo "shape is star, ring, mesh, ring-p or mesh-p" >&2; exit 1;; esac
+# [ reads a number decimally and $(( )) reads it C-style, so 010 is ten to one
+# of them and eight to the other. Both are used here — the shape counts seats
+# with [ and wraps a ring with $(( )) — so force decimal before either sees it.
+# Whether lanes are even is Pipes' to say, and it says it when a pipe is made;
+# a shape that makes no pipe still writes the header, which is the bay's own.
+case $n in ''|*[!0-9]*) echo "seats must be a whole number: $n" >&2; exit 1;; esac
+case $lanes in ''|*[!0-9]*) echo "lanes must be a whole number: $lanes" >&2; exit 1;; esac
+n=$((10#$n)); lanes=$((10#$lanes))
+[ "$n" -ge 1 ] || { echo "seats must be 1 or more" >&2; exit 1; }
+top=$(cd "$(dirname "$0")/../../../.." && pwd)
+P=$(cd "$top/.claude/skills/icc-pipes/scripts" && pwd)
+T=$(cd "$top/.claude/skills/icc-tee/scripts" && pwd)
+M=$(cd "$top/.claude/skills/icc-merge/scripts" && pwd)
+d=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
+trap 'rm -rf "$d"' EXIT
+echo "$shape $n $lanes" > "$d/patch"; : > "$d/made"
+trap '"$(dirname "$0")/remove" "$d"' EXIT
+# Make a piece and write it down before a signal can part the two. Interrupted
+# between them, create would leave a piece no made file names, which its own
+# list cannot see and its own remove cannot reach. The signal is handled, not
+# ignored: an ignored signal is inherited through fork and exec and cannot be
+# put back by the child, so the hold Pipes starts here would come out deaf to
+# the TERM Pipes' own remove sends it. A handler is reset to default on exec,
+# and this one only sets a flag, so the piece is written down first and the
+# signal honoured after. A failure inside $( ) is not set -e's business here,
+# so each says so itself.
+piece() { m=$1; shift
+  sig=; trap 'sig=1' INT TERM HUP
+  z=$("$m/create" "$@") || exit 1
+  echo "$m $z" >> "$d/made"
+  trap - INT TERM HUP
+  [ -z "$sig" ] || exit 1
+}
+pipe() { piece "$P" "$lanes"; p=$z; }
+tee() { piece "$T" "$@"; }
+merge() { piece "$M" "$@"; }
+end() { echo "$1 $2 $3 $(echo "$4" | tr ' ' ,)" >> "$d/patch"; }
+cable() {  # cable A B: one pipe, seat A on side 0, seat B on side 1
+  pipe; end "$1" 0 "$p" "$2"; end "$2" 1 "$p" "$1"
+}
+all=0; i=1; while [ "$i" -lt "$n" ]; do all="$all $i"; i=$((i + 1)); done
+case $shape in
+  star) for i in $all; do cable "$i" p; done; built=y ;;
+  ring)
+    case $n in 1) cable 0 0 ;; 2) cable 0 1 ;;
+      *) for i in $all; do cable "$i" $(( (i + 1) % n )); done ;; esac
+    built=y ;;
+  mesh|mesh-p)
+    set -- $all; [ "$shape" = mesh ] || set -- "$@" p
+    case $# in 1) ;; 2) cable "$1" "$2" ;;
+      *) pipe; b=$p; ins=; outs=
+         for s; do pipe; w=$p; pipe; r=$p; ins="$ins $w"; outs="$outs $r"
+           end "$s" 0 "$w" "$*"; end "$s" 1 "$r" "$*"; done
+         merge "$b" 0 $ins; tee "$b" 0 $outs; end - 1 "$b" - ;; esac
+    built=y ;;
+  ring-p)
+    xs=; rs=
+    for i in $all; do j=$(( (i + 1) % n ))
+      pipe; w=$p; pipe; r=$p; pipe; x=$p; pipe; y=$p
+      xs="$xs $x"; rs="$rs $y"
+      end "$i" 0 "$w" "$j p"; end "$j" 1 "$r" "$i"; end "$i" 1 "$y" p
+      tee "$w" 0 "$r" "$x"
+    done
+    q=$x; v=$y
+    [ "$n" -eq 1 ] || { pipe; q=$p; merge "$q" 0 $xs; pipe; v=$p; tee "$v" 0 $rs
+      for z in $xs; do end - 1 "$z" -; done; }
+    end p 1 "$q" "$all"; end p 0 "$v" "$all"; built=y ;;
+esac
+# An error inside $(( )) is not a command failure, so set -e does not stop it:
+# bash abandons the case and lands here. Without this line, "here" is where
+# cleanup is disarmed and a directory with no cables in it is reported as one.
+[ "${built:-}" = y ] || { echo "made nothing: $shape $n $lanes" >&2; exit 1; }
+trap - EXIT
+echo "$d"

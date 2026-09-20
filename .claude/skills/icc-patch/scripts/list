@@ -1,0 +1,34 @@
+#!/bin/bash
+# .claude/skills/icc-patch/scripts/list
+# list: one line per patch, "DIR up|down SHAPE N LANES".
+# Up means every pipe and fitting in it says up. A patch whose made file is
+# gone is down: nothing can say its pieces are up, and its pieces cannot be
+# reached to remove.
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT License text omitted for brevity, See LICENCE.TXT
+set -eu
+# Ask each skill once what it has, not once per piece it has: a sibling's list
+# names every piece of its kind on the box, so asking per piece makes listing
+# one patch cost as much as everyone else's work put together.
+u=$(mktemp); trap 'rm -f "$u"' EXIT
+cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u | while read -r sc; do
+  [ -x "$sc/list" ] && "$sc/list" | cut -d' ' -f1,2
+done > "$u" || :
+# A patch can go while this runs. That is a normal thing on a shared box, not
+# an error: read each file once, and skip a patch that is no longer there.
+for d in /tmp/icc-patch-*/; do
+  d=${d%/}
+  h=$(sed -n 1p "$d/patch" 2>/dev/null) || h=
+  [ -n "$h" ] || continue
+  if m=$(cat "$d/made" 2>/dev/null); then
+    s=up
+    [ -z "$m" ] || while read -r sc p; do
+      grep -qxF "$p up" "$u" || s=down
+    done <<< "$m"
+  else
+    s=down
+  fi
+  echo "$d $s $h"
+done

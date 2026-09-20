@@ -1,0 +1,34 @@
+#!/bin/bash
+# .claude/skills/icc-patch/scripts/remove
+# remove DIR: remove the fittings, then the pipes, in the reverse of the order
+# create made them, then delete DIR. DIR is what create printed. Reverse is
+# only the right order because create appends a fitting after the pipes it is
+# attached to; move a fitting earlier in create and this walk pulls a pipe out
+# from under a live copier. What the bay
+# can remove is what each piece's own skill still lists: a piece that skill no
+# longer knows is beyond removing by anything here, and is named where it lies
+# rather than tried for ever. One that is listed and will not go is named too,
+# and DIR is left standing with the made file that names the rest, so a second
+# remove can carry on: the record outlives the attempt, or nothing can find
+# what is left.
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT License text omitted for brevity, See LICENCE.TXT
+set -eu
+d=${1:?usage: remove DIR}
+[ -f "$d/patch" ] && [ -f "$d/made" ] || { echo "not a patch: $d" >&2; exit 1; }
+left=0
+# One question per skill, not one per piece: see list.
+u=$(mktemp); trap 'rm -f "$u"' EXIT
+cut -d' ' -f1 "$d/made" | sort -u | while read -r sc; do "$sc/list" | cut -d' ' -f1
+done > "$u"
+while read -r sc p; do
+  if grep -qxF "$p" "$u"; then
+    "$sc/remove" "$p" || { echo "would not go: $p" >&2; left=1; }
+  else
+    [ ! -e "$p" ] || echo "its own skill no longer knows it: $p" >&2
+  fi
+done < <(sed '1!G;h;$!d' "$d/made")
+[ "$left" -eq 0 ] || { echo "left standing: $d" >&2; exit 1; }
+rm -rf "$d"

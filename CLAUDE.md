@@ -63,6 +63,9 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
 - **Delivery.** Acknowledgements, retries, order between messages,
   duplicates, liveness, a reply.
 - Other alphabets, compression, options. One alphabet.
+- Anything a sibling already does. Use it where it is; never copy,
+  wrap, or reimplement it here. A sibling written after this file is
+  still a sibling.
 - Config files, plugins, or extension points.
 
 If a request touches any of the above, stop and say it is out of scope.

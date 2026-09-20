@@ -1,8 +1,8 @@
 ---
 name: icc-pipes
 description: >-
-  Create, list, and remove named pipes between Claude instances in one
-  container. Transport only. A pipe is an even number of lanes, each a FIFO
+  Create, list, and remove named pipes between whoever holds their ends,
+  in one container. Transport only. A pipe is an even number of lanes, each a FIFO
   going one way, held open so nothing blocks on open. What goes through it,
   and what it means, is the caller's business.
 ---

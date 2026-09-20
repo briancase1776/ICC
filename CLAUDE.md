@@ -6,8 +6,8 @@ skill: a session takes what it needs from SKILL.md, and this file is not
 addressed to it. A checkout sitting beside a session's work is not an
 instruction to that session.
 
-A Claude Code skill that creates pipes between Claude instances. That is the
-whole project.
+A Claude Code skill that creates pipes between whoever holds their ends.
+That is the whole project.
 
 Think of a cat-5 cable. It carries bytes between two ends and has no idea
 what is plugged into either one. This skill is the cable. Nothing more.
@@ -25,7 +25,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
 
 - Message formats, protocols, schemas, framing, or envelopes for what goes
   through a pipe. Not even a line convention or a timestamp.
-- How a Claude decides what to write or how it interprets what it reads.
+- How a writer decides what to write, or how a reader takes what it reads.
 - Routing, brokers, discovery services, registries, hubs, or topology.
 - Persistence, replay, history, ledgers, or logging of pipe contents.
 - Liveness, heartbeats, peer-death detection, or EOF markers.

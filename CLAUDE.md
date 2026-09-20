@@ -33,13 +33,14 @@ which seat.
 
 - A **patch**: the pipes, tees and merges one shape needs over N seats,
   made by their own skills, and a **map** saying which end each seat
-  holds and which seats are on the other side of it.
+  holds, which seats are on the other side of it, and which pipes no
+  seat holds at all.
 - The shapes are star, and ring and mesh each with or without the
   parent in on it. A star is a pipe from each seat to the parent and
   nothing between the seats. A mesh is a merge and a tee in the middle.
   A ring is a pipe from each seat to the next; with the parent in, each
   hop is a tee, the parent reads one merge of them all and writes one
-  tee to them all. Five shapes. Fewer seats means fewer cables, by the
+  tee to them all. Fewer seats means fewer cables, by the
   shape alone: two seats on a mesh is one pipe, one seat with its parent
   is one pipe.
 - The skill covers creating, listing, and removing patches. Using one is
@@ -60,8 +61,9 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
 - **What a seat does.** Sending, waiting, polling, forwarding around a
   ring, hop counts, tokens, turn taking. A seat holds ends; what it does
   with them is its business.
-- **New shapes on demand.** A shape is a few lines in create. Shape
-  files, graph input, a wiring language. No.
+- **A shape language.** Shape files, graph input, or anything else
+  that makes a shape without a change to create. A shape is code, and
+  adding one is a change to this repo; below says how.
 - Anything Pipes and Tee list as out of scope for themselves: routing,
   persistence, replay, liveness, auth, retries, queues, other transports,
   config, plugins, options.
@@ -83,6 +85,47 @@ vendor any of them into this repo.
 Do not duplicate their documentation. A fact about lanes is Pipes'; about
 copies, Tee's and Merge's; about payloads, Frames'. If one of them is
 missing a fact, that is a change there, not a paragraph here.
+
+## Adding a shape
+
+A shape is a few lines in create. Add one when there is a use for it,
+not on the chance there might be. The ones here are what has been
+wanted so far, and not a set anybody closed.
+
+    1. Name it in the guard at the top of create, and in the usage line
+       under it.
+    2. Give it a branch in the shape case: make what it needs, write a
+       map line for every pipe, set built=y.
+    3. Give it a case in the harness, and a row in SKILL.md's table.
+
+$all is the seats, 0 to N-1, and p is the parent where a shape has one.
+The helpers are already there:
+
+    pipe                     one pipe of LANES lanes, its directory in $p
+    cable A B                one pipe, seat A on side 0, seat B on side 1,
+                             and both map lines
+    tee SRC SIDE DST...      a tee, as ICC-Tee's create takes it
+    merge DST SIDE SRC...    a merge, as ICC-Merge's create takes it
+    end SEAT SIDE DIR PEERS  one map line. SEAT and PEERS are - for a
+                             pipe no seat holds
+
+Every pipe and fitting goes into made as it is made, by the helper that
+makes it, so remove finds it without a shape doing anything about it.
+
+What a shape owes:
+
+- A map line for every pipe it made: one per end a seat holds, and one
+  naming the free side of every pipe that only joins two fittings. The
+  map names every pipe or it is not the map.
+- Its own collapses, said out loud in SKILL.md. Fewer seats means fewer
+  cables, and a fitting with one end on a side is no fitting. Every
+  shape here handles its own one seat and two; a new one does too.
+- Nothing about who sits where or whose turn it is. Pipes, fittings and
+  a map. That is the whole of a shape.
+
+star is the smallest there is, and this is all of it:
+
+    star) for i in $all; do cable "$i" p; done; built=y ;;
 
 ## Testing
 

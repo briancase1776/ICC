@@ -49,6 +49,8 @@ is missing, create makes nothing.
              seat before it, and a read end from p
     mesh-p   mesh, with seat p on it like any other
 
+These are the shapes there are. CLAUDE.md says how to add one.
+
 N counts seats other than p. Fewer seats, fewer cables, by the shape
 alone: a fitting with one end on a side is no fitting. mesh 2 is one
 pipe, and so is mesh-p 1, one seat with its parent, and so is star 1.
@@ -64,12 +66,21 @@ it, since there is no tee to hand them round.
 
 ## The map
 
-After the first line, one line per end a seat holds:
+After the first line, one line per end a seat holds, and one for every
+pipe no seat holds at all:
 
     SEAT SIDE DIR PEERS
 
 Seat SEAT holds side SIDE of the pipe at DIR. PEERS is the seats on the
 other side, comma separated. Pipes says what a side writes and reads.
+
+SEAT and PEERS are both `-` on a pipe that joins two fittings and
+nothing else. Nobody holds either side of it, and SIDE names the free
+one. A mesh of three or more has one, between its merge and its tee; a
+ring-p has one per seat, between that seat's hop tee and p's merge.
+There is nothing to hold and nothing to do with such a line. It is
+there so the map names every pipe the shape made, and remove takes
+those pipes with the rest.
 
 - A DIR on two seats' lines is a pipe those two share: what each writes
   there reaches the other and what it reads there came from the other,
@@ -82,9 +93,10 @@ other side, comma separated. Pipes says what a side writes and reads.
 - A DIR on one line only is through a fitting, and goes one way. A write
   end, side 0, sends to PEERS and reads nothing. A read end, side 1,
   receives from PEERS and sends nowhere. Tee's and Merge's SKILL.md say
-  why. No pipe the map names has two writers on it, in any shape, so the
+  why. No pipe a seat holds has two writers on it, in any shape, so such a
   line is the whole of it: two names, both ways; one name, one way. A
-  merge's outlet has one writer per inlet, and the map names it nowhere.
+  merge's outlet does have two, one per inlet, and no seat holds it, so
+  its line names none.
 
     grep '^3 ' "$x/patch"                          every end seat 3 holds
 

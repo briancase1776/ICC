@@ -58,7 +58,8 @@ printf 'me' > "$(at 0 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 0)/0")" = me ]
 "$S/remove" "$x"
 mk mesh 4 6
 "$S/list" | grep -qx "$x up mesh 4 6"
-made icc-pipes 9; made icc-tee 1; made icc-merge 1; ends 8
+made icc-pipes 9; made icc-tee 1; made icc-merge 1; ends 9
+[ "$(grep -c '^- ' "$x/patch")" -eq 1 ]          # the hub, named, held by nobody
 [ "$(grep -c '^3 ' "$x/patch")" -eq 2 ]
 "$F/write" "$(at 1 0 3)" 0 < "$in"
 for r in 0 1 2 3; do timeout 5 "$F/read" "$(at $r 1 1)" 1 > "$out"; cmp "$in" "$out"; done
@@ -73,12 +74,13 @@ mk mesh-p 1; made icc-pipes 1; made icc-merge 0; ends 2
 printf 'hi' > "$(at 0 0 p)/0"; [ "$(timeout 1 cat "$(at p 1 0)/0")" = hi ]
 printf 'yo' > "$(at p 1 0)/1"; [ "$(timeout 1 cat "$(at 0 0 p)/1")" = yo ]
 "$S/remove" "$x"
-mk mesh-p 2; made icc-pipes 7; made icc-tee 1; made icc-merge 1; ends 6
+mk mesh-p 2; made icc-pipes 7; made icc-tee 1; made icc-merge 1; ends 7
 printf 'all' > "$(at p 0 1)/0"
 for r in 0 1 p; do [ "$(timeout 1 cat "$(at $r 1 p)/0")" = all ]; done
 "$S/remove" "$x"
 mk ring-p 3 6
-made icc-pipes 14; made icc-tee 4; made icc-merge 1; ends 11
+made icc-pipes 14; made icc-tee 4; made icc-merge 1; ends 14
+[ "$(grep -c '^- ' "$x/patch")" -eq 3 ]          # one coupler per seat
 [ "$(end 1 1 0)" != "$(end 1 1 p)" ]
 "$F/write" "$(at 1 0 2)" 0 < "$in"
 timeout 5 "$F/read" "$(at 2 1 1)" 1 > "$out"; cmp "$in" "$out"
@@ -90,6 +92,7 @@ m=$(cut -d' ' -f2 "$x/made")
 "$S/remove" "$x"; [ ! -d "$x" ]
 for p in $m; do [ ! -e "$p" ]; done
 mk ring-p 1; made icc-pipes 4; made icc-tee 1; made icc-merge 0; ends 5
+[ -z "$(grep '^- ' "$x/patch")" ]                # ring-p 1 has no coupler: p holds both
 printf 'hi' > "$(at p 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 p)/0")" = hi ]
 "$S/remove" "$x"
 mk star 1 2; e=$(at 0 0 p); h=$(holder "$e"); [ -n "$h" ]

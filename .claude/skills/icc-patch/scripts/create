@@ -66,7 +66,7 @@ case $shape in
       *) pipe; b=$p; ins=; outs=
          for s; do pipe; w=$p; pipe; r=$p; ins="$ins $w"; outs="$outs $r"
            end "$s" 0 "$w" "$*"; end "$s" 1 "$r" "$*"; done
-         merge "$b" 0 $ins; tee "$b" 0 $outs ;; esac
+         merge "$b" 0 $ins; tee "$b" 0 $outs; end - 1 "$b" - ;; esac
     built=y ;;
   ring-p)
     xs=; rs=
@@ -77,7 +77,8 @@ case $shape in
       tee "$w" 0 "$r" "$x"
     done
     q=$x; v=$y
-    [ "$n" -eq 1 ] || { pipe; q=$p; merge "$q" 0 $xs; pipe; v=$p; tee "$v" 0 $rs; }
+    [ "$n" -eq 1 ] || { pipe; q=$p; merge "$q" 0 $xs; pipe; v=$p; tee "$v" 0 $rs
+      for z in $xs; do end - 1 "$z" -; done; }
     end p 1 "$q" "$all"; end p 0 "$v" "$all"; built=y ;;
 esac
 # An error inside $(( )) is not a command failure, so set -e does not stop it:

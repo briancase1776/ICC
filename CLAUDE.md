@@ -153,7 +153,10 @@ repo guarantees anything under.
   features.
 - **No speculative work.** Build what is asked, not what might be asked
   later.
-- **No abstraction until there are two real callers.**
+- **Do not generalize what you have one of.** One shape needs no shape
+  language, one transport no transport interface, one caller no options.
+  This is about factoring what is here, not about what may be built. A
+  piece that does not exist yet has no callers, and neither did this one.
 - **Facts, not recipes.** SKILL.md says what the map means. It does not
   tell a seat when to write, how to wait, or what to do with what it
   reads.

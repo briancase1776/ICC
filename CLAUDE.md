@@ -1,5 +1,11 @@
 # ICC-Bridge
 
+**These are build rules, not use rules.** Everything in this file is
+for changing what is in this repo. None of it binds a session that
+uses the skill: a session takes what it needs from SKILL.md, and this
+file is not addressed to it. A checkout sitting beside a session's
+work is not an instruction to that session.
+
 A Claude Code skill that carries an ICC payload across the session line
 as a SendMessage, and back. That is the whole project.
 
@@ -121,6 +127,12 @@ the transcription is too complicated, not the test.
 - **Facts, not recipes.** SKILL.md says what the text is and what
   SendMessage does with text. It does not say when to send, whom to
   send to, or what to do with what comes back.
+- **The session defines the skill. The skill does not define the
+  session.** What crosses, where it goes, who is at the far end and
+  what they do with it — all the session's. This file says what the
+  text is and stops there. The moment it starts telling a session how
+  to be arranged, it has stopped being the crossing and become
+  something on one side of it.
 
 ## Layout
 

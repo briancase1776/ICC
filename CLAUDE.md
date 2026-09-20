@@ -64,9 +64,7 @@ Out of scope. Do not build, stub, or "leave room for" any of these:
 - **A shape language.** Shape files, graph input, or anything else
   that makes a shape without a change to create. A shape is code, and
   adding one is a change to this repo; below says how.
-- Anything Pipes and Tee list as out of scope for themselves: routing,
-  persistence, replay, liveness, auth, retries, queues, other transports,
-  config, plugins, options.
+- Config files, plugins, options, or extension points.
 
 If a request touches any of the above, stop and say it is out of scope.
 Before adding anything, ask: is this a cable, a fitting, what goes through

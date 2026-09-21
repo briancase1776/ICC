@@ -1,0 +1,259 @@
+bash-practices.txt
+
+Bash Development Practices
+
+Naming, comment format and ground rules for bash. A language skill:
+it names no project and no other document.
+
+Copyright (c) 2026 Brian Case. All rights reserved.
+AI contributor: Claude (Anthropic)
+
+MIT Licence. See LICENCE.TXT
+
+Naming Rules
+
+The case against Hungarian is always the same and always wrong the
+same way: that a prefix restates a type the compiler already knows,
+or that it means nothing in a language with no types. Both make the
+language the subject. It is not.
+
+A variable's type is what you put in it and what you use it for. The
+language may check that, or not check it, or have no such type at
+all, and none of those change what is in the variable. A language
+with no void still has functions that return nothing.
+
+So bash having one type, or no floats, or no objects, decides
+nothing. Where bash cannot operate on a value the system can. The
+prefix names what is held, not who does the sums.
+
+Prefixes
+
+A lowercase prefix, then a capitalised noun. The prefix is everything
+up to the first capital.
+
+- a: Array
+  An indexed array, read as "${aLines[@]}". Example: aLines.
+
+- h: Hash
+  An associative array, declare -A. Example: hCountByName.
+
+- b: Boolean
+  A flag. Say in @details whether it is 0/1 or empty/non-empty.
+  Example: bVerbose.
+
+- df: Double-Precision Float
+  A decimal value. Bash does not do float arithmetic; bc, awk or
+  printf does. Example: dfElapsed.
+
+- e: Enumeration
+  A value from a set closed elsewhere in the file. Example: eMode.
+
+- fd: File Descriptor
+  A descriptor number. Never exec $fdLog< "$pFile" -- bash does not
+  expand in the descriptor position; open with {fdLog}, use with
+  >&$fdLog. Example: fdLog.
+
+- i: Index
+  A loop counter or subscript. Example: iLine.
+
+- k: Constant
+  Declared readonly. Example: kTimeout.
+
+- n: Integer Number
+  A count or size. Example: nRetries.
+
+- o: Object
+  A record held as one value, fields to be split out with read -r,
+  cut or awk. Example: oRecord.
+
+- os: String
+  Text. Example: osMessage.
+
+- p: Path
+  A file or directory path, which is bash's only kind of reference.
+  Example: pWorkDir.
+
+- pid: Process Id
+  Never arithmetic. Where the value is signalled as a process group,
+  the noun says so. Example: pidWorkerGroup.
+
+- v: Void
+  Functions only. See Function Names.
+
+Naming Usage
+
+- Names fit within 80 columns along with the line they are on.
+- Every variable inside a function is declared local unless the
+  function deliberately sets it for its caller, in which case it is
+  named in the block's @global line.
+- UPPER_SNAKE_CASE is reserved for environment variables, read or
+  exported.
+- Positional parameters are named on the first lines and not referred
+  to positionally after:
+      pSrc=${1:?usage: $0 SRC DST}
+      pDst=${2:?usage: $0 SRC DST}
+  "$@" is exempt.
+
+Function Names
+
+A function's name carries the prefix of what it puts on STDOUT, and v
+where it puts nothing.
+
+    nLineCount()    prints an integer
+    pMakeTemp()     prints a path
+    bIsReadable()   prints nothing; its status is the boolean
+    vRotateLog()    prints nothing and is not to be captured
+
+A prefixed name cannot shadow an external command. tee(), sort() and
+test() as function names can and do.
+
+Ground Rules
+
+Coding Style
+
+- C Programmer Mindset: structured, readable, no spaghetti. In bash
+  the specific failure is a chain of && and || standing in for
+  control flow.
+
+- 80-Column Limit: all code and comments fit within 80 columns.
+
+- ASCII Only: no smart quotes, no em dashes, no box drawing. Use
+  $'\uXXXX' where a byte is genuinely needed in a string.
+
+- Strictness Header: a script states which options it sets, and where
+  it sets none its header says why. set -eu is the default. A script
+  that must survive its own failures -- one walking directories that
+  can vanish under it -- says so rather than being made strict.
+
+- set -e Is Not A Safety Net: it does not fire inside $( ) in a
+  condition, inside a function called in an if or as the left arm of
+  &&, or on a failing command mid-pipeline. Check the failure where
+  it happens.
+
+- local On Its Own Line: never local x=$(cmd). local's own exit
+  status masks the substitution's, and the guard on the next || is
+  lost. Declare, then assign.
+
+- Shell State: a function that touches file descriptors, traps or
+  process groups is never called in a condition, a pipeline, or $( ).
+  Each of those either suspends set -e inside it or puts it in a
+  subshell.
+
+- Single Exit: a function that computes a value declares its result
+  variable at the top, initialised to its natural empty value, fills
+  it in, and returns once. It does NOT echo the value as a general
+  rule -- the caller reads an echoed value with $( ), which is a
+  fork, and inside it exit does not leave the script, traps do not
+  propagate and assignments are lost. Never introduce a subshell to
+  satisfy a style rule. A value for the caller is set in a named
+  global recorded in @global.
+
+- Loop Structure: the exit condition goes in the while or until
+  header. Avoid break. A nested loop is usually the inner loop asking
+  to be its own function.
+
+- One Command Per Line, with four exceptions: a case arm that fits; a
+  guard of the shape cond || { echo "..." >&2; exit 1; }; a brace
+  group sharing one redirection, which is one command; and the paired
+  positional naming above.
+
+- Never a && b || c As If-Then-Else: it is not one. cmd || : stays --
+  it is the idiom for suppressing set -e.
+
+- Quoting: quote every expansion. Unquoted is a deliberate act and
+  carries a comment saying so.
+
+- Test Syntax: [ ] for file and string tests, (( )) for arithmetic,
+  [[ ]] only where =~ is needed.
+
+- pipefail: not global. grep -c exits 1 on a zero count and head -c
+  exits early, both legitimately. Set it before a specific pipeline
+  whose status is actually checked.
+
+- Command Substitution: $( ), never backticks.
+
+- eval: a last resort, and it says why.
+
+- printf for anything with a variable or a backslash in it; echo only
+  for a fixed string.
+
+- Temporaries: from mktemp, removed by a trap set on the next line.
+  Every trap says what it cleans and what it leaves.
+
+File Structure
+
+- File Header: #!/bin/bash, then a Doxygen block containing, in
+  order: the path and filename, @brief, @details where there is more
+  to say, what it takes and gives, the exit statuses, copyright, the
+  AI contributor line, and the licence reference.
+
+- Licence: reference the licence file. Do not inline its text.
+
+- Copyright Year: append, never replace. 2026 becomes 2026-2027.
+
+Failure Signaling
+
+- Exit Status Is The Sentinel: 0 it happened, non-zero it did not.
+
+- stdout carries the value, stderr carries the reason. Never mixed.
+  Empty output is not a failure signal; check the status.
+
+- Distinct non-zero statuses only where a caller must tell two
+  failures apart, and then documented in @return or @exit.
+
+- Why Not trap ERR: by the time the handler runs, the local state
+  that produced the failure is gone -- which file, which iteration,
+  which branch. Check the status at the call site. Traps are for
+  cleanup.
+
+- Minimal Logging: report what the caller cannot work out, once, on
+  stderr.
+
+- Defer Hardening: happy path first.
+
+Documentation
+
+- Information First: a block earns its place by carrying what the
+  code cannot say. NEVER trim content to fit a template, a column, or
+  a checker. When tooling and content disagree, the tooling is what
+  gets fixed.
+
+- Doxygen for bash runs through a filter, with EXTENSION_MAPPING and
+  FILTER_PATTERNS in the Doxyfile and @fn naming each function.
+
+  File header:
+    #!/bin/bash
+    ##
+    # @file path/name
+    # @brief One line description.
+    # @details Longer description if needed.
+    # @param $1 pSrc - description
+    # @stdout what it prints
+    # @exit 0 description; 1 description
+    #
+    # Copyright (c) 2026 Brian Case. All rights reserved.
+    # AI contributor: Claude (Anthropic)
+    #
+    # MIT Licence. See LICENCE.TXT
+    ##
+
+  Function:
+    ##
+    # @fn vRotateLog()
+    # @brief One line description.
+    # @details Longer description if needed.
+    # @param $1 pLog - description
+    # @stdin what it reads
+    # @stdout what it prints
+    # @stderr the reason, on refusal
+    # @global gLastRotated - what is left for the caller
+    # @return 0 description; 1 description
+    ##
+
+  Section marker inside a function:   ##### section name #####
+  Normal inline comment:              # comment
+
+- @details is optional and allowed everywhere a block is.
+
+- Bash has no block comment. To disable a region while working use
+  : <<'OFF' ... OFF, and do not commit it.

@@ -1,17 +1,32 @@
 #!/bin/bash
-# .claude/skills/icc-pipes/scripts/list
-# list: one line per pipe, "DIR up" or "DIR down".
-# Up means the hold still has lane 0 open.
+##
+# @file .claude/skills/icc-pipes/scripts/list
+# @brief One line per pipe: "DIR up" or "DIR down".
+# @details Up means the hold named in the pipe's pid file still has lane
+#          0 open on fd 3, which is what create left it holding. Down is
+#          everything else: no pid file, a dead hold, a recycled pid
+#          holding something of its own.
+# @stdout One "DIR up" or "DIR down" line per pipe, in glob order.
+# @exit 0 always, including where there is no pipe at all
+#
+# No set -eu, and deliberately: this walks directories whose holders can
+# remove them while it reads, and a pipe that goes away mid-walk is not
+# this script's failure to report. Every step that can fail is checked
+# where it happens, and a directory that does not answer is skipped.
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-for d in /tmp/icc-pipes-*/; do
-  [ -d "$d" ] || continue
-  d=${d%/}
-  [ -p "$d/0" ] || continue
-  p=$(cat "$d/pid" 2>/dev/null)
-  s=down
-  [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$d/0" ] && s=up
-  echo "$d $s"
+# MIT Licence. See LICENCE.TXT
+##
+for pDir in /tmp/icc-pipes-*/; do
+  [ -d "$pDir" ] || continue
+  pDir=${pDir%/}
+  [ -p "$pDir/0" ] || continue
+  pidHold=$(cat "$pDir/pid" 2>/dev/null)
+  eState=down
+  if [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ]; then
+    eState=up
+  fi
+  printf '%s %s\n' "$pDir" "$eState"
 done

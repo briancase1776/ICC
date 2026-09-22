@@ -155,9 +155,13 @@ Layout
   they silently emit their own source text instead. $'\uXXXX' also
   takes exactly four hex digits and leaves a fifth as a literal.
 
-- One Command Per Line, with three exceptions: a case arm that fits;
-  a brace group sharing one redirection, which is one command; and
-  the paired positional naming above.
+- One Command Per Line. A body that is a single command still sits on
+  one line, because that is one command on one line and needs no
+  leave. A body that is two commands is two lines. A case arm puts
+  its pattern, its commands and its ;; on lines of their own.
+
+- A brace group sharing one redirection opens on its own line and
+  closes with the redirection on the closing brace.
 
 - Command Substitution: $( ), never backticks.
 

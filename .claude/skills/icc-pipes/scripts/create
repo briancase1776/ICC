@@ -1,94 +1,43 @@
 #!/bin/bash
-##
-# @file .claude/skills/icc-pipes/scripts/create
-# @brief Make a fresh pipe of N lanes, hold every lane open, print it.
-# @details A pipe is a directory of numbered fifos and a pid file naming
-#          the hold. Even lanes go one way, odd lanes the other. The hold
-#          keeps every lane open, so no end of it blocks on open.
-# @param $1 nLanes - how many lanes, even and more than zero. Default 2.
-# @stdout The pipe's directory, one line, on success only.
-# @stderr The reason, on refusal.
-# @exit 0 the pipe is made; 1 the lane count is wrong, or the pipe could
-#       not be finished, in which case none of it is left behind
-#
-# set -eu: every step here is one the pipe cannot be made without, and
-# the half-made pipe is taken away by the handler rather than reported.
-#
+# .claude/skills/icc-pipes/scripts/create
+# create [N]: make a fresh pipe of N lanes (even, default 2), hold every lane
+# open, print its directory. Even lanes go one way, odd lanes the other.
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT Licence. See LICENCE.TXT
-##
+# MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
-
-##
-# @fn vAbandon()
-# @brief Take the half-made pipe with us: kill the hold, drop the
-#        directory, leave.
-# @details Armed as the EXIT, INT and TERM handler while the pipe is
-#          incomplete, disarmed once it is whole. It exits itself:
-#          without that, a signal caught between the pid write and the
-#          disarm would clean up and let create print the path it had
-#          just deleted. It cleans the directory mktemp made, and the
-#          hold if one started; it leaves everything else alone.
-#          pidHold is empty until there is a hold, because kill 0 would
-#          signal the whole process group.
-# @global pDir, pidHold - read, never set
-# @stderr nothing. A refusal was already reported where it happened.
-# @return does not return. Exits 1.
-##
-vAbandon() {
-  if [ -n "$pidHold" ]; then
-    kill "$pidHold" 2>/dev/null || :
-  fi
-  rm -rf "$pDir"
-  exit 1
-}
-
-nLanes=${1-2}
-
-##### the lane count #####
-# Digits only, parity from the last digit, size from test(1). (( )) is
-# used on nLanes nowhere in this file: arithmetic reads a leading zero as
-# octal, where test(1) and the build loop below both read 08 as eight.
-# Two readings of one value is what let an odd count past.
-case "$nLanes" in
-  ''|*[!0-9]*)
-    printf 'lanes must be a positive whole number: %s\n' "$nLanes" >&2
-    exit 1
-    ;;
-  *[13579])
-    printf 'lanes must be even: %s\n' "$nLanes" >&2
-    exit 1
-    ;;
+n=${1-2}
+# Digits only, parity from the last digit, size from test(1). Arithmetic
+# expansion reads a leading zero as octal and the build loop does not, so
+# it is not used here: two readings of $n is what let an odd count past.
+case $n in
+  ''|*[!0-9]*) echo "lanes must be a positive whole number: $n" >&2; exit 1 ;;
+  *[13579])    echo "lanes must be even: $n" >&2; exit 1 ;;
 esac
-[ "$nLanes" -gt 0 ] || { echo "lanes must be more than zero" >&2; exit 1; }
-
-##### the fifos #####
-pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
-pidHold=
-trap vAbandon EXIT INT TERM
-osRedirs=
-iLane=0
-while [ "$iLane" -lt "$nLanes" ]; do
-  mkfifo "$pDir/$iLane"
-  osRedirs="$osRedirs $((iLane + 3))<>'$pDir/$iLane'"
-  iLane=$((iLane + 1))
+[ "$n" -gt 0 ] || { echo "lanes must be more than zero" >&2; exit 1; }
+d=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
+# Until the pipe is whole, it is not a pipe: a create that cannot finish
+# takes its directory with it, and its hold if one started. h stays empty
+# until there is a hold, because kill 0 would signal the process group. The
+# handler exits: without that, a signal caught between the pid write and
+# the disarm would clean up and let create print the path it just deleted.
+h=
+trap '[ -n "$h" ] && kill "$h" 2>/dev/null || :; rm -rf "$d"; exit 1' \
+  EXIT INT TERM
+fds=; l=0
+while [ "$l" -lt "$n" ]; do
+  mkfifo "$d/$l"
+  fds="$fds $((l + 3))<>'$d/$l'"
+  l=$((l + 1))
 done
-
-##### the hold #####
-# Open the lanes here, where a failure is this shell's own and stops it.
-# The hold is started after and inherits them: opening them in the
-# background instead made create report success whatever became of the
-# opens, so a pipe whose hold never opened a lane was printed, and
-# blocked on first write.
-#
-# eval is the only way to reach this: bash does not expand a variable in
-# the descriptor position, so the redirections are built above as text,
-# one single-quoted path per lane, and read back here as syntax.
-eval "exec $osRedirs"
+# Open the lanes here, where a failure is this shell's own and stops it. The
+# hold is started after and inherits them: opening them in the background
+# instead made create report success whatever became of the opens, so a pipe
+# whose hold never opened a lane was printed, and blocked on first write.
+eval "exec $fds"
 sleep infinity </dev/null >/dev/null 2>&1 &
-pidHold=$!
-printf '%s\n' "$pidHold" > "$pDir/pid"
+h=$!
+echo "$h" > "$d/pid"
 trap - EXIT INT TERM
-printf '%s\n' "$pDir"
+echo "$d"

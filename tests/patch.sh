@@ -140,6 +140,12 @@ pidHolder() {
 # an odd LANES, and none, where the shape makes no pipe to say so
 "$pIccPatch/create" mesh 1 3 2>/dev/null && exit 1
 "$pIccPatch/create" mesh 1 0 2>/dev/null && exit 1
+# LANES is refused as Pipes refuses N, word for word
+for osLanes in x 3 0 99999999999999999998; do
+  osPatch=$("$pIccPatch/create" mesh 1 "$osLanes" 2>&1) || :
+  osPipes=$("$pIccPipes/create" "$osLanes" 2>&1) || :
+  [ "$osPatch" = "$osPipes" ]
+done
 # past 64 bits, where a count wrapped: this one was a ring of 2
 "$pIccPatch/create" ring 18446744073709551618 2>/dev/null && exit 1
 "$pIccPatch/create" star 1 99999999999999999998 2>/dev/null && exit 1

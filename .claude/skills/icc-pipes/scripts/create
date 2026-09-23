@@ -2,11 +2,12 @@
 ##
 # @file create
 # @brief Make a fresh pipe of N lanes, hold every lane open, print it.
-# @details create [N]. N is how many lanes, even and more than zero, and
-#          2 when it is not given. A pipe is a directory holding a fifo
-#          per lane, named 0 to N-1, and a pid file naming the hold: a
-#          sleep that keeps every lane open, so nothing blocks on open.
-#          Even lanes go one way, odd lanes the other.
+# @details create [N]. N is how many lanes, even and more than zero, read
+#          in base ten and no more than 18 significant digits, and 2 when
+#          it is not given. A pipe is a directory holding a fifo per lane,
+#          named 0 to N-1, and a pid file naming the hold: a sleep that
+#          keeps every lane open, so nothing blocks on open. Even lanes go
+#          one way, odd lanes the other.
 #          A create that cannot finish takes its directory and its hold
 #          with it. Once the pipe is whole that is no longer armed, so a
 #          create that then fails to print leaves a whole pipe nobody
@@ -25,13 +26,14 @@
 ##
 nLanes=${1-2}
 set -eu
-# Digits only, parity from the last digit, size from test(1). Arithmetic
-# expansion reads a leading zero as octal and the build loop does not, so
-# it is not used here: two readings of $nLanes is what let an odd count
-# past.
+# A lane count is checked one way wherever one is given, here and in Patch's
+# create, line for line: digits only, parity from the last digit, no more
+# digits than 64 bits always hold, then base ten, then more than zero. $(( ))
+# reads a leading zero as octal and [ does not, and two readings of the count
+# is what once let an odd one past; forcing base ten leaves one.
 case $nLanes in
   ''|*[!0-9]*)
-    echo "lanes must be a positive whole number: $nLanes" >&2
+    echo "lanes must be a whole number: $nLanes" >&2
     exit 1
     ;;
   *[13579])
@@ -39,6 +41,11 @@ case $nLanes in
     exit 1
     ;;
 esac
+[[ $nLanes =~ ^0*[0-9]{1,18}$ ]] || {
+  echo "lanes too big: $nLanes" >&2
+  exit 1
+}
+nLanes=$((10#$nLanes))
 [ "$nLanes" -gt 0 ] || {
   echo "lanes must be more than zero" >&2
   exit 1

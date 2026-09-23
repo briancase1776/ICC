@@ -50,16 +50,28 @@ esac
 # [ reads a number decimally and $(( )) reads it C-style, so 010 is ten to one
 # of them and eight to the other. Both are used here -- the shape counts
 # seats with [ and wraps a ring with $(( )) -- so force decimal before either
-# sees it.
-# Lanes are even and more than zero, checked here as Pipes checks them and in
-# its words: a shape that makes no pipe still writes LANES into the header,
-# and nothing else would say so.
+# sees it. Bash counts in 64 bits, and a longer run of digits wraps there
+# without a word: a ring of 18446744073709551618 seats was a ring of 2.
+# Eighteen digits always fit, as Frames' read bounds its count, and the zeros
+# are the leading ones base ten is forced for.
 case $nSeats in
   ''|*[!0-9]*)
     echo "seats must be a whole number: $nSeats" >&2
     exit 1
     ;;
 esac
+[[ $nSeats =~ ^0*[0-9]{1,18}$ ]] || {
+  echo "seats too big: $nSeats" >&2
+  exit 1
+}
+nSeats=$((10#$nSeats))
+[ "$nSeats" -ge 1 ] || {
+  echo "seats must be 1 or more" >&2
+  exit 1
+}
+# LANES is checked as Pipes' create checks N, line for line and in its words:
+# a shape that makes no pipe still writes LANES into the header, and nothing
+# else would say so.
 case $nLanes in
   ''|*[!0-9]*)
     echo "lanes must be a whole number: $nLanes" >&2
@@ -70,24 +82,11 @@ case $nLanes in
     exit 1
     ;;
 esac
-# Bash counts in 64 bits, and a longer run of digits wraps there without a
-# word: a ring of 18446744073709551618 seats was a ring of 2. Eighteen digits
-# always fit, as Frames' read bounds its count, and the zeros are the leading
-# ones the note above is about.
-[[ $nSeats =~ ^0*[0-9]{1,18}$ ]] || {
-  echo "seats too big: $nSeats" >&2
-  exit 1
-}
 [[ $nLanes =~ ^0*[0-9]{1,18}$ ]] || {
   echo "lanes too big: $nLanes" >&2
   exit 1
 }
-nSeats=$((10#$nSeats))
 nLanes=$((10#$nLanes))
-[ "$nSeats" -ge 1 ] || {
-  echo "seats must be 1 or more" >&2
-  exit 1
-}
 [ "$nLanes" -gt 0 ] || {
   echo "lanes must be more than zero" >&2
   exit 1

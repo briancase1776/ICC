@@ -3,17 +3,18 @@
 # @file create
 # @brief Copy what SIDE writes into every SRC onto DST, and print the merge.
 # @details create DST SIDE SRC... DST and every SRC are pipes Pipes made,
-#          every lane of them a fifo, all with the same lane count. SIDE
-#          is 0 or 1, the side whose writes are copied. No SRC is DST
-#          and none is given twice, in any spelling. For each lane SIDE
-#          writes, of each SRC, a copier, dd(1) at bs=4096, takes that
-#          lane of that SRC and writes it to that lane of DST, byte for
-#          byte, in order per inlet, until removed. create opens each
-#          lane of DST itself, so a DST whose hold is dead blocks create,
-#          where the caller's bound reaches it. The merge's directory
-#          holds two files: merge, naming DST, SIDE and each SRC a line,
-#          and pid, one copier a line in lane order, SRC order within a
-#          lane. The merge makes nothing but itself.
+#          every lane of them a fifo, all with the same lane count, and a
+#          lane for SIDE among them. SIDE is 0 or 1, the side whose writes
+#          are copied. No SRC is DST and none is given twice, in any
+#          spelling. For each lane SIDE writes, of each SRC, a copier,
+#          dd(1) at bs=4096, takes that lane of that SRC and writes it to
+#          that lane of DST, byte for byte, in order per inlet, until
+#          removed. create opens each lane of DST itself, so a DST whose
+#          hold is dead blocks create, where the caller's bound reaches
+#          it. The merge's directory holds two files: merge, naming DST,
+#          SIDE and each SRC a line, and pid, one copier a line in lane
+#          order, SRC order within a lane. The merge makes nothing but
+#          itself.
 #          A create that cannot finish takes its copiers and its
 #          directory with it. Once the merge is whole that is no longer
 #          armed, so a create that then fails to print leaves a whole
@@ -43,11 +44,20 @@ shift 2
   echo "side is 0 or 1" >&2
   exit 1
 }
-[ -p "$pDst/0" ] || {
-  echo "not a pipe: $pDst" >&2
+# Lane 0 of every pipe first, so a path that is no pipe at all says so, and
+# not what ls says of it; then a lane for SIDE to copy, or the merge would
+# start no copier. The same checks, in the same order, as Tee's create.
+for pPipe in "$pDst" "$@"; do
+  [ -p "$pPipe/0" ] || {
+    echo "not a pipe: $pPipe" >&2
+    exit 1
+  }
+done
+nLanes=$(ls -- "$pDst" | grep -c '^[0-9][0-9]*$')
+[ "$nLanes" -gt "$eSide" ] || {
+  echo "no lane for SIDE $eSide: $pDst" >&2
   exit 1
 }
-nLanes=$(ls -- "$pDst" | grep -c '^[0-9][0-9]*$')
 # Every lane, not only the first. A numeric entry that is not a lane counts
 # toward the count and then kills its copier on open, where nothing can say
 # so: a copier's stderr goes nowhere and list only ever says down.

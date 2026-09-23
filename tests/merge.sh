@@ -51,6 +51,10 @@ mkdir "$pBroken/2"
 "$pIccMerge/create" "$pPipeC" 0 "$pBroken" 2>/dev/null && exit 1
 rmdir "$pBroken/2"
 "$pIccPipes/remove" "$pBroken"
+# a pipe with no lane for SIDE, which would start no copier
+mkdir one two
+mkfifo one/0 two/0
+"$pIccMerge/create" one 1 two 2>/dev/null && exit 1
 pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeB")
 trap '"$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :
       for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do

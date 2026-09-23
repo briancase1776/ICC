@@ -59,6 +59,20 @@ vRefused "$pIccTee/create" "$pPipeA" 0
 vRefused "$pIccTee/create" "$pPipeA" 2 "$pPipeB"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pNarrow"
 vRefused "$pIccTee/create" "$pPipeA" 0 /tmp
+# A lane that is a file, not a lane, would take the copier's writes; and a
+# pipe with no lane for SIDE would make a tee with no copier. Neither is a
+# pipe Pipes makes.
+pBroken=$("$pIccPipes/create" 6)
+rm -f "$pBroken/2"
+: > "$pBroken/2"
+vRefused "$pIccTee/create" "$pPipeA" 0 "$pBroken"
+[ ! -s "$pBroken/2" ]
+rm -f "$pBroken/2"
+mkfifo "$pBroken/2"
+"$pIccPipes/remove" "$pBroken"
+mkdir one two
+mkfifo one/0 two/0
+vRefused "$pIccTee/create" one 1 two
 # SRC as its own DST, the same DST twice, the same DST spelled two ways
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeA"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB"

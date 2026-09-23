@@ -3,7 +3,8 @@
 # @file create
 # @brief Copy what SIDE writes into SRC onto every DST, and print the tee.
 # @details create SRC SIDE DST... SRC and every DST are pipes Pipes made,
-#          all with the same lane count. SIDE is 0 or 1, the side whose
+#          all with the same lane count, every lane of them a fifo, and a
+#          lane for SIDE among them. SIDE is 0 or 1, the side whose
 #          writes are copied. No DST is SRC and none is given twice, in
 #          any spelling. For each lane SIDE writes, a copier, tee(1),
 #          takes that lane of SRC and writes it to that lane of every
@@ -43,11 +44,36 @@ shift 2
   echo "side is 0 or 1" >&2
   exit 1
 }
+# A pipe is what Pipes makes, and the same checks, in the same order, as
+# Merge's create: lane 0 of every pipe first, so a path that is no pipe at
+# all says so; then a lane for SIDE to copy, or the tee would start no
+# copier; then every pipe the same count, and every lane of it a lane. A
+# numeric entry that is not a lane counts toward the count, and then its
+# copier appends to it as a file, or reads it as one and ends.
 for pPipe in "$pSrc" "$@"; do
   [ -p "$pPipe/0" ] || {
     echo "not a pipe: $pPipe" >&2
     exit 1
   }
+done
+nLanes=$(ls -- "$pSrc" | grep -c '^[0-9][0-9]*$')
+[ "$nLanes" -gt "$eSide" ] || {
+  echo "no lane for SIDE $eSide: $pSrc" >&2
+  exit 1
+}
+for pPipe in "$pSrc" "$@"; do
+  [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
+    echo "lanes differ: $pPipe" >&2
+    exit 1
+  }
+  iLane=0
+  while [ "$iLane" -lt "$nLanes" ]; do
+    [ -p "$pPipe/$iLane" ] || {
+      echo "not a pipe: $pPipe" >&2
+      exit 1
+    }
+    iLane=$((iLane + 1))
+  done
 done
 # Canonicalise before anything compares or is written: one pipe has many
 # spellings, the checks below are comparisons, and the outlets go in the
@@ -70,13 +96,6 @@ for pPipe; do
     }
   done
   aDsts+=("$pDst")
-done
-nLanes=$(ls "$pSrc" | grep -c '^[0-9][0-9]*$')
-for pDst in "${aDsts[@]}"; do
-  [ "$(ls "$pDst" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
-    echo "lanes differ: $pDst" >&2
-    exit 1
-  }
 done
 pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 # Until the tee is whole it is not a tee: a create that cannot finish takes

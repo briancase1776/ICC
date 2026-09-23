@@ -5,7 +5,10 @@
 # @details Prove the pipe: create it, refuse a bad lane count, hand bytes
 #          from one process to another and back again on every pair,
 #          remove it. A create that cannot finish is made to fail twice,
-#          and must leave nothing behind either time.
+#          once before its first fifo and once after its last. What is
+#          left in /tmp is checked only for new directories that are
+#          empty, since one with lanes in it may be anyone's pipe, so a
+#          leak from the second failure would pass.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -21,8 +24,9 @@ set -eu
 cd "$(dirname "$0")/../.claude/skills/icc-pipes"
 scripts/create 3 2>/dev/null && exit 1
 scripts/create 09 2>/dev/null && exit 1
-# a create that cannot finish leaves nothing behind. Counted, not emptied:
-# other pipes may be up beside this one.
+# a create that cannot finish leaves nothing behind. Checked against what
+# was there before, not by emptying /tmp: other pipes may be up beside this
+# one, which is also why a new directory with lanes in it is let pass.
 pFakeBin=$(mktemp -d)
 printf '#!/bin/sh\nexit 1\n' > "$pFakeBin/mkfifo"
 chmod +x "$pFakeBin/mkfifo"

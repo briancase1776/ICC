@@ -11,8 +11,8 @@
 # @stdin the text
 # @stdout nothing
 # @stderr the reason, on refusal, Frames' included
-# @exit 0 the payload is on the wire; 1 the text is not the alphabet, or
-#       Frames refused the payload
+# @exit 0 the payload is on the wire; 1 DIR or SIDE is missing, the text
+#       is not the alphabet, or Frames refused the payload
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)

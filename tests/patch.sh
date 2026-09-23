@@ -46,14 +46,17 @@ pEnd() {
 
 ##
 # @fn pAt()
-# @brief Print the pipe pEnd finds, and stop here if it finds none.
-# @details eSide is 0 or 1, as for pEnd.
+# @brief Print the pipe pEnd finds, and exit 1 if it finds none.
+# @details eSide is 0 or 1, as for pEnd. Every call is inside $( ), so the
+#          exit ends only that substitution. Where the result is assigned
+#          first, as pHeld is, set -e stops the harness on it; used in
+#          place, as an argument or a redirection, it leaves an empty
+#          string there and the command goes on with it.
 # @param $1 osSeat - the seat, a number or p
 # @param $2 eSide - the side it holds, 0 or 1
 # @param $3 osPeer - one of the seats in its PEERS
 # @stdout the pipe's directory
 # @stderr "no end" and the three arguments, when there is none
-# @global pDir - read, the patch under test
 # @return 0; it exits 1 instead when there is no such end
 ##
 pAt() {

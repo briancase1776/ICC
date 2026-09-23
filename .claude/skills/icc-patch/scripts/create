@@ -120,6 +120,7 @@ vPiece() {
 # @brief Make a pipe of nLanes lanes with Pipes' create.
 # @global pIccPipes - read, where Pipes' scripts are
 # @global nLanes - read, the lanes every pipe in the patch has
+# @global pPiece - read, what vPiece made
 # @global pPipe - set, the pipe it made
 # @return 0; it exits 1 as vPiece does
 ##
@@ -171,7 +172,7 @@ vEnd() {
 # @brief One pipe between two seats, the first on side 0, the other on 1.
 # @param $1 osSeatA - the seat on side 0
 # @param $2 osSeatB - the seat on side 1
-# @global pPipe - set, the pipe it made
+# @global pPipe - read, the pipe vPipe has just made
 # @return 0; it exits 1 as vPiece does
 ##
 vCable() {

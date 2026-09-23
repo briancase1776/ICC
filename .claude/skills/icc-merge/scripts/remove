@@ -7,12 +7,13 @@
 #          create wrote: a merge file naming an absolute DST, a SIDE of
 #          0 or 1 and at least one SRC, every SRC absolute, and a pid
 #          file whose every line is a number, which an empty one is. A
-#          copier is killed only while it is still the dd(1) on the
-#          inlet lane its place in the pid file names: on its fd 0 once
-#          it has opened that lane, and as if= in its argv while the
-#          open waits. Then the two files go, and the directory with
-#          them unless something else is in it. The pipes on either end
-#          are left exactly as they were.
+#          pid is killed only while its process still names the inlet
+#          lane its place in the pid file gives it: on its fd 0, where
+#          dd has that lane once it has opened it, or as if= in its argv
+#          while the open waits. Nothing checks that the process is dd.
+#          Then the two files go, and the directory with them unless
+#          something else is in it. The pipes on either end are left
+#          exactly as they were.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal

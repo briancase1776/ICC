@@ -7,8 +7,8 @@
 #          directions; push one far bigger with a read draining it;
 #          refuse a SIDE that is not a side and a count that is not a
 #          count, too big to count among them; do the round trip again on
-#          two lanes, the bundle CLAUDE.md calls the baseline; remove the
-#          pipes. Runs in a directory of its own and touches nothing else.
+#          two lanes, one straw each way; remove the pipes. Runs in a
+#          directory of its own and touches nothing else.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -75,10 +75,10 @@ printf '99999999999999999999\n' 1<> "$pDir/0"
 timeout 5 "$pIccFrames/read" "$pDir" 1 >/dev/null 2>&1 && exit 1
 printf '010\n0123456789' 1<> "$pDir/0"
 [[ $(timeout 5 "$pIccFrames/read" "$pDir" 1) == 0123456789 ]]
-# Two lanes is one straw each way and the same script, which is the bundle
-# CLAUDE.md names as the baseline. Bigger than the one lane this side writes
-# cannot be left on the wire here at all, so the read drains while the write
-# runs, as above; sized inside the hold's depth, which is one pipe more.
+# Two lanes is one straw each way and the same script, as Frames' SKILL.md
+# says. Bigger than the one lane this side writes cannot be left on the wire
+# here at all, so the read drains while the write runs, as above; sized
+# inside the hold's depth, which is one pipe more.
 pDir2=$("$pIccPipes/create" 2)
 osMade="$osMade $pDir2"
 # Past the hold nothing reaches a lane, so no read can free it, and the

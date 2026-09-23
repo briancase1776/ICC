@@ -35,60 +35,19 @@
 pSrc=$1
 eSide=$2
 set -eu
-# A lane is a name of digits and nothing else, and lanes are counted from a
-# glob, +([0-9]), never from ls, whose output is for people to read and not
-# for scripts to parse. nullglob makes a glob that matches nothing a count of
-# 0, not the pattern itself.
-shopt -s extglob nullglob
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 [ $# -ge 3 ] || {
   echo "usage: create SRC SIDE DST..." >&2
   exit 1
 }
 shift 2
-case $eSide in
-  0|1)
-    ;;
-  *)
-    echo "SIDE is 0 or 1, not $eSide" >&2
-    exit 1
-    ;;
-esac
-# A pipe is what Pipes makes, and the same checks, in the same order, as
-# Merge's create and Frames' read and write: lane 0 of every pipe first, so a
-# path that is no pipe at all says so; then an even count, in Pipes' words,
-# which with lane 0 there is two or more, so either SIDE has a lane to copy;
-# then every pipe the same count, and every lane of it a lane. A numeric
-# entry that is not a lane counts toward the count, and then its copier
-# appends to it as a file, or reads it as one and ends.
-for pPipe in "$pSrc" "$@"; do
-  [ -p "$pPipe/0" ] || {
-    echo "not a pipe: $pPipe" >&2
-    exit 1
-  }
-done
-aLanes=("$pSrc"/+([0-9]))
-nLanes=${#aLanes[@]}
-case $nLanes in
-  *[13579])
-    echo "lanes must be even: $pSrc" >&2
-    exit 1
-    ;;
-esac
-for pPipe in "$pSrc" "$@"; do
-  aLanes=("$pPipe"/+([0-9]))
-  [ "${#aLanes[@]}" -eq "$nLanes" ] || {
-    echo "lanes differ: $pPipe" >&2
-    exit 1
-  }
-  iLane=0
-  while [ "$iLane" -lt "$nLanes" ]; do
-    [ -p "$pPipe/$iLane" ] || {
-      echo "not a pipe: $pPipe" >&2
-      exit 1
-    }
-    iLane=$((iLane + 1))
-  done
-done
+vSide "$eSide"
+# A pipe is what Pipes makes: SRC and every DST are checked as icc-lib's
+# nLanesOf checks them, which is how Merge's create and Frames' read and
+# write check theirs. A numeric entry that is not a lane would count toward
+# the count, and then its copier would append to it as a file, or read it
+# as one and end.
+nLanes=$(nLanesOf "$pSrc" "$@")
 # Canonicalise before anything compares or is written: one pipe has many
 # spellings, the checks below are comparisons, and the outlets go in the
 # copiers' argv, which SKILL.md tells the caller pkill finds and list prints.
@@ -112,25 +71,20 @@ for pPipe; do
   aDsts+=("$pDst")
 done
 # Until the tee is whole it is not a tee: a create that cannot finish takes
-# its directory with it, and the copiers it started, and exits 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
-# aPids stays empty until there is a copier, because kill with no pid is not
-# this shell's to send. The handler takes the two files create writes and
-# rmdirs, never rm -rf, so a directory that holds anything else is left
-# where it is and says so.
+# its directory with it, and the copiers it started, and exits 1. Armed
+# before anything is made, as icc-lib's vArm says. aPids stays empty until
+# there is a copier, because kill with no pid is not this shell's to send.
+# The handler takes the two files create writes and rmdirs, never rm -rf, so
+# a directory that holds anything else is left where it is and says so.
 pDir=
 aPids=()
-trap '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+vArm '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
       if [ -n "$pDir" ]; then
         rm -f "$pDir/tee" "$pDir/pid"
         rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
           echo "left in place: $pDir" >&2
       fi
-      exit 1' EXIT
-trap 'exit 1' INT TERM HUP
+      exit 1'
 pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 {
   printf '%s\n' "$pSrc" "$eSide"
@@ -143,13 +97,8 @@ iLane=$eSide
 while [ "$iLane" -lt "$nLanes" ]; do
   aOuts=()
   for pDst in "${aDsts[@]}"; do aOuts+=("$pDst/$iLane"); done
-  # A copier is this shell's child until it execs, so it inherits the traps
-  # above: killing one from the handler ran the handler again, in it, racing
-  # the shell that sent the signal. Clear them and exec, so a copier is
-  # tee(1) and nothing else. It is a server: it copies long after this
-  # create, and whoever ran it, are gone, so a hangup is not its business. It
-  # ignores HUP, as a server run under nohup does; TERM, which remove sends,
-  # still ends it.
+  # A copier is a server, started as icc-lib's vServe says, and then tee(1)
+  # and nothing else.
   # Let go of the caller's stdout before opening the lane, not with it: a
   # lane whose pipe has no writer blocks the open, and a copier still
   # holding what it inherited held d=$(create ...) open with it. Its own
@@ -161,8 +110,7 @@ while [ "$iLane" -lt "$nLanes" ]; do
   # before fd 3 is closed, so the mark lasts as long as the wait, and tee(1)
   # does not inherit it.
   (
-    trap - EXIT INT TERM
-    trap '' HUP
+    vServe
     exec >/dev/null 2>&1 3< "$pDir/tee"
     exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane" 3<&-
   ) &
@@ -178,5 +126,5 @@ done
   echo "removed while starting: $pDir" >&2
   exit 1
 }
-trap - EXIT INT TERM HUP
+vDisarm
 echo "$pDir"

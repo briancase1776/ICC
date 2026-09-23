@@ -2,15 +2,13 @@
 ##
 # @file out
 # @brief Take one payload off the lanes SIDE reads and print it as text.
-# @details out DIR SIDE. DIR is what Pipes' create printed, or an end in
-#          a Patch map. SIDE is 0 or 1, and Frames refuses anything else.
+# @details out DIR SIDE. DIR is what Pipes' create printed, or an end in a
+#          Patch map. SIDE is 0 or 1, and Frames refuses anything else.
 #          The payload comes off by Frames' read, from beside this skill,
 #          and is printed in base64, as base64(1) prints it. Whole or
-#          nothing: a payload that does not come off whole prints
-#          nothing, and Frames says what it left. The signals a timeout
-#          sends are trapped as well as EXIT, and the signal trap clears
-#          EXIT before it runs, so the temporary goes exactly once
-#          whichever way the script ends.
+#          nothing: a payload that does not come off whole prints nothing,
+#          and Frames says what it left. The temporary goes whichever way
+#          the script ends, a timeout's signal included.
 # @stdin nothing
 # @stdout the payload in base64
 # @stderr the reason, on refusal, Frames' included
@@ -25,15 +23,12 @@
 pDir=${1:?usage: out DIR SIDE}
 eSide=${2:?usage: out DIR SIDE}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 pIccFrames=$(cd "$(dirname "$0")/../../icc-frames/scripts" && pwd)
 # The temp file goes however this ends, and a signal ends it with 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
+# Armed before anything is made, as icc-lib's vArm says.
 pTemp=
-trap '[ -n "$pTemp" ] && rm -f "$pTemp" || :' EXIT
-trap 'exit 1' INT TERM HUP
+vArm '[ -n "$pTemp" ] && rm -f "$pTemp" || :'
 pTemp=$(mktemp)
 "$pIccFrames/read" "$pDir" "$eSide" > "$pTemp"
 base64 "$pTemp"

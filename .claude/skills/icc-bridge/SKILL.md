@@ -33,6 +33,10 @@ directory. There is nothing to configure and nothing to set.
                                             # ... over there, a message arrives
     scripts/in "$pDir" 0 < text             # onto the wire, one tool call
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## The text
 
 - The payload in base64, as base64(1) prints it: A to Z, a to z, 0 to

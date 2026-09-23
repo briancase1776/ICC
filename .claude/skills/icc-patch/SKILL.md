@@ -33,6 +33,10 @@ directory. There is nothing to configure and nothing to set.
 remove runs the remove scripts create used. If a piece is missing,
 create makes nothing and says which.
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## Shapes
 
     star     seat i shares a pipe with seat p, i on side 0, p on side 1.

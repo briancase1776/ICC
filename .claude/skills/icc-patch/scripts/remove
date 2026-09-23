@@ -35,6 +35,7 @@
 ##
 pArg=${1:?usage: remove DIR}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 # Canonical first, and one of ours by name, as Merge's remove checks. This is
 # the one remove that takes its directory with rm -rf, so a wrong path here
 # costs a whole tree, where the others cost a look-alike its own files.
@@ -55,13 +56,9 @@ esac
 bLeft=0
 # One question per skill, not one per piece: see list. The temp file goes
 # however this ends, and a signal ends it with 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
+# Armed before anything is made, as icc-lib's vArm says.
 pListed=
-trap '[ -n "$pListed" ] && rm -f "$pListed" || :' EXIT
-trap 'exit 1' INT TERM HUP
+vArm '[ -n "$pListed" ] && rm -f "$pListed" || :'
 pListed=$(mktemp)
 cut -d' ' -f2- "$pDir/made" | sort -u | while read -r pScripts; do
   if [ -x "$pScripts/list" ]; then

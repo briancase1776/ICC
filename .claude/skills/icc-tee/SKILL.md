@@ -39,6 +39,10 @@ the other side. There is nothing else to do.
     .../icc-frames/scripts/write "$pPipeA" 0 < photo.jpg
     timeout 5 .../icc-frames/scripts/read "$pPipeB" 1 > photo.jpg
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## Facts about the tee
 
 Each lane SIDE writes has its own `tee(1)`, that lane of SRC on its

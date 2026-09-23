@@ -35,6 +35,7 @@ eShape=$1
 nSeats=$2
 nLanes=${3:-2}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 [ $# -ge 2 ] || {
   echo "usage: create SHAPE N [LANES]" >&2
   exit 1
@@ -47,71 +48,34 @@ case $eShape in
     exit 1
     ;;
 esac
-# [ reads a number decimally and $(( )) reads it C-style, so 010 is ten to one
-# of them and eight to the other. Both are used here -- the shape counts
-# seats with [ and wraps a ring with $(( )) -- so force decimal before either
-# sees it. Bash counts in 64 bits, and a longer run of digits wraps there
-# without a word: a ring of 18446744073709551618 seats was a ring of 2.
-# Eighteen digits always fit, as Frames' read bounds its count, and the zeros
-# are the leading ones base ten is forced for.
-case $nSeats in
-  ''|*[!0-9]*)
-    echo "seats must be a whole number: $nSeats" >&2
-    exit 1
-    ;;
-esac
-[[ $nSeats =~ ^0*[0-9]{1,18}$ ]] || {
-  echo "seats too big: $nSeats" >&2
-  exit 1
-}
-nSeats=$((10#$nSeats))
+# Seats and LANES are counts, taken as icc-lib's nCount takes one: in base
+# ten, which both [ and $(( )) then read alike -- the shape counts seats with
+# [ and wraps a ring with $(( )). LANES is checked as Pipes' create checks N,
+# by nLanesGiven: a shape that makes no pipe still writes LANES into the
+# header, and nothing else would say so.
+nSeats=$(nCount seats "$nSeats")
 [ "$nSeats" -ge 1 ] || {
   echo "seats must be 1 or more" >&2
   exit 1
 }
-# LANES is checked as Pipes' create checks N, line for line and in its words:
-# a shape that makes no pipe still writes LANES into the header, and nothing
-# else would say so.
-case $nLanes in
-  ''|*[!0-9]*)
-    echo "lanes must be a whole number: $nLanes" >&2
-    exit 1
-    ;;
-  *[13579])
-    echo "lanes must be even: $nLanes" >&2
-    exit 1
-    ;;
-esac
-[[ $nLanes =~ ^0*[0-9]{1,18}$ ]] || {
-  echo "lanes too big: $nLanes" >&2
-  exit 1
-}
-nLanes=$((10#$nLanes))
-[ "$nLanes" -gt 0 ] || {
-  echo "lanes must be more than zero" >&2
-  exit 1
-}
+nLanes=$(nLanesGiven "$nLanes")
 pIccPipes=$(cd "$(dirname "$0")/../../icc-pipes/scripts" && pwd)
 pIccTee=$(cd "$(dirname "$0")/../../icc-tee/scripts" && pwd)
 pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
 # A create that cannot finish takes what it made with it, and exits 1: its
 # directory, until the directory holds the two files remove reads, and then
-# everything, by remove.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
-# vPiece swaps the signal handler for its own while a piece is made, and
-# puts it back.
+# everything, by remove. Armed before anything is made, as icc-lib's vArm
+# says, and armed again for remove once there is something for it to read.
+# vPiece swaps the signal traps for its own while a piece is made, and puts
+# them back.
 pDir=
-trap '[ -n "$pDir" ] && rm -rf "$pDir" || :
-      exit 1' EXIT
-trap 'exit 1' INT TERM HUP
+vArm '[ -n "$pDir" ] && rm -rf "$pDir" || :
+      exit 1'
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 echo "$eShape $nSeats $nLanes" > "$pDir/patch"
 : > "$pDir/made"
-trap '"$(dirname "$0")/remove" "$pDir"
-      exit 1' EXIT
+vArm '"$(dirname "$0")/remove" "$pDir"
+      exit 1'
 
 ##
 # @fn vPiece()
@@ -147,7 +111,7 @@ vPiece() {
   # /tmp/icc-KIND-XXXXXXXX; the scripts are wherever the checkout is, which
   # can hold a space, and read gives its last name the rest of the line.
   echo "$pPiece $pScripts" >> "$pDir/made"
-  trap 'exit 1' INT TERM HUP
+  vStopOnSignal
   [ -z "$bSignalled" ] || exit 1
 }
 
@@ -320,5 +284,5 @@ esac
   echo "made nothing: $eShape $nSeats $nLanes" >&2
   exit 1
 }
-trap - EXIT INT TERM HUP
+vDisarm
 echo "$pDir"

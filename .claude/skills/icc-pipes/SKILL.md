@@ -38,6 +38,10 @@ laid the cable; it need not hold either end.
 
 To attach, open the path. There is nothing else to do.
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## Bytes on, bytes off
 
 A lane is a file. Move bytes with `dd bs=4096`. Do not use `cat`.

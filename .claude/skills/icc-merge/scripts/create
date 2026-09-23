@@ -35,60 +35,19 @@
 pDst=$1
 eSide=$2
 set -eu
-# A lane is a name of digits and nothing else, and lanes are counted from a
-# glob, +([0-9]), never from ls, whose output is for people to read and not
-# for scripts to parse. nullglob makes a glob that matches nothing a count of
-# 0, not the pattern itself.
-shopt -s extglob nullglob
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 [ $# -ge 3 ] || {
   echo "usage: create DST SIDE SRC..." >&2
   exit 1
 }
 shift 2
-case $eSide in
-  0|1)
-    ;;
-  *)
-    echo "SIDE is 0 or 1, not $eSide" >&2
-    exit 1
-    ;;
-esac
-# Lane 0 of every pipe first, so a path that is no pipe at all says so; then
-# an even count, in Pipes' words, which with lane 0 there is two or more, so
-# either SIDE has a lane to copy. The same checks, in the same order, as Tee's
-# create and Frames' read and write.
-for pPipe in "$pDst" "$@"; do
-  [ -p "$pPipe/0" ] || {
-    echo "not a pipe: $pPipe" >&2
-    exit 1
-  }
-done
-aLanes=("$pDst"/+([0-9]))
-nLanes=${#aLanes[@]}
-case $nLanes in
-  *[13579])
-    echo "lanes must be even: $pDst" >&2
-    exit 1
-    ;;
-esac
-# Every lane, not only the first. A numeric entry that is not a lane counts
-# toward the count and then kills its copier on open, where nothing can say
-# so: a copier's stderr goes nowhere and list only ever says down.
-for pPipe in "$pDst" "$@"; do
-  aLanes=("$pPipe"/+([0-9]))
-  [ "${#aLanes[@]}" -eq "$nLanes" ] || {
-    echo "lanes differ: $pPipe" >&2
-    exit 1
-  }
-  iLane=0
-  while [ "$iLane" -lt "$nLanes" ]; do
-    [ -p "$pPipe/$iLane" ] || {
-      echo "not a pipe: $pPipe" >&2
-      exit 1
-    }
-    iLane=$((iLane + 1))
-  done
-done
+vSide "$eSide"
+# DST and every SRC are checked as icc-lib's nLanesOf checks them, which is
+# how Tee's create and Frames' read and write check theirs. A numeric entry
+# that is not a lane would count toward the count and then kill its copier
+# on open, where nothing can say so: a copier's stderr goes nowhere and list
+# only ever says down.
+nLanes=$(nLanesOf "$pDst" "$@")
 # One pipe, one spelling. The checks below, the merge file and the copiers'
 # argv all get the canonical path, so the path list prints is the path that
 # finds the copiers.
@@ -113,21 +72,17 @@ for pPipe; do
   aSrcs+=("$pSrc")
 done
 # Until the merge is whole it is not a merge: a create that cannot finish
-# takes its copiers and its directory with it, and exits 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
-# aPids stays empty until there is a copier, as in Tee's create. The copiers
-# are killed from this list and not from the pid file, because the file can
-# be gone by then -- a remove can take this directory while the open below
-# is still waiting, and a copier forked after that would answer to nothing.
+# takes its copiers and its directory with it, and exits 1. Armed before
+# anything is made, as icc-lib's vArm says. aPids stays empty until there is
+# a copier, as in Tee's create. The copiers are killed from this list and
+# not from the pid file, because the file can be gone by then -- a remove can
+# take this directory while the open below is still waiting, and a copier
+# forked after that would answer to nothing.
 pDir=
 aPids=()
-trap '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+vArm '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
-      exit 1' EXIT
-trap 'exit 1' INT TERM HUP
+      exit 1'
 pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 {
   printf '%s\n' "$pDst" "$eSide"
@@ -152,13 +107,9 @@ while [ "$iLane" -lt "$nLanes" ]; do
     # diagnostic on it would be bytes no inlet ever wrote -- so dd's summary
     # needs no status=none. dd opens if= onto its stdin, which is /dev/null
     # until it has, and that fd is what list and remove know a copier by.
-    # It clears the traps above and execs, as every server here does. It is
-    # a server: it copies long after this create, and whoever ran it, are
-    # gone, so a hangup is not its business. It ignores HUP, as a server run
-    # under nohup does; TERM, which remove sends, still ends it.
+    # It is a server, started as icc-lib's vServe says.
     (
-      trap - EXIT INT TERM
-      trap '' HUP
+      vServe
       exec >&3 2>/dev/null 3>&-
       exec dd if="$pSrc/$iLane" bs=4096 < /dev/null
     ) &
@@ -175,5 +126,5 @@ done
   echo "removed while starting: $pDir" >&2
   exit 1
 }
-trap - EXIT INT TERM HUP
+vDisarm
 echo "$pDir"

@@ -27,44 +27,19 @@
 ##
 nLanes=${1-2}
 set -eu
-# A lane count is checked one way wherever one is given, here and in Patch's
-# create, line for line: digits only, parity from the last digit, no more
-# digits than 64 bits always hold, then base ten, then more than zero. $(( ))
-# reads a leading zero as octal and [ does not, and two readings of the count
-# is what once let an odd one past; forcing base ten leaves one.
-case $nLanes in
-  ''|*[!0-9]*)
-    echo "lanes must be a whole number: $nLanes" >&2
-    exit 1
-    ;;
-  *[13579])
-    echo "lanes must be even: $nLanes" >&2
-    exit 1
-    ;;
-esac
-[[ $nLanes =~ ^0*[0-9]{1,18}$ ]] || {
-  echo "lanes too big: $nLanes" >&2
-  exit 1
-}
-nLanes=$((10#$nLanes))
-[ "$nLanes" -gt 0 ] || {
-  echo "lanes must be more than zero" >&2
-  exit 1
-}
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+# N is checked as icc-lib checks a lane count someone gave, which is how
+# Patch's create checks LANES too.
+nLanes=$(nLanesGiven "$nLanes")
 # Until the pipe is whole, it is not a pipe: a create that cannot finish
 # takes its directory with it, and its hold if one started, and exits 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
-# pidHold stays empty until there is a hold, because kill 0 would signal the
-# process group.
+# Armed before anything is made, as icc-lib's vArm says. pidHold stays empty
+# until there is a hold, because kill 0 would signal the process group.
 pDir=
 pidHold=
-trap '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
+vArm '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
-      exit 1' EXIT
-trap 'exit 1' INT TERM HUP
+      exit 1'
 pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
 osRedirs=
 iLane=0
@@ -78,17 +53,12 @@ done
 # instead made create report success whatever became of the opens, so a pipe
 # whose hold never opened a lane was printed, and blocked on first write.
 eval "exec $osRedirs"
-# The hold clears the traps above and execs, as every server here does. It
-# is a server: it serves whoever holds the pipe's ends long after this create,
-# and whoever ran it, are gone, so a hangup is not its business. It ignores
-# HUP, as a server run under nohup does; TERM, which remove sends, still ends
-# it.
+# The hold is a server, started as icc-lib's vServe says.
 (
-  trap - EXIT INT TERM
-  trap '' HUP
+  vServe
   exec sleep infinity
 ) </dev/null >/dev/null 2>&1 &
 pidHold=$!
 echo "$pidHold" > "$pDir/pid"
-trap - EXIT INT TERM HUP
+vDisarm
 echo "$pDir"

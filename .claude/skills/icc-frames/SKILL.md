@@ -27,6 +27,10 @@ side you are is agreed outside this skill.
     scripts/write "$pDir" 0 < photo.jpg          # side 0, one tool call
     timeout 5 scripts/read "$pDir" 1 > photo.jpg # side 1, another tool call
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## The rule
 
 Both ends follow it; nothing on the wire says it.

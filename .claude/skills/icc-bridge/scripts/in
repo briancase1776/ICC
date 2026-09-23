@@ -22,15 +22,12 @@
 pDir=${1:?usage: in DIR SIDE}
 eSide=${2:?usage: in DIR SIDE}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 pIccFrames=$(cd "$(dirname "$0")/../../icc-frames/scripts" && pwd)
 # The temp file goes however this ends, and a signal ends it with 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
+# Armed before anything is made, as icc-lib's vArm says.
 pTemp=
-trap '[ -n "$pTemp" ] && rm -f "$pTemp" || :' EXIT
-trap 'exit 1' INT TERM HUP
+vArm '[ -n "$pTemp" ] && rm -f "$pTemp" || :'
 pTemp=$(mktemp)
 base64 -d > "$pTemp" 2>/dev/null || {
   echo "in: not the alphabet; nothing put on the wire" >&2

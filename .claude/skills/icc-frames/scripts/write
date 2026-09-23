@@ -27,47 +27,15 @@
 pDir=${1:?usage: write DIR SIDE}
 eSide=${2:?usage: write DIR SIDE}
 set -eu
-# A lane is a name of digits and nothing else, and lanes are counted from a
-# glob, +([0-9]), never from ls, whose output is for people to read and not
-# for scripts to parse. nullglob makes a glob that matches nothing a count of
-# 0, not the pattern itself.
-shopt -s extglob nullglob
-# SIDE before it is used: it ends up in arithmetic, where a subscript is
-# evaluated, so anything but 0 or 1 is refused rather than worked out.
-case $eSide in
-  0|1)
-    ;;
-  *)
-    echo "write: SIDE is 0 or 1, not $eSide" >&2
-    exit 1
-    ;;
-esac
-# A pipe is what Pipes makes, and the same checks, in the same order, as Tee's
-# and Merge's create: lane 0 first, so a path that is no pipe at all says so;
-# then an even count, in Pipes' words; then every lane of it a lane. All
-# before any lane is opened: `<>` creates, so an open that is not already a
-# lane would put a file in the pipe's directory, where it outlives the pipe
-# and Pipes' remove refuses it.
-[ -p "$pDir/0" ] || {
-  echo "write: not a pipe: $pDir" >&2
-  exit 1
-}
-aLanes=("$pDir"/+([0-9]))
-nLanes=${#aLanes[@]}
-case $nLanes in
-  *[13579])
-    echo "write: lanes must be even: $pDir" >&2
-    exit 1
-    ;;
-esac
-iLane=0
-while [ "$iLane" -lt "$nLanes" ]; do
-  [ -p "$pDir/$iLane" ] || {
-    echo "write: not a pipe: $pDir" >&2
-    exit 1
-  }
-  iLane=$((iLane + 1))
-done
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+# Every refusal says it is write speaking, as the rest of what it says does.
+osWho=write
+vSide "$eSide"
+# The pipe is checked as icc-lib's nLanesOf checks one, which is how Tee's
+# and Merge's create check theirs, and before any lane is opened: `<>`
+# creates, so an open that is not already a lane would put a file in the
+# pipe's directory, where it outlives the pipe and Pipes' remove refuses it.
+nLanes=$(nLanesOf "$pDir")
 nPairs=$((nLanes / 2))
 nPipeBuf=$(getconf PIPE_BUF "$pDir")
 # The hold is nPairs+1 fifos this script makes, and one it makes holds
@@ -118,11 +86,10 @@ vRelease() {
     kill "$pidCounter" 2>/dev/null
   } || :
 }
-# Armed before anything is made, as in every piece: vHold makes the hold
-# only after this, and each name vRelease reads is empty until what it names
-# exists. A signal exits 1, which runs vRelease on the way out.
-trap vRelease EXIT
-trap 'exit 1' INT TERM HUP
+# Armed before anything is made, as icc-lib's vArm says: vHold makes the
+# hold only after this, and each name vRelease reads is empty until what it
+# names exists.
+vArm vRelease
 
 ##
 # @fn vHold()

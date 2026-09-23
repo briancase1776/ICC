@@ -43,6 +43,10 @@ the other side. There is nothing else to do.
     .../icc-frames/scripts/write "$pPipeA" 0 < photo.jpg
     timeout 5 .../icc-frames/scripts/read "$pPipeC" 1 > photo.jpg
 
+The scripts source icc-lib's shared functions from beside this skill,
+`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
+to be installed with it.
+
 ## Facts about the merge
 
 Each lane SIDE writes, of each SRC, has its own `dd(1)` at `bs=4096`,

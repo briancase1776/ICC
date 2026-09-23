@@ -19,17 +19,14 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 # Ask each skill once what it has, not once per piece it has: a sibling's list
 # names every piece of its kind on the box, so asking per piece makes listing
 # one patch cost as much as everyone else's work put together.
 # The temp file goes however this ends, and a signal ends it with 1.
-# Armed before anything is made, as in every piece: a name is empty until
-# what it names exists, and bash runs a caught signal only once the $( ) that
-# makes a thing, and its assignment, are done, so the handler always knows
-# what there is to take. A signal exits 1, which runs the handler.
+# Armed before anything is made, as icc-lib's vArm says.
 pListed=
-trap '[ -n "$pListed" ] && rm -f "$pListed" || :' EXIT
-trap 'exit 1' INT TERM HUP
+vArm '[ -n "$pListed" ] && rm -f "$pListed" || :'
 pListed=$(mktemp)
 cut -d' ' -f2- /tmp/icc-patch-*/made 2>/dev/null | sort -u |
   while read -r pScripts; do

@@ -27,14 +27,23 @@ cd "$(dirname "$0")/.."
 pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
 pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
 pIccBridge=$(cd .claude/skills/icc-bridge/scripts && pwd)
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+pWork=
+pPipeA=
+pPipeB=
+trap 'for pPipe in $pPipeA $pPipeB; do
+        "$pIccPipes/remove" "$pPipe" 2>/dev/null || rm -rf "$pPipe"
+      done
+      cd /
+      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pWork=$(mktemp -d)
 cd "$pWork"
 pPipeA=$("$pIccPipes/create" 6)
 pPipeB=$("$pIccPipes/create" 6)
-trap '"$pIccPipes/remove" "$pPipeA" 2>/dev/null || :
-      "$pIccPipes/remove" "$pPipeB" 2>/dev/null || :
-      cd /
-      rm -rf "$pWork"' EXIT
 head -c 150000 /dev/urandom > in
 "$pIccFrames/write" "$pPipeA" 0 < in
 timeout 5 "$pIccBridge/out" "$pPipeA" 1 > text
@@ -112,5 +121,5 @@ cmp in out
 "$pIccPipes/remove" "$pPipeB"
 cd /
 rm -rf "$pWork"
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo ok

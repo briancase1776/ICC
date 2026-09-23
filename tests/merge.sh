@@ -28,17 +28,40 @@ cd "$(dirname "$0")/.."
 pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
 pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
 pIccMerge=$(cd .claude/skills/icc-merge/scripts && pwd)
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+pWork=
+pPipeA=
+pPipeB=
+pPipeC=
+pNarrow=
+pBroken=
+pOddA=
+pOddB=
+pMergeDir=
+pOutside=
+pDeep=
+pNoSrc=
+pBadSide=
+pIdle=
+trap '[ -n "$pMergeDir" ] && "$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :
+      for pFake in $pOutside $pDeep $pNoSrc $pBadSide $pIdle; do
+        rm -rf "$pFake"
+      done
+      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow $pBroken $pOddA $pOddB; do
+        "$pIccPipes/remove" "$pPipe" 2>/dev/null || rm -rf "$pPipe"
+      done
+      cd /
+      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pWork=$(mktemp -d)
 cd "$pWork"
 pPipeA=$("$pIccPipes/create" 6)
 pPipeB=$("$pIccPipes/create" 6)
 pPipeC=$("$pIccPipes/create" 6)
 pNarrow=$("$pIccPipes/create" 2)
-trap 'for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do
-        "$pIccPipes/remove" "$pPipe" 2>/dev/null || :
-      done
-      cd /
-      rm -rf "$pWork"' EXIT
 "$pIccMerge/create" "$pPipeC" 0 2>/dev/null && exit 1
 "$pIccMerge/create" "$pPipeC" 2 "$pPipeA" 2>/dev/null && exit 1
 "$pIccMerge/create" "$pPipeC" 0 "$pNarrow" 2>/dev/null && exit 1
@@ -110,12 +133,6 @@ vCutOff() {
 
 vCutOff "$pIccMerge/create" "$pPipeC" 0 "$pPipeA"
 pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeB")
-trap '"$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :
-      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do
-        "$pIccPipes/remove" "$pPipe" 2>/dev/null || :
-      done
-      cd /
-      rm -rf "$pWork"' EXIT
 "$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
 # remove takes what create made and nothing else, and list answers for every
 # merge whatever else is in /tmp.
@@ -179,5 +196,5 @@ done
 "$pIccPipes/remove" "$pPipeA"
 cd /
 rm -rf "$pWork"
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo ok

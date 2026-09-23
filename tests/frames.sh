@@ -26,15 +26,25 @@ set -eu
 cd "$(dirname "$0")/.."
 pIccPipes=$(cd ".claude/skills/icc-pipes/scripts" && pwd)
 pIccFrames=$PWD/.claude/skills/icc-frames/scripts
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+pWork=
+pDir=
+pOdd=
+pBroken=
+pStray=
+pDir2=
+trap 'for pPipe in $pDir $pOdd $pBroken $pStray $pDir2; do
+        "$pIccPipes/remove" "$pPipe" 2>/dev/null || rm -rf "$pPipe"
+      done
+      cd /
+      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pWork=$(mktemp -d)
 cd "$pWork"
 pDir=$("$pIccPipes/create" 6)
-osMade=$pDir
-trap 'for pPipe in $osMade; do
-        "$pIccPipes/remove" "$pPipe" 2>/dev/null || :
-      done
-      cd /
-      rm -rf "$pWork"' EXIT
 # A read with nothing on its lane waits for the writer, and that is the
 # usage: <> means the lane never says EOF, so a count that has not come
 # cannot be told from one that never will. What it must not do is come back
@@ -81,7 +91,6 @@ printf '010\n0123456789' 1<> "$pDir/0"
 # An odd lane count is not a pipe Pipes makes, and both ends refuse it
 # rather than pair it down: the read says so, and does not wait.
 pOdd=$("$pIccPipes/create" 4)
-osMade="$osMade $pOdd"
 rm -f "$pOdd/3"
 "$pIccFrames/write" "$pOdd" 0 < /dev/null 2>/dev/null && exit 1
 nStatus=0
@@ -91,7 +100,6 @@ timeout 1 "$pIccFrames/read" "$pOdd" 1 >/dev/null 2>&1 || nStatus=$?
 # end uses: a lane that is a file is refused from either side, and nothing is
 # written to it.
 pBroken=$("$pIccPipes/create" 4)
-osMade="$osMade $pBroken"
 rm -f "$pBroken/1"
 : > "$pBroken/1"
 "$pIccFrames/write" "$pBroken" 0 < /dev/null 2>/dev/null && exit 1
@@ -105,7 +113,6 @@ mkfifo "$pBroken/1"
 # starts with a digit is not a lane, nor is one with a newline in it, which
 # ls prints as two lines of digits and a count of its output took for two.
 pStray=$("$pIccPipes/create" 2)
-osMade="$osMade $pStray"
 : > "$pStray/2x"
 : > "$pStray/"$'2\n3'
 printf 'done' | "$pIccFrames/write" "$pStray" 0
@@ -162,7 +169,6 @@ vCutOff "$pIccFrames/write" "$pDir" 0
 # here at all, so the read drains while the write runs, as above; sized
 # inside the hold's depth, which is one pipe more.
 pDir2=$("$pIccPipes/create" 2)
-osMade="$osMade $pDir2"
 # Past the hold nothing reaches a lane, so no read can free it, and the
 # write is refused instead of waiting on a read that cannot help. A file and
 # a pipe both, since what says so is the byte after the last one the hold
@@ -186,8 +192,10 @@ pidRead=$!
 wait $pidWrite
 wait $pidRead
 cmp in2 out2
-for pPipe in $osMade; do "$pIccPipes/remove" "$pPipe"; done
-trap - EXIT
+for pPipe in $pDir $pOdd $pBroken $pStray $pDir2; do
+  "$pIccPipes/remove" "$pPipe"
+done
+trap - EXIT INT TERM HUP
 cd /
 rm -rf "$pWork"
 echo ok

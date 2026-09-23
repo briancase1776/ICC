@@ -26,6 +26,17 @@ set -eu
 # matches nothing is no paths at all, not the pattern itself.
 shopt -s nullglob
 cd "$(dirname "$0")/../.claude/skills/icc-pipes"
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+pFake=
+pFakeBin=
+pDir=
+trap '[ -n "$pDir" ] && scripts/remove "$pDir" 2>/dev/null || :
+      [ -n "$pFakeBin" ] && rm -rf "$pFakeBin" || :
+      [ -n "$pFake" ] && rm -rf "$pFake" || :' EXIT
+trap 'exit 1' INT TERM HUP
 scripts/create 3 2>/dev/null && exit 1
 scripts/create 09 2>/dev/null && exit 1
 # remove refuses a directory outside /tmp/icc-pipes-*, and leaves its fifos.
@@ -38,7 +49,7 @@ rm -rf "$pFake"
 # was there before, not by emptying /tmp: other pipes may be up beside this
 # one, which is also why a new directory with lanes in it is let pass.
 pFakeBin=$(mktemp -d)
-printf '#!/bin/sh\nexit 1\n' > "$pFakeBin/mkfifo"
+printf '#!/bin/bash\nexit 1\n' > "$pFakeBin/mkfifo"
 chmod +x "$pFakeBin/mkfifo"
 aBefore=(/tmp/icc-pipes-*/)
 PATH=$pFakeBin:$PATH scripts/create 2 2>/dev/null && exit 1
@@ -113,7 +124,6 @@ for pPipe in /tmp/icc-pipes-*/; do
 done
 rm -rf "$pFakeBin"
 pDir=$(scripts/create 4)
-trap 'scripts/remove "$pDir" 2>/dev/null || :' EXIT
 scripts/list | grep -qx "$pDir up"
 # The other side is a child of this shell: it reads the even lanes and
 # answers on their odd partners, so nothing is read at the end that wrote
@@ -146,5 +156,5 @@ osOut=$(timeout 1 cat "$pDir/1") || nStatus=$?
 wait
 scripts/remove "$pDir"
 [ ! -d "$pDir" ]
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo ok

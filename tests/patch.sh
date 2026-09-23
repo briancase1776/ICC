@@ -154,15 +154,24 @@ done
 # past 64 bits, where a count wrapped: this one was a ring of 2
 "$pIccPatch/create" ring 18446744073709551618 2>/dev/null && exit 1
 "$pIccPatch/create" star 1 99999999999999999998 2>/dev/null && exit 1
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+# osMine is every patch made so far, and pDir the latest, which a signal can
+# catch before vMake has added it to the list.
 osMine=
+pDir=
+pWork=
+trap 'for pMine in $osMine $pDir; do
+        "$pIccPatch/remove" "$pMine" 2>/dev/null || :
+      done
+      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pWork=$(mktemp -d)
 pIn=$pWork/in
 pOut=$pWork/out
 head -c 150000 /dev/urandom > "$pIn"
-trap 'for pMine in $osMine; do
-        "$pIccPatch/remove" "$pMine" 2>/dev/null || :
-      done
-      rm -rf "$pWork"' EXIT
 # remove knows a patch by name as well as by shape: a directory outside
 # /tmp/icc-patch-* with a patch file and a made file in it is refused, and
 # keeps everything in it.
@@ -466,5 +475,5 @@ aPipes=(/tmp/icc-pipes-*/)
 [ "${#aPipes[@]}" -eq "$nPipes" ]
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo ok

@@ -28,17 +28,45 @@ cd "$(dirname "$0")/.."
 pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
 pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
 pIccTee=$(cd .claude/skills/icc-tee/scripts && pwd)
+# Armed before anything is made, as in every piece: each name is empty until
+# what it names exists, and the one EXIT trap takes whatever is named, so a
+# check that fails leaves nothing of the harness's own behind. A signal exits
+# 1, which runs it.
+# pidSleep is emptied once it is killed, because a pid is soon someone
+# else's.
+pWork=
+pPipeA=
+pPipeB=
+pPipeC=
+pNarrow=
+pBroken=
+pOddA=
+pOddB=
+pWideSrc=
+pWideDst=
+pDead=
+pTeeDir=
+pStalled=
+pFake=
+pidSleep=
+trap '[ -n "$pidSleep" ] && kill "$pidSleep" 2>/dev/null || :
+      for pTee in $pTeeDir $pStalled; do
+        "$pIccTee/remove" "$pTee" 2>/dev/null || :
+      done
+      [ -n "$pFake" ] && rm -rf "$pFake" || :
+      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow $pBroken $pOddA $pOddB \
+          $pWideSrc $pWideDst $pDead; do
+        "$pIccPipes/remove" "$pPipe" 2>/dev/null || rm -rf "$pPipe"
+      done
+      cd /
+      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pWork=$(mktemp -d)
 cd "$pWork"
 pPipeA=$("$pIccPipes/create" 6)
 pPipeB=$("$pIccPipes/create" 6)
 pPipeC=$("$pIccPipes/create" 6)
 pNarrow=$("$pIccPipes/create" 2)
-trap 'for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do
-        "$pIccPipes/remove" "$pPipe" 2>/dev/null || :
-      done
-      cd /
-      rm -rf "$pWork"' EXIT
 
 ##
 # @fn vRefused()
@@ -89,12 +117,6 @@ vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeA"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB/"
 pTeeDir=$("$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeC")
-trap '"$pIccTee/remove" "$pTeeDir" 2>/dev/null || :
-      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do
-        "$pIccPipes/remove" "$pPipe" 2>/dev/null || :
-      done
-      cd /
-      rm -rf "$pWork"' EXIT
 "$pIccTee/list" | grep -qx "$pTeeDir up $pPipeA 0 $pPipeB $pPipeC"
 head -c 150000 /dev/urandom > in
 "$pIccFrames/write" "$pPipeA" 0 < in
@@ -217,6 +239,7 @@ echo "$pidSleep" > "$pFake/pid"
 [ ! -d "$pFake" ]
 kill -0 "$pidSleep"
 kill "$pidSleep"
+pidSleep=
 pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$pFake/tee"
 echo 1 > "$pFake/pid"
@@ -266,5 +289,5 @@ done
 "$pIccPipes/remove" "$pPipeA"
 cd /
 rm -rf "$pWork"
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo ok

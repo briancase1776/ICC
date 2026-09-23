@@ -7,10 +7,12 @@
 #          lane holds from a seat to its peers and read it back whole at
 #          every one, plain bytes back the other way, see a hold go when
 #          the patch does, see a piece that will not go named and tried
-#          again, remove it, see nothing left. A create cut off by a
-#          signal leaves nothing either, and create, list and remove cut
-#          off just after they make a directory or a temp file take it
-#          with them.
+#          again, remove it, see nothing left. Sit a moot on ring-p 3,
+#          three seats and a chair blowing raspberries at once through
+#          every tee and merge, and check every one and every seat's
+#          spittle count. A create cut off by a signal leaves nothing
+#          either, and create, list and remove cut off just after they
+#          make a directory or a temp file take it with them.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -347,6 +349,106 @@ pWriteEnd=$(pAt p 0 0)
 printf 'hi' > "$pWriteEnd/0"
 pReadEnd=$(pAt 0 1 p)
 [ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
+"$pIccPatch/remove" "$pDir"
+# The moot: three seats and a chair on ring-p 3, all at once, through every
+# fitting the shape has. Four rounds, Opening, two Rotations and the Final;
+# each round every seat blows a raspberry at the next, the hop tees copy each
+# one to the chair through the merge, and the chair blows one at every seat
+# through the broadcast tee. Every seat hands back its spittle count.
+
+##
+# @fn osRaspberry()
+# @brief Print a raspberry: P, 5 to 40 T's and 1 to 15 ~'s, from urandom.
+# @details The ~'s are spittle. Drawn fresh every time, a raspberry checks
+#          itself: one that arrives short, long, or mixed with another's
+#          is not the one that was blown.
+# @stdout the raspberry, with no newline
+# @return 0
+##
+osRaspberry() {
+  local nT
+  local nS
+  read -r nT nS < <(od -An -N2 -tu1 /dev/urandom)
+  printf 'P'
+  printf 'T%.0s' $(seq $((5 + nT % 36)))
+  printf '~%.0s' $(seq $((1 + nS % 15)))
+}
+
+##
+# @fn vSeat()
+# @brief Sit one seat through the moot's four rounds, then count its
+#        spittle.
+# @details Each round the seat blows before it takes, which is what keeps
+#          three seats from waiting on each other: its raspberry at the
+#          next seat, then the one from the seat before, then the
+#          chair's. What it blew and what it took go into its own files in
+#          pWork, a line each, and its spittle count, every ~ it took, into
+#          one more.
+# @param $1 iSeat - the seat, 0 to 2
+# @global pDir - read, the patch
+# @global pWork - read, where the seat's files go
+# @global pIccFrames - read, where Frames' scripts are
+# @return 0; a write or read that fails ends the seat, and the chair's wait
+#         for it with it
+##
+vSeat() {
+  local iSeat=$1
+  local pSend
+  local pHop
+  local pChair
+  local osBlown
+  local iRound
+  pSend=$(pAt "$iSeat" 0 $(( (iSeat + 1) % 3 )))
+  pHop=$(pAt "$iSeat" 1 $(( (iSeat + 2) % 3 )))
+  pChair=$(pAt "$iSeat" 1 p)
+  for iRound in 1 2 3 4; do
+    osBlown=$(osRaspberry)
+    echo "$osBlown" >> "$pWork/blown$iSeat"
+    printf '%s' "$osBlown" | "$pIccFrames/write" "$pSend" 0
+    timeout 10 "$pIccFrames/read" "$pHop" 1 >> "$pWork/hop$iSeat"
+    echo >> "$pWork/hop$iSeat"
+    timeout 10 "$pIccFrames/read" "$pChair" 1 >> "$pWork/chair$iSeat"
+    echo >> "$pWork/chair$iSeat"
+  done
+  cat "$pWork/hop$iSeat" "$pWork/chair$iSeat" | tr -cd '~' | wc -c \
+    > "$pWork/spittle$iSeat"
+}
+
+vMake ring-p 3
+pBroadcast=$(pAt p 0 0)
+pOverheard=$(pAt p 1 0)
+aSeats=()
+for iSeat in 0 1 2; do
+  vSeat "$iSeat" &
+  aSeats+=($!)
+done
+for iRound in 1 2 3 4; do
+  osBlown=$(osRaspberry)
+  echo "$osBlown" >> "$pWork/blownp"
+  printf '%s' "$osBlown" | "$pIccFrames/write" "$pBroadcast" 0
+  for iSeat in 0 1 2; do
+    timeout 10 "$pIccFrames/read" "$pOverheard" 1 >> "$pWork/overheard"
+    echo >> "$pWork/overheard"
+  done
+done
+for pidSeat in "${aSeats[@]}"; do
+  wait "$pidSeat"
+done
+# Every hop reached the next seat as it was blown, and the chair's every
+# seat; and the merge gave the chair all twelve hops whole, three seats' at
+# once, in whatever order they met.
+for iSeat in 0 1 2; do
+  cmp "$pWork/blown$(( (iSeat + 2) % 3 ))" "$pWork/hop$iSeat"
+  cmp "$pWork/blownp" "$pWork/chair$iSeat"
+done
+cat "$pWork/blown0" "$pWork/blown1" "$pWork/blown2" | sort |
+  cmp - <(sort "$pWork/overheard")
+# and each seat's spittle count is every ~ that was blown at it
+for iSeat in 0 1 2; do
+  nSpat=$(cat "$pWork/blown$(( (iSeat + 2) % 3 ))" "$pWork/blownp" |
+    tr -cd '~' | wc -c)
+  [ "$(cat "$pWork/spittle$iSeat")" -eq "$nSpat" ]
+done
 "$pIccPatch/remove" "$pDir"
 vMake star 1 2
 pHeld=$(pAt 0 0 p)

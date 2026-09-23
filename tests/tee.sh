@@ -9,36 +9,36 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=$(cd .claude/skills/icc-pipes/scripts && pwd)
-F=$(cd .claude/skills/icc-frames/scripts && pwd)
-T=$(cd .claude/skills/icc-tee/scripts && pwd)
-t=$(mktemp -d); cd "$t"
-a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
-trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
-      cd /; rm -rf "$t"' EXIT
+pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
+pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
+pIccTee=$(cd .claude/skills/icc-tee/scripts && pwd)
+pWork=$(mktemp -d); cd "$pWork"
+pPipeA=$("$pIccPipes/create" 6); pPipeB=$("$pIccPipes/create" 6); pPipeC=$("$pIccPipes/create" 6); pNarrow=$("$pIccPipes/create" 2)
+trap 'for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do "$pIccPipes/remove" "$pPipe" 2>/dev/null || :; done
+      cd /; rm -rf "$pWork"' EXIT
 # set -e is ignored for a pipeline that begins with !, so `! cmd` states a
-# refusal without ever being able to fail the harness. no() runs the command
-# and stops here if it succeeds.
-no() { if "$@" 2>/dev/null; then echo "not refused: $*" >&2; exit 1; fi; }
-no "$T/create" "$a" 0
-no "$T/create" "$a" 2 "$b"
-no "$T/create" "$a" 0 "$x"
-no "$T/create" "$a" 0 /tmp
-no "$T/create" "$a" 0 "$a"        # SRC as its own DST
-no "$T/create" "$a" 0 "$b" "$b"   # the same DST twice
-no "$T/create" "$a" 0 "$b" "$b/"  # the same DST spelled two ways
-e=$("$T/create" "$a" 0 "$b" "$c")
-trap '"$T/remove" "$e" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
-      cd /; rm -rf "$t"' EXIT
-"$T/list" | grep -qx "$e up $a 0 $b $c"
+# refusal without ever being able to fail the harness. vRefused() runs the
+# command and stops here if it succeeds.
+vRefused() { local aCommand=("$@"); if "${aCommand[@]}" 2>/dev/null; then echo "not refused: ${aCommand[*]}" >&2; exit 1; fi; }
+vRefused "$pIccTee/create" "$pPipeA" 0
+vRefused "$pIccTee/create" "$pPipeA" 2 "$pPipeB"
+vRefused "$pIccTee/create" "$pPipeA" 0 "$pNarrow"
+vRefused "$pIccTee/create" "$pPipeA" 0 /tmp
+vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeA"        # SRC as its own DST
+vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB"   # the same DST twice
+vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB/"  # the same DST spelled two ways
+pTeeDir=$("$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeC")
+trap '"$pIccTee/remove" "$pTeeDir" 2>/dev/null || :; for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do "$pIccPipes/remove" "$pPipe" 2>/dev/null || :; done
+      cd /; rm -rf "$pWork"' EXIT
+"$pIccTee/list" | grep -qx "$pTeeDir up $pPipeA 0 $pPipeB $pPipeC"
 head -c 150000 /dev/urandom > in
-"$F/write" "$a" 0 < in
-timeout 5 "$F/read" "$b" 1 > out; cmp in out
-timeout 5 "$F/read" "$c" 1 > out; cmp in out
-printf 'plain' > "$a/2"
-[ "$(timeout 1 cat "$b/2")" = plain ] && [ "$(timeout 1 cat "$c/2")" = plain ]
-"$T/remove" "$e"
-[ ! -d "$e" ]
+"$pIccFrames/write" "$pPipeA" 0 < in
+timeout 5 "$pIccFrames/read" "$pPipeB" 1 > out; cmp in out
+timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out; cmp in out
+printf 'plain' > "$pPipeA/2"
+[ "$(timeout 1 cat "$pPipeB/2")" = plain ] && [ "$(timeout 1 cat "$pPipeC/2")" = plain ]
+"$pIccTee/remove" "$pTeeDir"
+[ ! -d "$pTeeDir" ]
 # remove signals a copier, not whatever pid sits in the file, and takes the
 # two files it made, not the directory. A look-alike holding a stranger's pid
 # loses its own two files and nothing else; one with a file beside them is
@@ -47,40 +47,40 @@ printf 'plain' > "$a/2"
 # copiers it started with it. A wide pipe makes that loop long enough to
 # signal into, and the signal waits for the directory to exist -- cutting a
 # create off before it made one proves nothing, and passes with no trap at all.
-w=$("$P/create" 200); v=$("$P/create" 200)
-n=$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)
-"$T/create" "$w" 0 "$v" >/dev/null 2>&1 & q=$!
-while [ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -le "$n" ]; do
-  kill -0 $q 2>/dev/null || break
+pWideSrc=$("$pIccPipes/create" 200); pWideDst=$("$pIccPipes/create" 200)
+nTees=$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)
+"$pIccTee/create" "$pWideSrc" 0 "$pWideDst" >/dev/null 2>&1 & pidCreate=$!
+while [ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -le "$nTees" ]; do
+  kill -0 $pidCreate 2>/dev/null || break
 done
-kill -TERM $q 2>/dev/null || :
-wait $q 2>/dev/null || :
-[ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -eq "$n" ]
-"$P/remove" "$v"; "$P/remove" "$w"
+kill -TERM $pidCreate 2>/dev/null || :
+wait $pidCreate 2>/dev/null || :
+[ "$(ls -d /tmp/icc-tee-* 2>/dev/null | wc -l)" -eq "$nTees" ]
+"$pIccPipes/remove" "$pWideDst"; "$pIccPipes/remove" "$pWideSrc"
 
 # A lane with no writer does not hang create: the copier lets go of the
 # caller's stdout before it opens, so d=$(create ...) returns and list says
 # down. A writer lets the copier through, and it ends when that writer goes.
-y=$("$P/create" 6); kill "$(cat "$y/pid")"
-while kill -0 "$(cat "$y/pid")" 2>/dev/null; do :; done
-u=$(timeout 10 "$T/create" "$y" 0 "$b")
-"$T/list" | grep -qx "$u down $y 0 $b"
-: > "$y/0"
-"$T/remove" "$u"; [ ! -d "$u" ]; "$P/remove" "$y"
-sleep 60 & s=$!
-f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
-printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo "$s" > "$f/pid"
-"$T/remove" "$f"; [ ! -d "$f" ]; kill -0 "$s"; kill "$s"
-f=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
-printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$f/tee"; echo 1 > "$f/pid"
-: > "$f/keep"; no "$T/remove" "$f"; [ -f "$f/keep" ]; rm -f "$f"/*; rmdir "$f"
-f=$(mktemp -d /tmp/icc-tee-XXXXXXXX); echo 1 > "$f/pid"
-[ -z "$("$T/list" 2>&1 >/dev/null)" ]
-"$T/list" 2>/dev/null | grep -q "$f" && exit 1
-rm -f "$f"/*; rmdir "$f"
-no "$T/remove" "$a"
-for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
-"$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"
-cd /; rm -rf "$t"
+pDead=$("$pIccPipes/create" 6); kill "$(cat "$pDead/pid")"
+while kill -0 "$(cat "$pDead/pid")" 2>/dev/null; do :; done
+pStalled=$(timeout 10 "$pIccTee/create" "$pDead" 0 "$pPipeB")
+"$pIccTee/list" | grep -qx "$pStalled down $pDead 0 $pPipeB"
+: > "$pDead/0"
+"$pIccTee/remove" "$pStalled"; [ ! -d "$pStalled" ]; "$pIccPipes/remove" "$pDead"
+sleep 60 & pidSleep=$!
+pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$pFake/tee"; echo "$pidSleep" > "$pFake/pid"
+"$pIccTee/remove" "$pFake"; [ ! -d "$pFake" ]; kill -0 "$pidSleep"; kill "$pidSleep"
+pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' /tmp/not-a-pipe 0 /tmp/nor-this > "$pFake/tee"; echo 1 > "$pFake/pid"
+: > "$pFake/keep"; vRefused "$pIccTee/remove" "$pFake"; [ -f "$pFake/keep" ]; rm -f "$pFake"/*; rmdir "$pFake"
+pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX); echo 1 > "$pFake/pid"
+[ -z "$("$pIccTee/list" 2>&1 >/dev/null)" ]
+"$pIccTee/list" 2>/dev/null | grep -q "$pFake" && exit 1
+rm -f "$pFake"/*; rmdir "$pFake"
+vRefused "$pIccTee/remove" "$pPipeA"
+for pPipe in $pPipeA $pPipeB $pPipeC; do "$pIccPipes/list" | grep -qx "$pPipe up"; done
+"$pIccPipes/remove" "$pNarrow"; "$pIccPipes/remove" "$pPipeC"; "$pIccPipes/remove" "$pPipeB"; "$pIccPipes/remove" "$pPipeA"
+cd /; rm -rf "$pWork"
 trap - EXIT
 echo ok

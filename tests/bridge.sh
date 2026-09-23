@@ -12,30 +12,30 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=$(cd .claude/skills/icc-pipes/scripts && pwd)
-F=$(cd .claude/skills/icc-frames/scripts && pwd)
-B=$(cd .claude/skills/icc-bridge/scripts && pwd)
-t=$(mktemp -d); cd "$t"
-a=$("$P/create" 6); b=$("$P/create" 6)
-trap '"$P/remove" "$a" 2>/dev/null || :; "$P/remove" "$b" 2>/dev/null || :
-  cd /; rm -rf "$t"' EXIT
+pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
+pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
+pIccBridge=$(cd .claude/skills/icc-bridge/scripts && pwd)
+pWork=$(mktemp -d); cd "$pWork"
+pPipeA=$("$pIccPipes/create" 6); pPipeB=$("$pIccPipes/create" 6)
+trap '"$pIccPipes/remove" "$pPipeA" 2>/dev/null || :; "$pIccPipes/remove" "$pPipeB" 2>/dev/null || :
+  cd /; rm -rf "$pWork"' EXIT
 head -c 150000 /dev/urandom > in
-"$F/write" "$a" 0 < in
-timeout 5 "$B/out" "$a" 1 > text
+"$pIccFrames/write" "$pPipeA" 0 < in
+timeout 5 "$pIccBridge/out" "$pPipeA" 1 > text
 base64 in | cmp - text
 LC_ALL=C grep -q '[^A-Za-z0-9+/=]' text && exit 1
-"$B/in" "$b" 0 < text
-timeout 5 "$F/read" "$b" 1 > out; cmp in out
-"$F/write" "$b" 1 < in
-timeout 5 "$B/out" "$b" 0 > text
-"$B/in" "$a" 1 < text
-timeout 5 "$F/read" "$a" 0 > out; cmp in out
-: | "$B/in" "$a" 0
-[ -z "$(timeout 5 "$B/out" "$a" 1)" ]
-echo 'not the alphabet' | "$B/in" "$a" 0 2>/dev/null && exit 1
-timeout 1 "$B/out" "$a" 1 > text 2>/dev/null && exit 1
+"$pIccBridge/in" "$pPipeB" 0 < text
+timeout 5 "$pIccFrames/read" "$pPipeB" 1 > out; cmp in out
+"$pIccFrames/write" "$pPipeB" 1 < in
+timeout 5 "$pIccBridge/out" "$pPipeB" 0 > text
+"$pIccBridge/in" "$pPipeA" 1 < text
+timeout 5 "$pIccFrames/read" "$pPipeA" 0 > out; cmp in out
+: | "$pIccBridge/in" "$pPipeA" 0
+[ -z "$(timeout 5 "$pIccBridge/out" "$pPipeA" 1)" ]
+echo 'not the alphabet' | "$pIccBridge/in" "$pPipeA" 0 2>/dev/null && exit 1
+timeout 1 "$pIccBridge/out" "$pPipeA" 1 > text 2>/dev/null && exit 1
 [ ! -s text ]
-"$P/remove" "$a"; "$P/remove" "$b"
-cd /; rm -rf "$t"
+"$pIccPipes/remove" "$pPipeA"; "$pIccPipes/remove" "$pPipeB"
+cd /; rm -rf "$pWork"
 trap - EXIT
 echo ok

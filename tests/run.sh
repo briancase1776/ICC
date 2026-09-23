@@ -8,6 +8,6 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-for p in pipes frames tee merge patch bridge; do
-  printf '%-8s' "$p"; "tests/$p.sh"
+for osPiece in pipes frames tee merge patch bridge; do
+  printf '%-8s' "$osPiece"; "tests/$osPiece.sh"
 done

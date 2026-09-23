@@ -13,52 +13,52 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=$(cd .claude/skills/icc-pipes/scripts && pwd)
-F=$(cd .claude/skills/icc-frames/scripts && pwd)
-M=$(cd .claude/skills/icc-merge/scripts && pwd)
-t=$(mktemp -d); cd "$t"
-a=$("$P/create" 6); b=$("$P/create" 6); c=$("$P/create" 6); x=$("$P/create" 2)
-trap 'for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
-      cd /; rm -rf "$t"' EXIT
-"$M/create" "$c" 0 2>/dev/null && exit 1
-"$M/create" "$c" 2 "$a" 2>/dev/null && exit 1
-"$M/create" "$c" 0 "$x" 2>/dev/null && exit 1
-"$M/create" "$c" 0 /tmp 2>/dev/null && exit 1
-"$M/create" "$c" 0 "$c" 2>/dev/null && exit 1
-"$M/create" "$c" 0 "$a" "$a" 2>/dev/null && exit 1
-y=$("$P/create" 6); rm -f "$y/2"; mkdir "$y/2"
-"$M/create" "$c" 0 "$y" 2>/dev/null && exit 1   # a lane that is not a lane
-rmdir "$y/2"; "$P/remove" "$y"
-m=$("$M/create" "$c" 0 "$a" "$b")
-trap '"$M/remove" "$m" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
-      cd /; rm -rf "$t"' EXIT
-"$M/list" | grep -qx "$m up $c 0 $a $b"
+pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
+pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
+pIccMerge=$(cd .claude/skills/icc-merge/scripts && pwd)
+pWork=$(mktemp -d); cd "$pWork"
+pPipeA=$("$pIccPipes/create" 6); pPipeB=$("$pIccPipes/create" 6); pPipeC=$("$pIccPipes/create" 6); pNarrow=$("$pIccPipes/create" 2)
+trap 'for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do "$pIccPipes/remove" "$pPipe" 2>/dev/null || :; done
+      cd /; rm -rf "$pWork"' EXIT
+"$pIccMerge/create" "$pPipeC" 0 2>/dev/null && exit 1
+"$pIccMerge/create" "$pPipeC" 2 "$pPipeA" 2>/dev/null && exit 1
+"$pIccMerge/create" "$pPipeC" 0 "$pNarrow" 2>/dev/null && exit 1
+"$pIccMerge/create" "$pPipeC" 0 /tmp 2>/dev/null && exit 1
+"$pIccMerge/create" "$pPipeC" 0 "$pPipeC" 2>/dev/null && exit 1
+"$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeA" 2>/dev/null && exit 1
+pBroken=$("$pIccPipes/create" 6); rm -f "$pBroken/2"; mkdir "$pBroken/2"
+"$pIccMerge/create" "$pPipeC" 0 "$pBroken" 2>/dev/null && exit 1   # a lane that is not a lane
+rmdir "$pBroken/2"; "$pIccPipes/remove" "$pBroken"
+pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeB")
+trap '"$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :; for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do "$pIccPipes/remove" "$pPipe" 2>/dev/null || :; done
+      cd /; rm -rf "$pWork"' EXIT
+"$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
 # remove takes what create made and nothing else, and list answers for every
 # merge whatever else is in /tmp.
-v=$(mktemp -d); mkdir "$v/deep"; printf '%s\n0\n%s\n' "$c" "$a" > "$v/merge"; : > "$v/pid"
-"$M/remove" "$m/../$(basename "$v")" 2>/dev/null && exit 1
-[ -d "$v/deep" ]
-k=$(mktemp -d /tmp/icc-merge-XXXXXXXX); mkdir "$k/deep"
-printf '%s\n0\n%s\n' "$c" "$a" > "$k/merge"; : > "$k/pid"
-"$M/remove" "$k" 2>/dev/null && exit 1
-[ -d "$k/deep" ]
-s=$(mktemp -d /tmp/icc-merge-XXXXXXXX); printf '%s\n0\n' "$c" > "$s/merge"; echo 1 > "$s/pid"
-"$M/list" | grep -qx "$m up $c 0 $a $b"
-h=$(mktemp -d /tmp/icc-merge-XXXXXXXX); printf '%s\n0\n%s\n' "$c" "$a" > "$h/merge"; : > "$h/pid"
-"$M/list" | grep -qx "$h down $c 0 $a"
-"$M/remove" "$h"; [ ! -d "$h" ]
-rm -rf "$v" "$k" "$s"
+pOutside=$(mktemp -d); mkdir "$pOutside/deep"; printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pOutside/merge"; : > "$pOutside/pid"
+"$pIccMerge/remove" "$pMergeDir/../$(basename "$pOutside")" 2>/dev/null && exit 1
+[ -d "$pOutside/deep" ]
+pDeep=$(mktemp -d /tmp/icc-merge-XXXXXXXX); mkdir "$pDeep/deep"
+printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pDeep/merge"; : > "$pDeep/pid"
+"$pIccMerge/remove" "$pDeep" 2>/dev/null && exit 1
+[ -d "$pDeep/deep" ]
+pNoSrc=$(mktemp -d /tmp/icc-merge-XXXXXXXX); printf '%s\n0\n' "$pPipeC" > "$pNoSrc/merge"; echo 1 > "$pNoSrc/pid"
+"$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
+pIdle=$(mktemp -d /tmp/icc-merge-XXXXXXXX); printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pIdle/merge"; : > "$pIdle/pid"
+"$pIccMerge/list" | grep -qx "$pIdle down $pPipeC 0 $pPipeA"
+"$pIccMerge/remove" "$pIdle"; [ ! -d "$pIdle" ]
+rm -rf "$pOutside" "$pDeep" "$pNoSrc"
 head -c 150000 /dev/urandom > in
-"$F/write" "$a" 0 < in
-timeout 5 "$F/read" "$c" 1 > out; cmp in out
-"$F/write" "$b" 0 < in
-timeout 5 "$F/read" "$c" 1 > out; cmp in out
-printf 'a' > "$a/2"; printf 'b' > "$b/2"
-case $(timeout 1 dd if="$c/2" bs=4096 status=none) in ab|ba) ;; *) exit 1;; esac
-"$M/remove" "$m"
-[ ! -d "$m" ]
-for p in $a $b $c; do "$P/list" | grep -qx "$p up"; done
-"$P/remove" "$x"; "$P/remove" "$c"; "$P/remove" "$b"; "$P/remove" "$a"
-cd /; rm -rf "$t"
+"$pIccFrames/write" "$pPipeA" 0 < in
+timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out; cmp in out
+"$pIccFrames/write" "$pPipeB" 0 < in
+timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out; cmp in out
+printf 'a' > "$pPipeA/2"; printf 'b' > "$pPipeB/2"
+case $(timeout 1 dd if="$pPipeC/2" bs=4096 status=none) in ab|ba) ;; *) exit 1;; esac
+"$pIccMerge/remove" "$pMergeDir"
+[ ! -d "$pMergeDir" ]
+for pPipe in $pPipeA $pPipeB $pPipeC; do "$pIccPipes/list" | grep -qx "$pPipe up"; done
+"$pIccPipes/remove" "$pNarrow"; "$pIccPipes/remove" "$pPipeC"; "$pIccPipes/remove" "$pPipeB"; "$pIccPipes/remove" "$pPipeA"
+cd /; rm -rf "$pWork"
 trap - EXIT
 echo ok

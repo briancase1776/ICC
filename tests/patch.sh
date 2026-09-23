@@ -11,98 +11,98 @@
 # MIT License text omitted for brevity, See LICENCE.TXT
 set -eu
 cd "$(dirname "$0")/.."
-P=.claude/skills/icc-pipes/scripts
-F=.claude/skills/icc-frames/scripts
-S=.claude/skills/icc-patch/scripts
-end() { awk -v s="$1" -v i="$2" -v p="$3" \
-  '$1==s && $2==i && ("," $4 ",") ~ ("," p ",") {print $3}' "$x/patch"; }
-at() { e=$(end "$@"); [ -n "$e" ] || { echo "no end: $*" >&2; exit 1; }; echo "$e"; }
-made() { [ "$(grep -c "$1" "$x/made")" -eq "$2" ]; }
-ends() { [ "$(( $(wc -l < "$x/patch") - 1 ))" -eq "$1" ]; }   # the map, and no more
-mk() { x=$("$S/create" "$@"); mine="$mine $x"; }
-holder() { for f in /proc/[0-9]*/fd/*; do
-  [ "$(readlink "$f" 2>/dev/null)" = "$1/0" ] && { echo "$f" | cut -d/ -f3; return; }
+pIccPipes=.claude/skills/icc-pipes/scripts
+pIccFrames=.claude/skills/icc-frames/scripts
+pIccPatch=.claude/skills/icc-patch/scripts
+pEnd() { local osSeat=$1 eSide=$2 osPeer=$3; awk -v s="$osSeat" -v i="$eSide" -v p="$osPeer" \
+  '$1==s && $2==i && ("," $4 ",") ~ ("," p ",") {print $3}' "$pDir/patch"; }
+pAt() { local osSeat=$1 eSide=$2 osPeer=$3 pFound; pFound=$(pEnd "$osSeat" "$eSide" "$osPeer"); [ -n "$pFound" ] || { echo "no end: $osSeat $eSide $osPeer" >&2; exit 1; }; echo "$pFound"; }
+vMade() { local osSkill=$1 nCount=$2; [ "$(grep -c "$osSkill" "$pDir/made")" -eq "$nCount" ]; }
+vEnds() { local nEnds=$1; [ "$(( $(wc -l < "$pDir/patch") - 1 ))" -eq "$nEnds" ]; }   # the map, and no more
+vMake() { pDir=$("$pIccPatch/create" "$@"); osMine="$osMine $pDir"; }
+pidHolder() { local pPipe=$1; for pFd in /proc/[0-9]*/fd/*; do
+  [ "$(readlink "$pFd" 2>/dev/null)" = "$pPipe/0" ] && { echo "$pFd" | cut -d/ -f3; return; }
 done; }
-"$S/create" 2>/dev/null && exit 1
-"$S/create" bus 3 2>/dev/null && exit 1
-"$S/create" ring 0 2>/dev/null && exit 1
-"$S/create" ring 3 3 2>/dev/null && exit 1
-"$S/create" mesh 1 banana 2>/dev/null && exit 1
-mine=; w=$(mktemp -d); in=$w/in; out=$w/out
-head -c 150000 /dev/urandom > "$in"
-trap 'for q in $mine; do "$S/remove" "$q" 2>/dev/null || :; done; rm -rf "$w"' EXIT
-mk star 3 6
-"$S/list" | grep -qx "$x up star 3 6"
-made icc-pipes 3; made icc-tee 0; made icc-merge 0; ends 6
-[ "$(grep -c '^p ' "$x/patch")" -eq 3 ]
-"$F/write" "$(at 1 0 p)" 0 < "$in"
-timeout 5 "$F/read" "$(at p 1 1)" 1 > "$out"; cmp "$in" "$out"
-"$F/write" "$(at p 1 2)" 1 < "$in"
-timeout 5 "$F/read" "$(at 2 0 p)" 0 > "$out"; cmp "$in" "$out"
-printf 'me' > "$(at 0 0 p)/0"; [ "$(timeout 1 cat "$(at p 1 0)/0")" = me ]
-[ -z "$(end 0 0 2)" ]; [ -z "$(end 0 1 p)" ]
-"$S/remove" "$x"; [ ! -d "$x" ]
-mk star 1; made icc-pipes 1; ends 2; "$S/remove" "$x"
-mk ring 3 6
-"$S/list" | grep -qx "$x up ring 3 6"
-made icc-pipes 3; made icc-tee 0; made icc-merge 0; ends 6
-"$F/write" "$(at 2 0 0)" 0 < "$in"
-timeout 5 "$F/read" "$(at 0 1 2)" 1 > "$out"; cmp "$in" "$out"
-"$F/write" "$(at 0 1 2)" 1 < "$in"
-timeout 5 "$F/read" "$(at 2 0 0)" 0 > "$out"; cmp "$in" "$out"
-[ -z "$(end 0 0 2)" ]
-"$S/remove" "$x"; [ ! -d "$x" ]
-mk ring 2; made icc-pipes 1; ends 2; "$S/remove" "$x"
-mk ring 1; made icc-pipes 1; ends 2
-printf 'me' > "$(at 0 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 0)/0")" = me ]
-"$S/remove" "$x"
-mk mesh 4 6
-"$S/list" | grep -qx "$x up mesh 4 6"
-made icc-pipes 9; made icc-tee 1; made icc-merge 1; ends 9
-[ "$(grep -c '^- ' "$x/patch")" -eq 1 ]          # the hub, named, held by nobody
-[ "$(grep -c '^3 ' "$x/patch")" -eq 2 ]
-"$F/write" "$(at 1 0 3)" 0 < "$in"
-for r in 0 1 2 3; do timeout 5 "$F/read" "$(at $r 1 1)" 1 > "$out"; cmp "$in" "$out"; done
-printf 'a' > "$(at 0 0 2)/2"; printf 'b' > "$(at 2 0 0)/2"
-case $(timeout 1 cat "$(at 3 1 0)/2") in ab|ba) ;; *) exit 1;; esac
-mkdir "$x/lock"; "$S/remove" "$x"; [ ! -d "$x" ]
-mk mesh 2; made icc-pipes 1; made icc-tee 0; ends 2
-mv "$x/made" "$x/gone"; "$S/list" | grep -qx "$x down mesh 2 2"
-mv "$x/gone" "$x/made"; "$S/remove" "$x"
-mk mesh 1; made icc-pipes 0; ends 0; "$S/remove" "$x"
-mk mesh-p 1; made icc-pipes 1; made icc-merge 0; ends 2
-printf 'hi' > "$(at 0 0 p)/0"; [ "$(timeout 1 cat "$(at p 1 0)/0")" = hi ]
-printf 'yo' > "$(at p 1 0)/1"; [ "$(timeout 1 cat "$(at 0 0 p)/1")" = yo ]
-"$S/remove" "$x"
-mk mesh-p 2; made icc-pipes 7; made icc-tee 1; made icc-merge 1; ends 7
-printf 'all' > "$(at p 0 1)/0"
-for r in 0 1 p; do [ "$(timeout 1 cat "$(at $r 1 p)/0")" = all ]; done
-"$S/remove" "$x"
-mk ring-p 3 6
-made icc-pipes 14; made icc-tee 4; made icc-merge 1; ends 14
-[ "$(grep -c '^- ' "$x/patch")" -eq 3 ]          # one coupler per seat
-[ "$(end 1 1 0)" != "$(end 1 1 p)" ]
-"$F/write" "$(at 1 0 2)" 0 < "$in"
-timeout 5 "$F/read" "$(at 2 1 1)" 1 > "$out"; cmp "$in" "$out"
-timeout 5 "$F/read" "$(at p 1 1)" 1 > "$out"; cmp "$in" "$out"
-[ -z "$(end 0 1 1)" ]
-printf 'all' > "$(at p 0 1)/2"
-for r in 0 1 2; do [ "$(timeout 1 cat "$(at $r 1 p)/2")" = all ]; done
-m=$(cut -d' ' -f2 "$x/made")
-"$S/remove" "$x"; [ ! -d "$x" ]
-for p in $m; do [ ! -e "$p" ]; done
-mk ring-p 1; made icc-pipes 4; made icc-tee 1; made icc-merge 0; ends 5
-[ -z "$(grep '^- ' "$x/patch")" ]                # ring-p 1 has no coupler: p holds both
-printf 'hi' > "$(at p 0 0)/0"; [ "$(timeout 1 cat "$(at 0 1 p)/0")" = hi ]
-"$S/remove" "$x"
-mk star 1 2; e=$(at 0 0 p); h=$(holder "$e"); [ -n "$h" ]
-"$S/remove" "$x"; sleep 1   # dead is dead: reaped, or a zombie nobody reaped
-case $(ps -o stat= -p "$h" 2>/dev/null) in ''|Z*) ;; *) exit 1;; esac
-mk star 1 2; e=$(at 0 0 p); touch "$e/obstruct"
-"$S/remove" "$x" 2>/dev/null && exit 1
-[ -d "$x" ]; rm -f "$e/obstruct"
-"$S/remove" "$x" 2>/dev/null; [ ! -d "$x" ]; rmdir "$e" 2>/dev/null || :
-for q in $mine; do [ ! -d "$q" ]; done
-rm -rf "$w"
+"$pIccPatch/create" 2>/dev/null && exit 1
+"$pIccPatch/create" bus 3 2>/dev/null && exit 1
+"$pIccPatch/create" ring 0 2>/dev/null && exit 1
+"$pIccPatch/create" ring 3 3 2>/dev/null && exit 1
+"$pIccPatch/create" mesh 1 banana 2>/dev/null && exit 1
+osMine=; pWork=$(mktemp -d); pIn=$pWork/in; pOut=$pWork/out
+head -c 150000 /dev/urandom > "$pIn"
+trap 'for pMine in $osMine; do "$pIccPatch/remove" "$pMine" 2>/dev/null || :; done; rm -rf "$pWork"' EXIT
+vMake star 3 6
+"$pIccPatch/list" | grep -qx "$pDir up star 3 6"
+vMade icc-pipes 3; vMade icc-tee 0; vMade icc-merge 0; vEnds 6
+[ "$(grep -c '^p ' "$pDir/patch")" -eq 3 ]
+"$pIccFrames/write" "$(pAt 1 0 p)" 0 < "$pIn"
+timeout 5 "$pIccFrames/read" "$(pAt p 1 1)" 1 > "$pOut"; cmp "$pIn" "$pOut"
+"$pIccFrames/write" "$(pAt p 1 2)" 1 < "$pIn"
+timeout 5 "$pIccFrames/read" "$(pAt 2 0 p)" 0 > "$pOut"; cmp "$pIn" "$pOut"
+printf 'me' > "$(pAt 0 0 p)/0"; [ "$(timeout 1 cat "$(pAt p 1 0)/0")" = me ]
+[ -z "$(pEnd 0 0 2)" ]; [ -z "$(pEnd 0 1 p)" ]
+"$pIccPatch/remove" "$pDir"; [ ! -d "$pDir" ]
+vMake star 1; vMade icc-pipes 1; vEnds 2; "$pIccPatch/remove" "$pDir"
+vMake ring 3 6
+"$pIccPatch/list" | grep -qx "$pDir up ring 3 6"
+vMade icc-pipes 3; vMade icc-tee 0; vMade icc-merge 0; vEnds 6
+"$pIccFrames/write" "$(pAt 2 0 0)" 0 < "$pIn"
+timeout 5 "$pIccFrames/read" "$(pAt 0 1 2)" 1 > "$pOut"; cmp "$pIn" "$pOut"
+"$pIccFrames/write" "$(pAt 0 1 2)" 1 < "$pIn"
+timeout 5 "$pIccFrames/read" "$(pAt 2 0 0)" 0 > "$pOut"; cmp "$pIn" "$pOut"
+[ -z "$(pEnd 0 0 2)" ]
+"$pIccPatch/remove" "$pDir"; [ ! -d "$pDir" ]
+vMake ring 2; vMade icc-pipes 1; vEnds 2; "$pIccPatch/remove" "$pDir"
+vMake ring 1; vMade icc-pipes 1; vEnds 2
+printf 'me' > "$(pAt 0 0 0)/0"; [ "$(timeout 1 cat "$(pAt 0 1 0)/0")" = me ]
+"$pIccPatch/remove" "$pDir"
+vMake mesh 4 6
+"$pIccPatch/list" | grep -qx "$pDir up mesh 4 6"
+vMade icc-pipes 9; vMade icc-tee 1; vMade icc-merge 1; vEnds 9
+[ "$(grep -c '^- ' "$pDir/patch")" -eq 1 ]          # the hub, named, held by nobody
+[ "$(grep -c '^3 ' "$pDir/patch")" -eq 2 ]
+"$pIccFrames/write" "$(pAt 1 0 3)" 0 < "$pIn"
+for osSeat in 0 1 2 3; do timeout 5 "$pIccFrames/read" "$(pAt $osSeat 1 1)" 1 > "$pOut"; cmp "$pIn" "$pOut"; done
+printf 'a' > "$(pAt 0 0 2)/2"; printf 'b' > "$(pAt 2 0 0)/2"
+case $(timeout 1 cat "$(pAt 3 1 0)/2") in ab|ba) ;; *) exit 1;; esac
+mkdir "$pDir/lock"; "$pIccPatch/remove" "$pDir"; [ ! -d "$pDir" ]
+vMake mesh 2; vMade icc-pipes 1; vMade icc-tee 0; vEnds 2
+mv "$pDir/made" "$pDir/gone"; "$pIccPatch/list" | grep -qx "$pDir down mesh 2 2"
+mv "$pDir/gone" "$pDir/made"; "$pIccPatch/remove" "$pDir"
+vMake mesh 1; vMade icc-pipes 0; vEnds 0; "$pIccPatch/remove" "$pDir"
+vMake mesh-p 1; vMade icc-pipes 1; vMade icc-merge 0; vEnds 2
+printf 'hi' > "$(pAt 0 0 p)/0"; [ "$(timeout 1 cat "$(pAt p 1 0)/0")" = hi ]
+printf 'yo' > "$(pAt p 1 0)/1"; [ "$(timeout 1 cat "$(pAt 0 0 p)/1")" = yo ]
+"$pIccPatch/remove" "$pDir"
+vMake mesh-p 2; vMade icc-pipes 7; vMade icc-tee 1; vMade icc-merge 1; vEnds 7
+printf 'all' > "$(pAt p 0 1)/0"
+for osSeat in 0 1 p; do [ "$(timeout 1 cat "$(pAt $osSeat 1 p)/0")" = all ]; done
+"$pIccPatch/remove" "$pDir"
+vMake ring-p 3 6
+vMade icc-pipes 14; vMade icc-tee 4; vMade icc-merge 1; vEnds 14
+[ "$(grep -c '^- ' "$pDir/patch")" -eq 3 ]          # one coupler per seat
+[ "$(pEnd 1 1 0)" != "$(pEnd 1 1 p)" ]
+"$pIccFrames/write" "$(pAt 1 0 2)" 0 < "$pIn"
+timeout 5 "$pIccFrames/read" "$(pAt 2 1 1)" 1 > "$pOut"; cmp "$pIn" "$pOut"
+timeout 5 "$pIccFrames/read" "$(pAt p 1 1)" 1 > "$pOut"; cmp "$pIn" "$pOut"
+[ -z "$(pEnd 0 1 1)" ]
+printf 'all' > "$(pAt p 0 1)/2"
+for osSeat in 0 1 2; do [ "$(timeout 1 cat "$(pAt $osSeat 1 p)/2")" = all ]; done
+osPieces=$(cut -d' ' -f2 "$pDir/made")
+"$pIccPatch/remove" "$pDir"; [ ! -d "$pDir" ]
+for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
+vMake ring-p 1; vMade icc-pipes 4; vMade icc-tee 1; vMade icc-merge 0; vEnds 5
+[ -z "$(grep '^- ' "$pDir/patch")" ]                # ring-p 1 has no coupler: p holds both
+printf 'hi' > "$(pAt p 0 0)/0"; [ "$(timeout 1 cat "$(pAt 0 1 p)/0")" = hi ]
+"$pIccPatch/remove" "$pDir"
+vMake star 1 2; pHeld=$(pAt 0 0 p); pidHold=$(pidHolder "$pHeld"); [ -n "$pidHold" ]
+"$pIccPatch/remove" "$pDir"; sleep 1   # dead is dead: reaped, or a zombie nobody reaped
+case $(ps -o stat= -p "$pidHold" 2>/dev/null) in ''|Z*) ;; *) exit 1;; esac
+vMake star 1 2; pHeld=$(pAt 0 0 p); touch "$pHeld/obstruct"
+"$pIccPatch/remove" "$pDir" 2>/dev/null && exit 1
+[ -d "$pDir" ]; rm -f "$pHeld/obstruct"
+"$pIccPatch/remove" "$pDir" 2>/dev/null; [ ! -d "$pDir" ]; rmdir "$pHeld" 2>/dev/null || :
+for pMine in $osMine; do [ ! -d "$pMine" ]; done
+rm -rf "$pWork"
 trap - EXIT
 echo ok

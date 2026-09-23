@@ -22,8 +22,9 @@
 # @stdout the patch's directory, one line
 # @stderr the reason, on refusal, and whatever a piece's scripts say
 # @exit 0 the patch is made and printed; 1 the arguments are refused, a
-#       piece could not be made, or the shape made nothing, and what was
-#       made is removed, or it could not be printed and all of it is left
+#       piece could not be made, a signal came, or the shape made
+#       nothing, and what was made is removed, or it could not be printed
+#       and all of it is left
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -88,6 +89,10 @@ pIccTee=$(cd "$pTop/.claude/skills/icc-tee/scripts" && pwd)
 pIccMerge=$(cd "$pTop/.claude/skills/icc-merge/scripts" && pwd)
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 trap 'rm -rf "$pDir"' EXIT
+# A signal is a create that cannot finish, like any other: the handler exits,
+# so the EXIT trap takes what was made and create says 1. vPiece swaps it for
+# its own while a piece is made, and puts it back.
+trap 'exit 1' INT TERM HUP
 echo "$eShape $nSeats $nLanes" > "$pDir/patch"
 : > "$pDir/made"
 trap '"$(dirname "$0")/remove" "$pDir"' EXIT
@@ -126,7 +131,7 @@ vPiece() {
   # /tmp/icc-KIND-XXXXXXXX; the scripts are wherever the checkout is, which
   # can hold a space, and read gives its last name the rest of the line.
   echo "$pPiece $pScripts" >> "$pDir/made"
-  trap - INT TERM HUP
+  trap 'exit 1' INT TERM HUP
   [ -z "$bSignalled" ] || exit 1
 }
 
@@ -299,5 +304,5 @@ esac
   echo "made nothing: $eShape $nSeats $nLanes" >&2
   exit 1
 }
-trap - EXIT
+trap - EXIT INT TERM HUP
 echo "$pDir"

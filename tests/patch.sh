@@ -7,7 +7,8 @@
 #          lane holds from a seat to its peers and read it back whole at
 #          every one, plain bytes back the other way, see a hold go when
 #          the patch does, see a piece that will not go named and tried
-#          again, remove it, see nothing left.
+#          again, remove it, see nothing left. A create cut off by a
+#          signal leaves nothing either.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -370,6 +371,27 @@ osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pSpaced/remove" "$pDir"
 [ ! -d "$pDir" ]
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
+# A signal between pieces is a create that cannot finish: it takes what it
+# made and exits 1, as one inside a piece does. This tr stalls the first line
+# of the map, and takes itself away so that the next tr is the real one.
+mkdir "$pWork/bin"
+printf '%s\n' '#!/bin/bash' 'rm -- "$0"' 'echo $$ > "${0%/*}/stalled"' \
+  'exec sleep 30' > "$pWork/bin/tr"
+chmod +x "$pWork/bin/tr"
+nPatches=$(ls -d /tmp/icc-patch-* 2>/dev/null | wc -l)
+nPipes=$(ls -d /tmp/icc-pipes-* 2>/dev/null | wc -l)
+PATH=$pWork/bin:$PATH "$pIccPatch/create" star 1 >/dev/null 2>&1 &
+pidCreate=$!
+while [ ! -s "$pWork/bin/stalled" ]; do
+  kill -0 $pidCreate 2>/dev/null || break
+done
+kill -TERM $pidCreate
+kill "$(cat "$pWork/bin/stalled")"
+nStatus=0
+wait $pidCreate || nStatus=$?
+[ "$nStatus" -eq 1 ]
+[ "$(ls -d /tmp/icc-patch-* 2>/dev/null | wc -l)" -eq "$nPatches" ]
+[ "$(ls -d /tmp/icc-pipes-* 2>/dev/null | wc -l)" -eq "$nPipes" ]
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
 trap - EXIT

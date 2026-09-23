@@ -27,6 +27,12 @@ rule below.
 - **KISS.** One way to do each thing. Prefer the OS primitive over a
   library. Prefer a shell script over a program. Prefer no dependency
   over one.
+- **Functions are welcome.** Logic needed in more than one place is
+  written once, as a function, and called. A function several pieces
+  need goes in one file they source by fixed path, as they reach
+  everything else here; that is sharing within the repo, not a
+  dependency. The same code written out in several places is how pieces
+  drift apart.
 - **Small.** If a file is getting long, you are adding scope, not
   features.
 - **No speculative work.** Build what is asked, not what might be asked

@@ -24,8 +24,9 @@
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal, and every piece it could not take
-# @exit 0 the patch is gone; 1 DIR is missing or not a patch, or a piece
-#       would not go and DIR is left standing
+# @exit 0 the patch is gone; 1 DIR is missing or not a patch, a piece
+#       would not go and DIR is left standing, or it was cut off by a
+#       signal
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -52,9 +53,16 @@ case $pDir in
     ;;
 esac
 bLeft=0
-# One question per skill, not one per piece: see list.
+# One question per skill, not one per piece: see list. The temp file goes
+# however this ends, and a signal ends it with 1.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+pListed=
+trap '[ -n "$pListed" ] && rm -f "$pListed" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pListed=$(mktemp)
-trap 'rm -f "$pListed"' EXIT
 cut -d' ' -f2- "$pDir/made" | sort -u | while read -r pScripts; do
   if [ -x "$pScripts/list" ]; then
     "$pScripts/list" | cut -d' ' -f1

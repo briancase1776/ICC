@@ -11,7 +11,7 @@
 # @stdin nothing
 # @stdout "DIR up|down SHAPE N LANES", one line per patch, in glob order
 # @stderr whatever a piece's own list says
-# @exit 0, with patches or without
+# @exit 0, with patches or without; 1 cut off by a signal
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -22,8 +22,15 @@ set -eu
 # Ask each skill once what it has, not once per piece it has: a sibling's list
 # names every piece of its kind on the box, so asking per piece makes listing
 # one patch cost as much as everyone else's work put together.
+# The temp file goes however this ends, and a signal ends it with 1.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+pListed=
+trap '[ -n "$pListed" ] && rm -f "$pListed" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pListed=$(mktemp)
-trap 'rm -f "$pListed"' EXIT
 cut -d' ' -f2- /tmp/icc-patch-*/made 2>/dev/null | sort -u |
   while read -r pScripts; do
     [ -x "$pScripts/list" ] && "$pScripts/list" | cut -d' ' -f1,2

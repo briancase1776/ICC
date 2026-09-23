@@ -8,7 +8,9 @@
 #          every one, plain bytes back the other way, see a hold go when
 #          the patch does, see a piece that will not go named and tried
 #          again, remove it, see nothing left. A create cut off by a
-#          signal leaves nothing either.
+#          signal leaves nothing either, and create, list and remove cut
+#          off just after they make a directory or a temp file take it
+#          with them.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -384,6 +386,59 @@ osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pSpaced/remove" "$pDir"
 [ ! -d "$pDir" ]
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
+# Cut off just after it makes its directory or its temp file, each script
+# takes it with it: create, list, and remove, which leaves the patch alone.
+##
+# @fn vCutOff()
+# @brief Cut a command off just after its first mktemp, and check it goes
+#        and takes what that made with it.
+# @details A stand-in mktemp makes what the real one would, prints it and
+#          waits, so the signal lands once the thing exists and before the
+#          command has its name: the moment a cleanup armed after mktemp
+#          misses. The stand-in takes itself away first, so any later
+#          mktemp in the command is the real one. The same check in every
+#          harness whose piece makes something.
+# @param $1... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1 and what its mktemp made is gone; it exits
+#         1 instead when not
+##
+vCutOff() {
+  local aCommand=("$@")
+  local pBin
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
+    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
+  chmod +x "$pBin/mktemp"
+  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill -TERM "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    rm -rf "$pMade"
+    exit 1
+  }
+}
+
+vCutOff "$pIccPatch/create" star 1
+vCutOff "$pIccPatch/list"
+pDir=$("$pIccPatch/create" star 1)
+osMine="$osMine $pDir"
+vCutOff "$pIccPatch/remove" "$pDir"
+"$pIccPatch/list" | grep -qx "$pDir up star 1 2"
+"$pIccPatch/remove" "$pDir"
 # A signal between pieces is a create that cannot finish: it takes what it
 # made and exits 1, as one inside a piece does. This tr stalls the first line
 # of the map, and takes itself away so that the next tr is the real one.

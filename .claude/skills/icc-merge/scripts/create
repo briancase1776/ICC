@@ -111,17 +111,23 @@ for pPipe; do
   done
   aSrcs+=("$pSrc")
 done
-pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 # Until the merge is whole it is not a merge: a create that cannot finish
-# takes its copiers and its directory with it. It kills them from its own
-# list and not from the pid file, because the file can be gone by then -- a
-# remove can take this directory while the open below is still waiting, and
-# a copier forked after that would answer to nothing. The handler exits so
-# the EXIT trap runs on a signal too.
+# takes its copiers and its directory with it, and exits 1.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+# aPids stays empty until there is a copier, as in Tee's create. The copiers
+# are killed from this list and not from the pid file, because the file can
+# be gone by then -- a remove can take this directory while the open below
+# is still waiting, and a copier forked after that would answer to nothing.
+pDir=
 aPids=()
-trap 'kill "${aPids[@]}" 2>/dev/null || :
-      rm -rf "$pDir"' EXIT
+trap '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+      [ -n "$pDir" ] && rm -rf "$pDir" || :
+      exit 1' EXIT
 trap 'exit 1' INT TERM HUP
+pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 {
   printf '%s\n' "$pDst" "$eSide"
   printf '%s\n' "${aSrcs[@]}"

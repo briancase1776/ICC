@@ -110,21 +110,27 @@ for pPipe; do
   done
   aDsts+=("$pDst")
 done
-pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 # Until the tee is whole it is not a tee: a create that cannot finish takes
-# its directory with it, and the copiers it started. aPids stays empty until
-# there is one, because kill with no pid is not this shell's to send. The
-# handler takes the two files create writes and rmdirs, never rm -rf, so a
-# directory that holds anything else is left where it is and says so. It
-# exits: without that, a signal caught between the last copier and the
-# disarm would clean up and let create print the path it just deleted.
+# its directory with it, and the copiers it started, and exits 1.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+# aPids stays empty until there is a copier, because kill with no pid is not
+# this shell's to send. The handler takes the two files create writes and
+# rmdirs, never rm -rf, so a directory that holds anything else is left
+# where it is and says so.
+pDir=
 aPids=()
-trap 'trap - EXIT INT TERM HUP
-      [ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
-      rm -f "$pDir/tee" "$pDir/pid"
-      rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
-        echo "left in place: $pDir" >&2
-      exit 1' EXIT INT TERM HUP
+trap '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+      if [ -n "$pDir" ]; then
+        rm -f "$pDir/tee" "$pDir/pid"
+        rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
+          echo "left in place: $pDir" >&2
+      fi
+      exit 1' EXIT
+trap 'exit 1' INT TERM HUP
+pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 {
   printf '%s\n' "$pSrc" "$eSide"
   printf '%s\n' "${aDsts[@]}"

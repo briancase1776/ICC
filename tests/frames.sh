@@ -8,8 +8,9 @@
 #          refuse a SIDE that is not a side, a pipe with an odd lane count
 #          or a lane that is a file on either side, and a count that is
 #          not a count, too big to count among them; do the round trip
-#          again on two lanes, one straw each way; remove the pipes. Runs
-#          in a directory of its own and touches nothing else.
+#          again on two lanes, one straw each way; remove the pipes. A
+#          write cut off just after it makes its hold takes the hold with
+#          it. Runs in a directory of its own and touches nothing else.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -110,6 +111,52 @@ osMade="$osMade $pStray"
 printf 'done' | "$pIccFrames/write" "$pStray" 0
 [[ $(timeout 5 "$pIccFrames/read" "$pStray" 1) == done ]]
 rm -f "$pStray/2x" "$pStray/"$'2\n3'
+# Cut off just after it makes its hold, a write takes it with it.
+##
+# @fn vCutOff()
+# @brief Cut a command off just after its first mktemp, and check it goes
+#        and takes what that made with it.
+# @details A stand-in mktemp makes what the real one would, prints it and
+#          waits, so the signal lands once the thing exists and before the
+#          command has its name: the moment a cleanup armed after mktemp
+#          misses. The stand-in takes itself away first, so any later
+#          mktemp in the command is the real one. The same check in every
+#          harness whose piece makes something.
+# @param $1... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1 and what its mktemp made is gone; it exits
+#         1 instead when not
+##
+vCutOff() {
+  local aCommand=("$@")
+  local pBin
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
+    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
+  chmod +x "$pBin/mktemp"
+  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill -TERM "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    rm -rf "$pMade"
+    exit 1
+  }
+}
+
+vCutOff "$pIccFrames/write" "$pDir" 0
 # Two lanes is one straw each way and the same script, as Frames' SKILL.md
 # says. Bigger than the one lane this side writes cannot be left on the wire
 # here at all, so the read drains while the write runs, as above; sized

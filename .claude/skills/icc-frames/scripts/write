@@ -118,9 +118,11 @@ vRelease() {
     kill "$pidCounter" 2>/dev/null
   } || :
 }
-trap 'vRelease
-      exit 1' INT TERM HUP
+# Armed before anything is made, as in every piece: vHold makes the hold
+# only after this, and each name vRelease reads is empty until what it names
+# exists. A signal exits 1, which runs vRelease on the way out.
 trap vRelease EXIT
+trap 'exit 1' INT TERM HUP
 
 ##
 # @fn vHold()

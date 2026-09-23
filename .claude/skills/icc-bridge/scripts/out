@@ -26,10 +26,14 @@ pDir=${1:?usage: out DIR SIDE}
 eSide=${2:?usage: out DIR SIDE}
 set -eu
 pIccFrames=$(cd "$(dirname "$0")/../../icc-frames/scripts" && pwd)
+# The temp file goes however this ends, and a signal ends it with 1.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+pTemp=
+trap '[ -n "$pTemp" ] && rm -f "$pTemp" || :' EXIT
+trap 'exit 1' INT TERM HUP
 pTemp=$(mktemp)
-trap 'rm -f "$pTemp"' EXIT
-trap 'trap - EXIT INT TERM HUP
-      rm -f "$pTemp"
-      exit 1' INT TERM HUP
 "$pIccFrames/read" "$pDir" "$eSide" > "$pTemp"
 base64 "$pTemp"

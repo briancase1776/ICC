@@ -4,12 +4,12 @@
 # @brief Prove the pipe: make it, refuse bad counts, carry bytes, remove it.
 # @details Prove the pipe: create it, refuse a bad lane count, hand bytes
 #          from one process to another and back again on every pair,
-#          remove it. A create that cannot finish is made to fail three
-#          times: before its first fifo, after its last, and on a hangup
-#          while it waits on its first. What is left in /tmp is checked
-#          only for new directories that are empty, since one with lanes
-#          in it may be anyone's pipe, so a leak from the second failure
-#          would pass.
+#          remove it. A create that cannot finish is made to fail four
+#          times: before its first fifo, after its last, on a hangup while
+#          it waits on its first, and on a signal just after it makes its
+#          directory. What is left in /tmp is checked only for new
+#          directories that are empty, since one with lanes in it may be
+#          anyone's pipe, so a leak from the second failure would pass.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -61,6 +61,52 @@ kill "$(cat "$pFakeBin/stalled")"
 nStatus=0
 wait $pidCreate || nStatus=$?
 [ "$nStatus" -eq 1 ]
+# Cut off just after its directory is made, a create takes it with it.
+##
+# @fn vCutOff()
+# @brief Cut a command off just after its first mktemp, and check it goes
+#        and takes what that made with it.
+# @details A stand-in mktemp makes what the real one would, prints it and
+#          waits, so the signal lands once the thing exists and before the
+#          command has its name: the moment a cleanup armed after mktemp
+#          misses. The stand-in takes itself away first, so any later
+#          mktemp in the command is the real one. The same check in every
+#          harness whose piece makes something.
+# @param $1... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1 and what its mktemp made is gone; it exits
+#         1 instead when not
+##
+vCutOff() {
+  local aCommand=("$@")
+  local pBin
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
+    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
+  chmod +x "$pBin/mktemp"
+  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill -TERM "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    rm -rf "$pMade"
+    exit 1
+  }
+}
+
+vCutOff scripts/create 2
 for pPipe in /tmp/icc-pipes-*/; do
   printf '%s\n' "${aBefore[@]}" | grep -qxF "$pPipe" ||
     [ -n "$(find "$pPipe" -mindepth 1 -print -quit)" ]

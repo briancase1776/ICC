@@ -2,12 +2,13 @@
 ##
 # @file tee.sh
 # @brief Prove the tee: one pipe's side copied whole onto two others.
-# @details Prove the tee: get three pipes, tee side 0 of one into the other
-#          two, push a Frames payload bigger than one lane holds, read it
-#          back whole from both outlets, then plain bytes on one lane,
-#          remove it. The pipes stay up. Bad arguments are refused, a
-#          create cut off by a signal takes itself with it, and remove
-#          and list leave alone what create did not make.
+# @details Prove the tee: get three pipes, tee side 0 of one into the
+#          other two, push a Frames payload bigger than one lane holds,
+#          read it back whole from both outlets, then plain bytes on one
+#          lane, remove it. The pipes stay up. Bad arguments are refused,
+#          a create cut off by a signal, just after it makes its directory
+#          or inside its lane loop, takes itself with it, and remove and
+#          list leave alone what create did not make.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -110,6 +111,52 @@ printf 'plain' > "$pPipeA/2"
 # two files it made, not the directory. A look-alike holding a stranger's pid
 # loses its own two files and nothing else; one with a file beside them is
 # left where it is. list does not announce a directory with no DIR/tee.
+# Cut off just after its directory is made, a create takes it with it.
+##
+# @fn vCutOff()
+# @brief Cut a command off just after its first mktemp, and check it goes
+#        and takes what that made with it.
+# @details A stand-in mktemp makes what the real one would, prints it and
+#          waits, so the signal lands once the thing exists and before the
+#          command has its name: the moment a cleanup armed after mktemp
+#          misses. The stand-in takes itself away first, so any later
+#          mktemp in the command is the real one. The same check in every
+#          harness whose piece makes something.
+# @param $1... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1 and what its mktemp made is gone; it exits
+#         1 instead when not
+##
+vCutOff() {
+  local aCommand=("$@")
+  local pBin
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
+    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
+  chmod +x "$pBin/mktemp"
+  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill -TERM "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    rm -rf "$pMade"
+    exit 1
+  }
+}
+
+vCutOff "$pIccTee/create" "$pPipeA" 0 "$pPipeB"
 # The trap: a create cut off inside its lane loop takes its directory and the
 # copiers it started with it. A wide pipe makes that loop long enough to
 # signal into, and the signal waits for the new tee's pid file, which create

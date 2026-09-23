@@ -94,15 +94,24 @@ nLanes=$((10#$nLanes))
 pIccPipes=$(cd "$(dirname "$0")/../../icc-pipes/scripts" && pwd)
 pIccTee=$(cd "$(dirname "$0")/../../icc-tee/scripts" && pwd)
 pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
-pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
-trap 'rm -rf "$pDir"' EXIT
-# A signal is a create that cannot finish, like any other: the handler exits,
-# so the EXIT trap takes what was made and create says 1. vPiece swaps it for
-# its own while a piece is made, and puts it back.
+# A create that cannot finish takes what it made with it, and exits 1: its
+# directory, until the directory holds the two files remove reads, and then
+# everything, by remove.
+# Armed before anything is made, as in every piece: a name is empty until
+# what it names exists, and bash runs a caught signal only once the $( ) that
+# makes a thing, and its assignment, are done, so the handler always knows
+# what there is to take. A signal exits 1, which runs the handler.
+# vPiece swaps the signal handler for its own while a piece is made, and
+# puts it back.
+pDir=
+trap '[ -n "$pDir" ] && rm -rf "$pDir" || :
+      exit 1' EXIT
 trap 'exit 1' INT TERM HUP
+pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 echo "$eShape $nSeats $nLanes" > "$pDir/patch"
 : > "$pDir/made"
-trap '"$(dirname "$0")/remove" "$pDir"' EXIT
+trap '"$(dirname "$0")/remove" "$pDir"
+      exit 1' EXIT
 
 ##
 # @fn vPiece()

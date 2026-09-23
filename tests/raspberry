@@ -1,0 +1,62 @@
+#!/bin/bash
+##
+# @file raspberry
+# @brief Print one raspberry, one of sixteen kinds, picked from urandom.
+# @details raspberry [BYTES]. A raspberry is a lead, a run of its body
+#          letter, and a run of ~, the spittle: PTTTT~~~, PFFFF~~,
+#          THPPP~. Which of the sixteen kinds, and how long each run is,
+#          come from /dev/urandom: the kind from the low four bits of one
+#          byte, so no kind is likelier than another. With no BYTES it is
+#          moot-sized, 5 to 40 of body and 1 to 15 of spittle. With BYTES
+#          it is exactly that long, the lead and then the body and the
+#          spittle each cut as one dd block, their split drawn at random,
+#          so a test can size a raspberry to sit inside a frame, fill one,
+#          or spill over. A raspberry is test data that makes itself and
+#          checks itself: drawn fresh each time, one that arrives short,
+#          long, or mixed with another is not the one that was blown.
+# @stdin nothing
+# @stdout the raspberry, with no newline
+# @stderr the reason, on refusal
+# @exit 0 the raspberry is printed; 1 BYTES is refused
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+nBytes=${1-}
+set -eu
+# Sixteen kinds, LEAD:BODY. Every lead is one or two letters, so four bytes
+# always hold a lead, a body and some spittle.
+aKinds=(P:T PF:F PB:B TH:P B:R BL:L BZ:Z PH:T
+  FF:T TH:B PS:S PR:R PT:H BF:F TP:P PW:W)
+read -r nPick nA nB < <(od -An -N3 -tu1 /dev/urandom)
+osKind=${aKinds[nPick % 16]}
+osLead=${osKind%:*}
+osBody=${osKind#*:}
+if [ -z "$nBytes" ]; then
+  nBody=$((5 + nA % 36))
+  nSpit=$((1 + nB % 15))
+else
+  case $nBytes in
+    *[!0-9]*)
+      echo "raspberry: BYTES must be a whole number: $nBytes" >&2
+      exit 1
+      ;;
+  esac
+  [[ $nBytes =~ ^0*[0-9]{1,18}$ ]] || {
+    echo "raspberry: BYTES too big: $nBytes" >&2
+    exit 1
+  }
+  nBytes=$((10#$nBytes))
+  [ "$nBytes" -ge 4 ] || {
+    echo "raspberry: BYTES must be 4 or more: $nBytes" >&2
+    exit 1
+  }
+  nRoom=$((nBytes - ${#osLead}))
+  nSpit=$((1 + (nA * 256 + nB) % (nRoom - 1)))
+  nBody=$((nRoom - nSpit))
+fi
+printf '%s' "$osLead"
+dd if=/dev/zero bs="$nBody" count=1 status=none | tr '\0' "$osBody"
+dd if=/dev/zero bs="$nSpit" count=1 status=none | tr '\0' '~'

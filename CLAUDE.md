@@ -11,7 +11,9 @@ instruction to that session.
 Six skills under one `.claude/`, one harness apiece under `tests/`, and
 this file.
 
-    ./tests/run.sh    every piece's harness, bottom up
+    ./tests/run.sh               every piece's harness, bottom up
+    ./tests/raspberry [BYTES]    test data: a raspberry, one of sixteen
+                                 kinds, fresh from /dev/urandom, BYTES long
 
 Pieces reach each other by fixed path: a script in
 `.claude/skills/icc-patch/scripts/` finds Pipes at

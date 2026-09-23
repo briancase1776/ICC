@@ -354,25 +354,10 @@ pReadEnd=$(pAt 0 1 p)
 # fitting the shape has. Four rounds, Opening, two Rotations and the Final;
 # each round every seat blows a raspberry at the next, the hop tees copy each
 # one to the chair through the merge, and the chair blows one at every seat
-# through the broadcast tee. Every seat hands back its spittle count.
-
-##
-# @fn osRaspberry()
-# @brief Print a raspberry: P, 5 to 40 T's and 1 to 15 ~'s, from urandom.
-# @details The ~'s are spittle. Drawn fresh every time, a raspberry checks
-#          itself: one that arrives short, long, or mixed with another's
-#          is not the one that was blown.
-# @stdout the raspberry, with no newline
-# @return 0
-##
-osRaspberry() {
-  local nT
-  local nS
-  read -r nT nS < <(od -An -N2 -tu1 /dev/urandom)
-  printf 'P'
-  printf 'T%.0s' $(seq $((5 + nT % 36)))
-  printf '~%.0s' $(seq $((1 + nS % 15)))
-}
+# through the broadcast tee. Every seat hands back its spittle count. The
+# raspberries come from tests/raspberry, fresh each time; in the Final the
+# chair's is 20000 bytes and spills over five frames, which the broadcast
+# tee, one writer to a lane, carries whole.
 
 ##
 # @fn vSeat()
@@ -402,7 +387,7 @@ vSeat() {
   pHop=$(pAt "$iSeat" 1 $(( (iSeat + 2) % 3 )))
   pChair=$(pAt "$iSeat" 1 p)
   for iRound in 1 2 3 4; do
-    osBlown=$(osRaspberry)
+    osBlown=$(tests/raspberry)
     echo "$osBlown" >> "$pWork/blown$iSeat"
     printf '%s' "$osBlown" | "$pIccFrames/write" "$pSend" 0
     timeout 10 "$pIccFrames/read" "$pHop" 1 >> "$pWork/hop$iSeat"
@@ -422,8 +407,8 @@ for iSeat in 0 1 2; do
   vSeat "$iSeat" &
   aSeats+=($!)
 done
-for iRound in 1 2 3 4; do
-  osBlown=$(osRaspberry)
+for nBytes in '' '' '' 20000; do
+  osBlown=$(tests/raspberry "$nBytes")
   echo "$osBlown" >> "$pWork/blownp"
   printf '%s' "$osBlown" | "$pIccFrames/write" "$pBroadcast" 0
   for iSeat in 0 1 2; do

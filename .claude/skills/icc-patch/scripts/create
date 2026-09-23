@@ -92,14 +92,15 @@ trap '"$(dirname "$0")/remove" "$pDir"' EXIT
 #          come out deaf to the TERM Pipes' own remove sends it. A
 #          handler is reset to default on exec, and this one only sets a
 #          flag, so the piece is written down first and the signal
-#          honoured after. A failure inside $( ) is not set -e's
+#          honoured after. bSignalled is that flag: empty, and 1 once a
+#          signal has come. A failure inside $( ) is not set -e's
 #          business here, so each says so itself.
 # @param $1 pScripts - the scripts directory of the skill that makes it
 # @param $2... - what that skill's create takes
 # @stderr what that skill's create says, on refusal
 # @global pDir - read, the patch, whose made file it adds a line to
 # @global pPiece - set, the directory that skill's create printed
-# @global bSignalled - set, empty, and 1 once a signal has come
+# @global bSignalled - set, whether a signal came while it worked
 # @return 0 the piece is made and written down; it exits 1 instead when
 #         the piece could not be made, or a signal came while it was
 ##
@@ -148,6 +149,8 @@ vMerge() { vPiece "$pIccMerge" "$@"; }
 ##
 # @fn vEnd()
 # @brief Write one end into the map.
+# @details eSide is 0 or 1. A seat is a number, p for the parent, or -
+#          for nobody, and osPeers is seats of the same kinds.
 # @param $1 osSeat - the seat that holds it: a number, p, or - for nobody
 # @param $2 eSide - the side of the pipe it holds, 0 or 1
 # @param $3 pCable - the pipe it is on

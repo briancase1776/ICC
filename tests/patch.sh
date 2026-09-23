@@ -28,6 +28,7 @@ pIccPatch=.claude/skills/icc-patch/scripts
 ##
 # @fn pEnd()
 # @brief Print the pipe a seat holds a side of, with a given peer on it.
+# @details eSide is 0 or 1. PEERS are matched whole, so 1 is not 10.
 # @param $1 osSeat - the seat, a number or p
 # @param $2 eSide - the side it holds, 0 or 1
 # @param $3 osPeer - one of the seats in its PEERS
@@ -46,6 +47,7 @@ pEnd() {
 ##
 # @fn pAt()
 # @brief Print the pipe pEnd finds, and stop here if it finds none.
+# @details eSide is 0 or 1, as for pEnd.
 # @param $1 osSeat - the seat, a number or p
 # @param $2 eSide - the side it holds, 0 or 1
 # @param $3 osPeer - one of the seats in its PEERS

@@ -1,19 +1,36 @@
 #!/bin/bash
-# .claude/skills/icc-bridge/scripts/in
-# in DIR SIDE < text: take the text a message carried and put the payload it
-# spells on the lanes SIDE writes. Whole or nothing: a character outside the
-# alphabet refuses the text, and the wire is untouched.
+##
+# @file in
+# @brief Put the payload a message's text spells on the lanes SIDE writes.
+# @details in DIR SIDE. DIR is what Pipes' create printed, or an end in a
+#          Patch map. SIDE is 0 or 1, and Frames refuses anything else.
+#          The text is base64, as base64(1) reads it. Whole or nothing: a
+#          character outside the alphabet refuses the text, and the wire
+#          is untouched. The payload goes on the wire by Frames' write,
+#          from beside this skill.
+# @stdin the text
+# @stdout nothing
+# @stderr the reason, on refusal, Frames' included
+# @exit 0 the payload is on the wire; 1 the text is not the alphabet, or
+#       Frames refused the payload
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-pDir=${1:?usage: in DIR SIDE}; eSide=${2:?usage: in DIR SIDE}
+# MIT Licence. See LICENCE.TXT
+##
+pDir=${1:?usage: in DIR SIDE}
+eSide=${2:?usage: in DIR SIDE}
 set -eu
 pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
 pIccFrames=$(cd "$pTop/.claude/skills/icc-frames/scripts" && pwd)
 pTemp=$(mktemp)
 trap 'rm -f "$pTemp"' EXIT
-trap 'trap - EXIT INT TERM HUP; rm -f "$pTemp"; exit 1' INT TERM HUP
-base64 -d > "$pTemp" 2>/dev/null ||
-  { echo "in: not the alphabet; nothing put on the wire" >&2; exit 1; }
+trap 'trap - EXIT INT TERM HUP
+      rm -f "$pTemp"
+      exit 1' INT TERM HUP
+base64 -d > "$pTemp" 2>/dev/null || {
+  echo "in: not the alphabet; nothing put on the wire" >&2
+  exit 1
+}
 "$pIccFrames/write" "$pDir" "$eSide" < "$pTemp"

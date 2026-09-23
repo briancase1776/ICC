@@ -1,36 +1,83 @@
 #!/bin/bash
-# .claude/skills/icc-merge/scripts/remove
-# remove DIR: stop the merge, delete its directory. DIR is what create printed.
-# Only this merge's own copiers are killed, and only the two files create
-# wrote are deleted. The pipes on either end are left exactly as they were.
+##
+# @file remove
+# @brief Stop a merge and delete its directory.
+# @details remove DIR. DIR is what create printed, spelled any way that
+#          resolves to a /tmp/icc-merge-* directory. It must hold what
+#          create wrote: a merge file naming an absolute DST, a SIDE of
+#          0 or 1 and at least one SRC, every SRC absolute, and a pid
+#          file whose every line is a number, which an empty one is. A
+#          copier is killed only while it is still the dd(1) on the
+#          inlet lane its place in the pid file names: on its fd 0 once
+#          it has opened that lane, and as if= in its argv while the
+#          open waits. Then the two files go, and the directory with
+#          them unless something else is in it. The pipes on either end
+#          are left exactly as they were.
+# @stdin nothing
+# @stdout nothing
+# @stderr the reason, on refusal
+# @exit 0 the merge is gone; 1 DIR is missing or not a merge, or held
+#       something create did not make and was left in place
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 pArg=${1:?usage: remove DIR}
 set -eu
 # Canonical first. A path is what it resolves to, not how it is spelled, and
 # the test below is about the path: /tmp/icc-merge-XXXXXXXX/../tree matches
 # the name and is not one.
 pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
-[ -n "$pDir" ] && [ -d "$pDir" ] && [ -s "$pDir/merge" ] && [ -f "$pDir/pid" ] ||
-  { echo "not a merge: $pArg" >&2; exit 1; }
-case $pDir in /tmp/icc-merge-*) ;; *) echo "not a merge: $pArg" >&2; exit 1 ;; esac
+[ -n "$pDir" ] && [ -d "$pDir" ] &&
+  [ -s "$pDir/merge" ] && [ -f "$pDir/pid" ] || {
+  echo "not a merge: $pArg" >&2
+  exit 1
+}
+case $pDir in
+  /tmp/icc-merge-*)
+    ;;
+  *)
+    echo "not a merge: $pArg" >&2
+    exit 1
+    ;;
+esac
 # What create wrote: DST absolute, SIDE 0 or 1, a SRC per line, all absolute,
 # and a pid per copier, every one a number. A directory that does not hold
 # that was not made here, so its files are not this script's to delete. The
 # pid file is empty until the first copier is forked, and that is a merge too.
 eSide=$(sed -n 2p "$pDir/merge")
 mapfile -t aSrcs < <(sed -n '3,$p' "$pDir/merge")
-case $(sed -n 1p "$pDir/merge"):$eSide in /*:0|/*:1) ;;
-  *) echo "not a merge: $pArg" >&2; exit 1 ;; esac
-[ "${#aSrcs[@]}" -ge 1 ] || { echo "not a merge: $pArg" >&2; exit 1; }
+case $(sed -n 1p "$pDir/merge"):$eSide in
+  /*:0|/*:1)
+    ;;
+  *)
+    echo "not a merge: $pArg" >&2
+    exit 1
+    ;;
+esac
+[ "${#aSrcs[@]}" -ge 1 ] || {
+  echo "not a merge: $pArg" >&2
+  exit 1
+}
 for pSrc in "${aSrcs[@]}"; do
-  case $pSrc in /*) ;; *) echo "not a merge: $pArg" >&2; exit 1 ;; esac
+  case $pSrc in
+    /*)
+      ;;
+    *)
+      echo "not a merge: $pArg" >&2
+      exit 1
+      ;;
+  esac
 done
 nPids=$(grep -c '^[0-9][0-9]*$' "$pDir/pid" || :)
-[ "$nPids" -eq "$(wc -l < "$pDir/pid")" ] || { echo "not a merge: $pArg" >&2; exit 1; }
-nSrcs=${#aSrcs[@]}; iCopier=0
+[ "$nPids" -eq "$(wc -l < "$pDir/pid")" ] || {
+  echo "not a merge: $pArg" >&2
+  exit 1
+}
+nSrcs=${#aSrcs[@]}
+iCopier=0
 while read -r pidCopier; do
   # A pid outlives nothing here: it can be gone, or another process, by the
   # time this runs. This merge's copiers are the pids in this merge's own pid
@@ -41,8 +88,10 @@ while read -r pidCopier; do
   # the same -- so it is the pid file that says which are ours.
   pWant=${aSrcs[iCopier % nSrcs]}/$((eSide + 2 * (iCopier / nSrcs)))
   if [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "$pWant" ] ||
-     [ "$(tr '\0' '\n' 2>/dev/null < "/proc/$pidCopier/cmdline" | sed -n 2p)" = "if=$pWant" ]
-  then kill "$pidCopier" 2>/dev/null || :
+     [ "$(tr '\0' '\n' 2>/dev/null < "/proc/$pidCopier/cmdline" |
+          sed -n 2p)" = "if=$pWant" ]
+  then
+    kill "$pidCopier" 2>/dev/null || :
   fi
   iCopier=$((iCopier + 1))
 done < "$pDir/pid"
@@ -50,4 +99,7 @@ done < "$pDir/pid"
 # refuses a directory with anything left in it, so a wrong path costs a
 # look-alike its own two files and never a stranger's tree.
 rm -f "$pDir/merge" "$pDir/pid"
-rmdir "$pDir" || { echo "not a merge, left in place: $pArg" >&2; exit 1; }
+rmdir "$pDir" || {
+  echo "not a merge, left in place: $pArg" >&2
+  exit 1
+}

@@ -1,30 +1,67 @@
 #!/bin/bash
-# .claude/skills/icc-merge/scripts/create
-# create DST SIDE SRC...: copy what SIDE writes into every pipe SRC onto the
-# same lanes of pipe DST, byte for byte, in order per inlet, until removed.
-# Print the merge's directory. Every pipe must exist, every lane of it must be
-# a lane, and all of them must have the same count; no inlet is the outlet and
-# none is given twice; the merge makes nothing but itself.
+##
+# @file create
+# @brief Copy what SIDE writes into every SRC onto DST, and print the merge.
+# @details create DST SIDE SRC... DST and every SRC are pipes Pipes made,
+#          every lane of them a fifo, all with the same lane count. SIDE
+#          is 0 or 1, the side whose writes are copied. No SRC is DST
+#          and none is given twice, in any spelling. For each lane SIDE
+#          writes, of each SRC, a copier, dd(1) at bs=4096, takes that
+#          lane of that SRC and writes it to that lane of DST, byte for
+#          byte, in order per inlet, until removed. create opens each
+#          lane of DST itself, so a DST whose hold is dead blocks create,
+#          where the caller's bound reaches it. The merge's directory
+#          holds two files: merge, naming DST, SIDE and each SRC a line,
+#          and pid, one copier a line in lane order, SRC order within a
+#          lane. The merge makes nothing but itself.
+#          A create that cannot finish takes its copiers and its
+#          directory with it. Once the merge is whole that is no longer
+#          armed, so a create that then fails to print leaves a whole
+#          merge nobody was told of, which list shows and remove takes.
+# @stdin nothing
+# @stdout the merge's directory, one line
+# @stderr the reason, on refusal
+# @exit 0 the merge is made and printed; 1 the arguments are refused,
+#       or the merge could not be finished or was removed while it
+#       started, and none of it is left, or it could not be printed and
+#       all of it is
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-pDst=$1; eSide=$2
+# MIT Licence. See LICENCE.TXT
+##
+pDst=$1
+eSide=$2
 set -eu
-[ $# -ge 3 ] || { echo "usage: create DST SIDE SRC..." >&2; exit 1; }
+[ $# -ge 3 ] || {
+  echo "usage: create DST SIDE SRC..." >&2
+  exit 1
+}
 shift 2
-[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || { echo "side is 0 or 1" >&2; exit 1; }
-[ -p "$pDst/0" ] || { echo "not a pipe: $pDst" >&2; exit 1; }
+[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || {
+  echo "side is 0 or 1" >&2
+  exit 1
+}
+[ -p "$pDst/0" ] || {
+  echo "not a pipe: $pDst" >&2
+  exit 1
+}
 nLanes=$(ls -- "$pDst" | grep -c '^[0-9][0-9]*$')
 # Every lane, not only the first. A numeric entry that is not a lane counts
 # toward the count and then kills its copier on open, where nothing can say
 # so: a copier's stderr goes nowhere and list only ever says down.
 for pPipe in "$pDst" "$@"; do
-  [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] ||
-    { echo "lanes differ: $pPipe" >&2; exit 1; }
+  [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
+    echo "lanes differ: $pPipe" >&2
+    exit 1
+  }
   iLane=0
   while [ "$iLane" -lt "$nLanes" ]; do
-    [ -p "$pPipe/$iLane" ] || { echo "not a pipe: $pPipe" >&2; exit 1; }
+    [ -p "$pPipe/$iLane" ] || {
+      echo "not a pipe: $pPipe" >&2
+      exit 1
+    }
     iLane=$((iLane + 1))
   done
 done
@@ -32,15 +69,21 @@ done
 # argv all get the canonical path, so the path list prints is the path that
 # finds the copiers.
 pDst=$(readlink -f -- "$pDst")
-aSrcs=(); for pPipe; do aSrcs+=("$(readlink -f -- "$pPipe")"); done
+aSrcs=()
+for pPipe; do aSrcs+=("$(readlink -f -- "$pPipe")"); done
 for pSrc in "${aSrcs[@]}"; do
-  [ "$pSrc" != "$pDst" ] ||
-    { echo "inlet is the outlet: $pSrc" >&2; exit 1; }
+  [ "$pSrc" != "$pDst" ] || {
+    echo "inlet is the outlet: $pSrc" >&2
+    exit 1
+  }
 done
 # Two copiers on one inlet lane are two readers of it, and the order it went
 # in on that inlet is the one thing a merge promises.
 pDup=$(printf '%s\n' "${aSrcs[@]}" | sort | uniq -d | sed -n 1p)
-[ -z "$pDup" ] || { echo "inlet twice: $pDup" >&2; exit 1; }
+[ -z "$pDup" ] || {
+  echo "inlet twice: $pDup" >&2
+  exit 1
+}
 pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 # Until the merge is whole it is not a merge: a create that cannot finish
 # takes its copiers and its directory with it. It kills them from its own
@@ -49,9 +92,13 @@ pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 # a copier forked after that would answer to nothing. The handler exits so
 # the EXIT trap runs on a signal too.
 aPids=()
-trap 'kill "${aPids[@]}" 2>/dev/null || :; rm -rf "$pDir"' EXIT
+trap 'kill "${aPids[@]}" 2>/dev/null || :
+      rm -rf "$pDir"' EXIT
 trap 'exit 1' INT TERM HUP
-{ printf '%s\n' "$pDst" "$eSide"; printf '%s\n' "${aSrcs[@]}"; } > "$pDir/merge"
+{
+  printf '%s\n' "$pDst" "$eSide"
+  printf '%s\n' "${aSrcs[@]}"
+} > "$pDir/merge"
 # Both files from here on, so a merge is the same shape to list and to remove
 # before the first copier is forked as after. The open below can wait forever.
 : > "$pDir/pid"
@@ -71,8 +118,11 @@ while [ "$iLane" -lt "$nLanes" ]; do
     # diagnostic on it would be bytes no inlet ever wrote -- so dd's summary
     # needs no status=none. dd opens if= onto its stdin, which is /dev/null
     # until it has, and that fd is what list and remove know a copier by.
-    { trap - EXIT INT TERM HUP; exec >&3 2>/dev/null 3>&-
-      exec dd if="$pSrc/$iLane" bs=4096 < /dev/null; } &
+    {
+      trap - EXIT INT TERM HUP
+      exec >&3 2>/dev/null 3>&-
+      exec dd if="$pSrc/$iLane" bs=4096 < /dev/null
+    } &
     aPids+=($!)
     echo $! >> "$pDir/pid"
   done
@@ -82,7 +132,9 @@ done
 # Still ours? A remove that ran while an open above waited took the directory,
 # and these copiers are now merging into a merge that no longer exists, which
 # nothing can list and nothing can stop. They are this shell's to end.
-[ -d "$pDir" ] && [ -f "$pDir/merge" ] && [ -f "$pDir/pid" ] ||
-  { echo "removed while starting: $pDir" >&2; exit 1; }
+[ -d "$pDir" ] && [ -f "$pDir/merge" ] && [ -f "$pDir/pid" ] || {
+  echo "removed while starting: $pDir" >&2
+  exit 1
+}
 trap - EXIT INT TERM HUP
 echo "$pDir"

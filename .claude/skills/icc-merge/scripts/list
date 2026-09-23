@@ -1,11 +1,24 @@
 #!/bin/bash
-# .claude/skills/icc-merge/scripts/list
-# list: one line per merge, "DIR up|down DST SIDE SRC...".
-# Up means every copier still has its own inlet lane open to read.
+##
+# @file list
+# @brief One line per merge: its directory, up or down, and its merge file.
+# @details list takes nothing. A merge is a /tmp/icc-merge-* directory
+#          with a merge file naming at least one SRC. eState is up or
+#          down: up when the pid file names at least one copier and
+#          every one of them still has its own inlet lane open on fd 0,
+#          and down otherwise. A copier's inlet lane is read off its
+#          place in the pid file: SRC order within a lane, and lanes
+#          from SIDE in steps of two.
+# @stdin nothing
+# @stdout "DIR up|down DST SIDE SRC...", one line per merge, in glob order
+# @stderr nothing
+# @exit 0, with merges or without
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 for pDir in /tmp/icc-merge-*/; do
   pDir=${pDir%/}
   # A directory of the right name is not a merge. An unfinished create and a
@@ -23,9 +36,12 @@ for pDir in /tmp/icc-merge-*/; do
   # otherwise. The mark is the inlet lane on fd 0, where dd puts if=,
   # canonically spelled; the outlet lane would not do, since two merges onto
   # one outlet share it.
-  eState=down; iCopier=0; nUp=0
+  eState=down
+  iCopier=0
+  nUp=0
   for pidCopier in $(cat "$pDir/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "${aSrcs[iCopier % nSrcs]}/$((eSide + 2 * (iCopier / nSrcs)))" ] &&
+    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = \
+      "${aSrcs[iCopier % nSrcs]}/$((eSide + 2 * (iCopier / nSrcs)))" ] &&
       nUp=$((nUp + 1))
     iCopier=$((iCopier + 1))
   done

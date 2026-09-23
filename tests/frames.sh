@@ -64,11 +64,12 @@ wait $pidRead
 cmp big bigout
 # A SIDE that is not a side is refused before anything is opened, so the
 # pipe is as it was: <> creates, and a file among the lanes outlives them.
-osBefore=$(ls "$pDir")
+aBefore=("$pDir"/*)
 "$pIccFrames/write" "$pDir" 2 < /dev/null 2>/dev/null && exit 1
 "$pIccFrames/read" "$pDir" 'x[$(touch pwned)]' 2>/dev/null && exit 1
 [ ! -e pwned ]
-[ "$(ls "$pDir")" = "$osBefore" ]
+aAfter=("$pDir"/*)
+[ "${aAfter[*]}" = "${aBefore[*]}" ]
 # A count that is not a count is a failure, and a leading zero is base ten.
 printf 'garbage\n' 1<> "$pDir/0"
 timeout 5 "$pIccFrames/read" "$pDir" 1 >/dev/null 2>&1 && exit 1
@@ -99,14 +100,16 @@ timeout 1 "$pIccFrames/read" "$pBroken" 1 >/dev/null 2>&1 || nStatus=$?
 [ ! -s "$pBroken/1" ]
 rm -f "$pBroken/1"
 mkfifo "$pBroken/1"
-# Lanes are counted as the fittings count them: a name that only starts with
-# a digit is not a lane, and does not make the count odd.
+# Lanes are counted as the fittings count them, from a glob: a name that only
+# starts with a digit is not a lane, nor is one with a newline in it, which
+# ls prints as two lines of digits and a count of its output took for two.
 pStray=$("$pIccPipes/create" 2)
 osMade="$osMade $pStray"
 : > "$pStray/2x"
+: > "$pStray/"$'2\n3'
 printf 'done' | "$pIccFrames/write" "$pStray" 0
 [[ $(timeout 5 "$pIccFrames/read" "$pStray" 1) == done ]]
-rm -f "$pStray/2x"
+rm -f "$pStray/2x" "$pStray/"$'2\n3'
 # Two lanes is one straw each way and the same script, as Frames' SKILL.md
 # says. Bigger than the one lane this side writes cannot be left on the wire
 # here at all, so the read drains while the write runs, as above; sized

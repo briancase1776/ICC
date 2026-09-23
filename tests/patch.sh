@@ -21,6 +21,9 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+# What is in /tmp is counted from globs, never from ls, and a glob that
+# matches nothing is no paths at all, not the pattern itself.
+shopt -s nullglob
 cd "$(dirname "$0")/.."
 pIccPipes=.claude/skills/icc-pipes/scripts
 pIccFrames=.claude/skills/icc-frames/scripts
@@ -388,8 +391,10 @@ mkdir "$pWork/bin"
 printf '%s\n' '#!/bin/bash' 'rm -- "$0"' 'echo $$ > "${0%/*}/stalled"' \
   'exec sleep 30' > "$pWork/bin/tr"
 chmod +x "$pWork/bin/tr"
-nPatches=$(ls -d /tmp/icc-patch-* 2>/dev/null | wc -l)
-nPipes=$(ls -d /tmp/icc-pipes-* 2>/dev/null | wc -l)
+aPatches=(/tmp/icc-patch-*/)
+aPipes=(/tmp/icc-pipes-*/)
+nPatches=${#aPatches[@]}
+nPipes=${#aPipes[@]}
 PATH=$pWork/bin:$PATH "$pIccPatch/create" star 1 >/dev/null 2>&1 &
 pidCreate=$!
 while [ ! -s "$pWork/bin/stalled" ]; do
@@ -400,8 +405,10 @@ kill "$(cat "$pWork/bin/stalled")"
 nStatus=0
 wait $pidCreate || nStatus=$?
 [ "$nStatus" -eq 1 ]
-[ "$(ls -d /tmp/icc-patch-* 2>/dev/null | wc -l)" -eq "$nPatches" ]
-[ "$(ls -d /tmp/icc-pipes-* 2>/dev/null | wc -l)" -eq "$nPipes" ]
+aPatches=(/tmp/icc-patch-*/)
+aPipes=(/tmp/icc-pipes-*/)
+[ "${#aPatches[@]}" -eq "$nPatches" ]
+[ "${#aPipes[@]}" -eq "$nPipes" ]
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
 trap - EXIT

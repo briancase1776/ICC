@@ -22,6 +22,9 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+# What is in /tmp is counted from globs, never from ls, and a glob that
+# matches nothing is no paths at all, not the pattern itself.
+shopt -s nullglob
 cd "$(dirname "$0")/../.claude/skills/icc-pipes"
 scripts/create 3 2>/dev/null && exit 1
 scripts/create 09 2>/dev/null && exit 1
@@ -37,7 +40,7 @@ rm -rf "$pFake"
 pFakeBin=$(mktemp -d)
 printf '#!/bin/sh\nexit 1\n' > "$pFakeBin/mkfifo"
 chmod +x "$pFakeBin/mkfifo"
-osBefore=$(ls -d /tmp/icc-pipes-*/ 2>/dev/null || :)
+aBefore=(/tmp/icc-pipes-*/)
 PATH=$pFakeBin:$PATH scripts/create 2 2>/dev/null && exit 1
 (
   ulimit -n 30
@@ -58,8 +61,9 @@ kill "$(cat "$pFakeBin/stalled")"
 nStatus=0
 wait $pidCreate || nStatus=$?
 [ "$nStatus" -eq 1 ]
-for pPipe in $(ls -d /tmp/icc-pipes-*/ 2>/dev/null || :); do
-  printf '%s\n' "$osBefore" | grep -qxF "$pPipe" || [ -n "$(ls -A "$pPipe")" ]
+for pPipe in /tmp/icc-pipes-*/; do
+  printf '%s\n' "${aBefore[@]}" | grep -qxF "$pPipe" ||
+    [ -n "$(find "$pPipe" -mindepth 1 -print -quit)" ]
 done
 rm -rf "$pFakeBin"
 pDir=$(scripts/create 4)

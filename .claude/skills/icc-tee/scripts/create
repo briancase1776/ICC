@@ -34,6 +34,11 @@
 pSrc=$1
 eSide=$2
 set -eu
+# A lane is a name of digits and nothing else, and lanes are counted from a
+# glob, +([0-9]), never from ls, whose output is for people to read and not
+# for scripts to parse. nullglob makes a glob that matches nothing a count of
+# 0, not the pattern itself.
+shopt -s extglob nullglob
 [ $# -ge 3 ] || {
   echo "usage: create SRC SIDE DST..." >&2
   exit 1
@@ -60,7 +65,8 @@ for pPipe in "$pSrc" "$@"; do
     exit 1
   }
 done
-nLanes=$(ls -- "$pSrc" | grep -c '^[0-9][0-9]*$')
+aLanes=("$pSrc"/+([0-9]))
+nLanes=${#aLanes[@]}
 case $nLanes in
   *[13579])
     echo "lanes must be even: $pSrc" >&2
@@ -68,7 +74,8 @@ case $nLanes in
     ;;
 esac
 for pPipe in "$pSrc" "$@"; do
-  [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
+  aLanes=("$pPipe"/+([0-9]))
+  [ "${#aLanes[@]}" -eq "$nLanes" ] || {
     echo "lanes differ: $pPipe" >&2
     exit 1
   }

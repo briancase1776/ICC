@@ -34,6 +34,11 @@
 pDst=$1
 eSide=$2
 set -eu
+# A lane is a name of digits and nothing else, and lanes are counted from a
+# glob, +([0-9]), never from ls, whose output is for people to read and not
+# for scripts to parse. nullglob makes a glob that matches nothing a count of
+# 0, not the pattern itself.
+shopt -s extglob nullglob
 [ $# -ge 3 ] || {
   echo "usage: create DST SIDE SRC..." >&2
   exit 1
@@ -47,17 +52,18 @@ case $eSide in
     exit 1
     ;;
 esac
-# Lane 0 of every pipe first, so a path that is no pipe at all says so, and
-# not what ls says of it; then an even count, in Pipes' words, which with
-# lane 0 there is two or more, so either SIDE has a lane to copy. The same
-# checks, in the same order, as Tee's create and Frames' read and write.
+# Lane 0 of every pipe first, so a path that is no pipe at all says so; then
+# an even count, in Pipes' words, which with lane 0 there is two or more, so
+# either SIDE has a lane to copy. The same checks, in the same order, as Tee's
+# create and Frames' read and write.
 for pPipe in "$pDst" "$@"; do
   [ -p "$pPipe/0" ] || {
     echo "not a pipe: $pPipe" >&2
     exit 1
   }
 done
-nLanes=$(ls -- "$pDst" | grep -c '^[0-9][0-9]*$')
+aLanes=("$pDst"/+([0-9]))
+nLanes=${#aLanes[@]}
 case $nLanes in
   *[13579])
     echo "lanes must be even: $pDst" >&2
@@ -68,7 +74,8 @@ esac
 # toward the count and then kills its copier on open, where nothing can say
 # so: a copier's stderr goes nowhere and list only ever says down.
 for pPipe in "$pDst" "$@"; do
-  [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
+  aLanes=("$pPipe"/+([0-9]))
+  [ "${#aLanes[@]}" -eq "$nLanes" ] || {
     echo "lanes differ: $pPipe" >&2
     exit 1
   }

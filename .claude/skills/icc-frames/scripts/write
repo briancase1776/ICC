@@ -27,6 +27,11 @@
 pDir=${1:?usage: write DIR SIDE}
 eSide=${2:?usage: write DIR SIDE}
 set -eu
+# A lane is a name of digits and nothing else, and lanes are counted from a
+# glob, +([0-9]), never from ls, whose output is for people to read and not
+# for scripts to parse. nullglob makes a glob that matches nothing a count of
+# 0, not the pattern itself.
+shopt -s extglob nullglob
 # SIDE before it is used: it ends up in arithmetic, where a subscript is
 # evaluated, so anything but 0 or 1 is refused rather than worked out.
 case $eSide in
@@ -47,7 +52,8 @@ esac
   echo "write: not a pipe: $pDir" >&2
   exit 1
 }
-nLanes=$(ls -- "$pDir" | grep -c '^[0-9][0-9]*$')
+aLanes=("$pDir"/+([0-9]))
+nLanes=${#aLanes[@]}
 case $nLanes in
   *[13579])
     echo "write: lanes must be even: $pDir" >&2

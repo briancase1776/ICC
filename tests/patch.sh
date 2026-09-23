@@ -136,6 +136,9 @@ pidHolder() {
 "$pIccPatch/create" ring 0 2>/dev/null && exit 1
 "$pIccPatch/create" ring 3 3 2>/dev/null && exit 1
 "$pIccPatch/create" mesh 1 banana 2>/dev/null && exit 1
+# past 64 bits, where a count wrapped: this one was a ring of 2
+"$pIccPatch/create" ring 18446744073709551618 2>/dev/null && exit 1
+"$pIccPatch/create" star 1 99999999999999999998 2>/dev/null && exit 1
 osMine=
 pWork=$(mktemp -d)
 pIn=$pWork/in

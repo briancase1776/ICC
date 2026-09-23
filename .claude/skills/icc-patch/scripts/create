@@ -6,9 +6,9 @@
 #          mesh-p. N is how many seats there are besides p, 1 or more.
 #          LANES is how many lanes every pipe has, 2 when not given, and
 #          whether it is even is Pipes' to say. Both numbers are read in
-#          base ten. The pieces come from icc-pipes, icc-tee and
-#          icc-merge, beside this skill under .claude/skills; the bay
-#          makes nothing but the map.
+#          base ten, and neither may run past 18 significant digits. The
+#          pieces come from icc-pipes, icc-tee and icc-merge, beside this
+#          skill under .claude/skills; the bay makes nothing but the map.
 #          The patch's directory holds two files: patch, the line SHAPE
 #          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
 #          made, one line per piece in the order it was made, its
@@ -64,6 +64,18 @@ case $nLanes in
     exit 1
     ;;
 esac
+# Bash counts in 64 bits, and a longer run of digits wraps there without a
+# word: a ring of 18446744073709551618 seats was a ring of 2. Eighteen digits
+# always fit, as Frames' read bounds its count, and the zeros are the leading
+# ones the note above is about.
+[[ $nSeats =~ ^0*[0-9]{1,18}$ ]] || {
+  echo "seats too big: $nSeats" >&2
+  exit 1
+}
+[[ $nLanes =~ ^0*[0-9]{1,18}$ ]] || {
+  echo "lanes too big: $nLanes" >&2
+  exit 1
+}
 nSeats=$((10#$nSeats))
 nLanes=$((10#$nLanes))
 [ "$nSeats" -ge 1 ] || {

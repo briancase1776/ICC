@@ -106,10 +106,16 @@ while [ "$iLane" -lt "$nLanes" ]; do
   # lane whose pipe has no writer blocks the open, and a copier still
   # holding what it inherited held d=$(create ...) open with it. Its own
   # output goes nowhere either way; only the order matters.
+  # Until the lane opens, a copier is a shell with create's argv and nothing
+  # on stdin to be known by, so while it waits it holds this tee's own tee
+  # file on fd 3, which nothing else holds: remove finds a waiting copier by
+  # that, as it finds a copying one by its lane on stdin. The lane is opened
+  # before fd 3 is closed, so the mark lasts as long as the wait, and tee(1)
+  # does not inherit it.
   (
     trap - EXIT INT TERM HUP
-    exec >/dev/null 2>&1
-    exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane"
+    exec >/dev/null 2>&1 3< "$pDir/tee"
+    exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane" 3<&-
   ) &
   aPids+=($!)
   echo $! >> "$pDir/pid"

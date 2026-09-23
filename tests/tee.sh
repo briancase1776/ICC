@@ -112,9 +112,22 @@ kill "$(cat "$pDead/pid")"
 while kill -0 "$(cat "$pDead/pid")" 2>/dev/null; do :; done
 pStalled=$(timeout 10 "$pIccTee/create" "$pDead" 0 "$pPipeB")
 "$pIccTee/list" | grep -qx "$pStalled down $pDead 0 $pPipeB"
+osStalled=$(cat "$pStalled/pid")
 : > "$pDead/0"
 "$pIccTee/remove" "$pStalled"
 [ ! -d "$pStalled" ]
+# remove takes the copiers still waiting on their lanes too, which have
+# nothing on stdin yet to be known by. Dead is dead: reaped, or a zombie.
+sleep 1
+for pidCopier in $osStalled; do
+  case $(ps -o stat= -p "$pidCopier" 2>/dev/null) in
+    ''|Z*)
+      ;;
+    *)
+      exit 1
+      ;;
+  esac
+done
 "$pIccPipes/remove" "$pDead"
 sleep 60 &
 pidSleep=$!

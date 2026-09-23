@@ -1,53 +1,89 @@
 #!/bin/bash
-# .claude/skills/icc-frames/scripts/read
-# read DIR SIDE > bytes: take frames off the lanes SIDE reads and put them
-# back together. The count comes first. Frames come round-robin, lane order.
-# A count that is not a count is a failure, not an empty payload: bytes in,
-# the same bytes out, or say so. A count that has not come is a different
-# thing and is not failed: the lane is opened <> so it never says EOF, and a
-# read started before its writer waits, which is what makes that usage work.
-# Bound the call, as SKILL.md says.
+##
+# @file read
+# @brief Take frames off the lanes SIDE reads and put the payload back.
+# @details read DIR SIDE. DIR is what Pipes' create printed. SIDE is 0 or
+#          1, the side this end is: side 0 reads the odd lanes, side 1
+#          the even ones. The count comes first, as a decimal line on
+#          the first lane SIDE reads, then frames round-robin in lane
+#          order until that many bytes have come.
+#          A count that is not a count is a failure, not an empty
+#          payload: bytes in, the same bytes out, or say so. A count
+#          that has not come is a different thing and is not failed:
+#          the lane is opened <> so it never says EOF, and a read
+#          started before its writer waits, which is what makes that
+#          usage work. Bound the call, as SKILL.md says.
+# @stdin nothing
+# @stdout the payload, byte for byte
+# @stderr the reason, on refusal
+# @exit 0 the payload is out whole; 1 DIR or SIDE is refused, or the
+#       count line could not be read or is not a count that fits
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-pDir=${1:?usage: read DIR SIDE}; eSide=${2:?usage: read DIR SIDE}
+# MIT Licence. See LICENCE.TXT
+##
+pDir=${1:?usage: read DIR SIDE}
+eSide=${2:?usage: read DIR SIDE}
 set -eu
 shopt -s nullglob
 # SIDE before it is used, for the reason write says.
-case $eSide in 0|1) ;; *) echo "read: SIDE is 0 or 1, not $eSide" >&2; exit 1 ;; esac
-aLanes=("$pDir"/[0-9]*); nPairs=$(( ${#aLanes[@]} / 2 ))
-(( nPairs > 0 )) || { echo "read: no lanes in $pDir" >&2; exit 1; }
+case $eSide in
+  0|1)
+    ;;
+  *)
+    echo "read: SIDE is 0 or 1, not $eSide" >&2
+    exit 1
+    ;;
+esac
+aLanes=("$pDir"/[0-9]*)
+nPairs=$(( ${#aLanes[@]} / 2 ))
+(( nPairs > 0 )) || {
+  echo "read: no lanes in $pDir" >&2
+  exit 1
+}
 iFirstLane=$(( 1 - eSide ))
 for (( iPair=0; iPair<nPairs; iPair++ )); do
-  [ -p "$pDir/$(( iPair * 2 + iFirstLane ))" ] ||
-    { echo "read: not a lane: $pDir/$(( iPair * 2 + iFirstLane ))" >&2; exit 1; }
+  [ -p "$pDir/$(( iPair * 2 + iFirstLane ))" ] || {
+    echo "read: not a lane: $pDir/$(( iPair * 2 + iFirstLane ))" >&2
+    exit 1
+  }
 done
 nPipeBuf=$(getconf PIPE_BUF "$pDir")
 # Not the nothing-was-sent case: this lane never says EOF, so a count that
 # has not come is waited for here rather than failed. The branch is for a
 # read that fails some other way, which set -e would otherwise take out
 # without a word.
-read -r nSize 0<> "$pDir/$iFirstLane" ||
-  { echo "read: the count line could not be read" >&2; exit 1; }
-[[ $nSize =~ ^[0-9]+$ ]] ||
-  { echo "read: not a count: $nSize" >&2; exit 1; }
+read -r nSize 0<> "$pDir/$iFirstLane" || {
+  echo "read: the count line could not be read" >&2
+  exit 1
+}
+[[ $nSize =~ ^[0-9]+$ ]] || {
+  echo "read: not a count: $nSize" >&2
+  exit 1
+}
 # Bash counts in 64 bits. A longer run of digits wraps there, and read sets
 # off after a payload nobody sent, on a lane that never says EOF. Eighteen
 # digits always fit; the zeros are the leading ones the note below is about.
-[[ $nSize =~ ^0*[0-9]{1,18}$ ]] ||
-  { echo "read: count too big: $nSize" >&2; exit 1; }
+[[ $nSize =~ ^0*[0-9]{1,18}$ ]] || {
+  echo "read: count too big: $nSize" >&2
+  exit 1
+}
 # Base ten, said out loud: the shape above lets a leading zero through and
 # arithmetic would take it for octal, leaving the rest of the payload on
 # the lane as the head of the next one.
 # Frame 0 shares its write with the count, so it is short by the count's
 # own length. Every frame after it is PIPE_BUF until the last.
 nLeft=$(( 10#$nSize ))
-nFirst=$(( nPipeBuf - ${#nSize} - 1 )); (( nFirst > nLeft )) && nFirst=$nLeft
+nFirst=$(( nPipeBuf - ${#nSize} - 1 ))
+(( nFirst > nLeft )) && nFirst=$nLeft
 (( nFirst > 0 )) && head -c "$nFirst" 0<> "$pDir/$iFirstLane"
-nLeft=$(( nLeft - nFirst )); iFrame=1
+nLeft=$(( nLeft - nFirst ))
+iFrame=1
 while (( nLeft > 0 )); do
   (( nWant = nLeft < nPipeBuf ? nLeft : nPipeBuf ))
   head -c "$nWant" 0<> "$pDir/$(( (iFrame % nPairs) * 2 + iFirstLane ))"
-  nLeft=$(( nLeft - nWant )); iFrame=$(( iFrame + 1 ))
+  nLeft=$(( nLeft - nWant ))
+  iFrame=$(( iFrame + 1 ))
 done

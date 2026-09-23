@@ -1,30 +1,62 @@
 #!/bin/bash
-# .claude/skills/icc-frames/scripts/write
-# write DIR SIDE < bytes: slice stdin into frames and put them on the lanes
-# SIDE writes. A count goes first. Frames go round-robin, lane order.
+##
+# @file write
+# @brief Slice stdin into frames and put them on the lanes SIDE writes.
+# @details write DIR SIDE. DIR is what Pipes' create printed. SIDE is 0
+#          or 1, the side this end is: side 0 writes the even lanes,
+#          side 1 the odd ones. A count goes first, as a decimal line on
+#          the first lane SIDE writes, with the head of the payload in
+#          the same page, then frames of PIPE_BUF round-robin in lane
+#          order.
+#          The whole payload is held while it is counted, in a hold of
+#          65536 bytes for each lane SIDE writes and one more. A payload
+#          past that is refused before the count goes out, so nothing of
+#          it reaches a lane.
+# @stdin the payload
+# @stdout nothing
+# @stderr the reason, on refusal
+# @global TMPDIR - read, where the hold is made, and /tmp when unset
+# @exit 0 the payload is on the wire; 1 DIR or SIDE is refused, the
+#       payload is past the hold, or the hold failed
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-pDir=${1:?usage: write DIR SIDE}; eSide=${2:?usage: write DIR SIDE}
+# MIT Licence. See LICENCE.TXT
+##
+pDir=${1:?usage: write DIR SIDE}
+eSide=${2:?usage: write DIR SIDE}
 set -eu
 shopt -s nullglob
 # SIDE before it is used: it ends up in arithmetic, where a subscript is
 # evaluated, so anything but 0 or 1 is refused rather than worked out.
-case $eSide in 0|1) ;; *) echo "write: SIDE is 0 or 1, not $eSide" >&2; exit 1 ;; esac
-aLanes=("$pDir"/[0-9]*); nPairs=$(( ${#aLanes[@]} / 2 ))
-(( nPairs > 0 )) || { echo "write: no lanes in $pDir" >&2; exit 1; }
+case $eSide in
+  0|1)
+    ;;
+  *)
+    echo "write: SIDE is 0 or 1, not $eSide" >&2
+    exit 1
+    ;;
+esac
+aLanes=("$pDir"/[0-9]*)
+nPairs=$(( ${#aLanes[@]} / 2 ))
+(( nPairs > 0 )) || {
+  echo "write: no lanes in $pDir" >&2
+  exit 1
+}
 # Every lane this side writes, before any of them is opened: `<>` creates,
 # so an open that is not already a lane would put a file in the pipe's
 # directory, where it outlives the pipe and Pipes' remove refuses it.
 for (( iPair=0; iPair<nPairs; iPair++ )); do
-  [ -p "$pDir/$(( iPair * 2 + eSide ))" ] ||
-    { echo "write: not a lane: $pDir/$(( iPair * 2 + eSide ))" >&2; exit 1; }
+  [ -p "$pDir/$(( iPair * 2 + eSide ))" ] || {
+    echo "write: not a lane: $pDir/$(( iPair * 2 + eSide ))" >&2
+    exit 1
+  }
 done
 nPipeBuf=$(getconf PIPE_BUF "$pDir")
-# The hold is nPairs+1 fifos this script makes, and one it makes holds 65536
-# whatever the lanes have been grown to, so what fits is that number either
-# way, and it is known before a byte is read.
+# The hold is nPairs+1 fifos this script makes, and one it makes holds
+# 65536 whatever the lanes have been grown to, so what fits is that number
+# either way, and it is known before a byte is read.
 (( nHold = (nPairs + 1) * 65536 ))
 
 # The count goes in front, so the whole payload is held while it is weighed.
@@ -36,11 +68,25 @@ nPipeBuf=$(getconf PIPE_BUF "$pDir")
 # it and a page a stage, which leaves that figure a floor under it every
 # run. Detached on purpose: a chain in this shell's own tree holds nothing,
 # because the shell waits for its own pipeline before going on.
-pidChainGroup=; pidCounter=; pHoldDir=
-# The chain ends itself when the hold is closed, so this is only for a signal
-# arriving mid-write. It signals the job, not the shell that forked it: that
-# shell is a pipeline's parent, and killing it alone orphans every copier in
-# the chain with nothing left able to end them.
+pidChainGroup=
+pidCounter=
+pHoldDir=
+
+##
+# @fn vRelease()
+# @brief Take down whatever of the hold and the counting pair is still up.
+# @details The chain ends itself when the hold is closed, so this is only
+#          for a signal arriving mid-write. It signals the job, not the
+#          shell that forked it: that shell is a pipeline's parent, and
+#          killing it alone orphans every copier in the chain with
+#          nothing left able to end them. Each of the three names below
+#          is empty while there is nothing of it to take.
+# @stderr nothing
+# @global pHoldDir - read, the hold's directory until it is unlinked
+# @global pidChainGroup - read, the chain, which leads its own group
+# @global pidCounter - read, the subshell running the counting pair
+# @return 0
+##
 vRelease() {
   # The hold's directory outlives a signal that lands before its lanes are
   # unlinked, and that window is the documented `timeout N` usage, so it is
@@ -51,15 +97,30 @@ vRelease() {
   # substitution the caller's group whatever job control says, so it has to
   # be taken by name, children first -- tee holds the hold's input open and
   # nothing downstream can end while it does.
-  [ -n "$pidCounter" ] && { pkill -P "$pidCounter" 2>/dev/null; kill "$pidCounter" 2>/dev/null; } || :
+  [ -n "$pidCounter" ] && {
+    pkill -P "$pidCounter" 2>/dev/null
+    kill "$pidCounter" 2>/dev/null
+  } || :
 }
-trap 'vRelease; exit 1' INT TERM HUP
+trap 'vRelease
+      exit 1' INT TERM HUP
 trap vRelease EXIT
 
+##
+# @fn vHold()
+# @brief Start the hold: a chain of dd, one per lane this side writes.
+# @details Made, opened, and unlinked before anything is written to it:
+#          the hold lives on its descriptors alone, so no name survives
+#          for a bystander to read or a signal to strand, and there is
+#          nothing to clean up. It leaves this shell holding the chain's
+#          input on fd 5, to write, and its output on fd 3, to read.
+# @global TMPDIR - read, where the hold's two fifos are made
+# @global nPairs - read, how many copiers the chain has
+# @global pHoldDir - set, the hold's directory, and empty once unlinked
+# @global pidChainGroup - set, the chain, which leads its own group
+# @return 0; a step that fails ends the script, under set -e
+##
 vHold() {
-  # Made, opened, and unlinked before anything is written to it: the hold
-  # lives on its descriptors alone, so no name survives for a bystander to
-  # read or a signal to strand, and there is nothing to clean up.
   pHoldDir=$(mktemp -d "${TMPDIR:-/tmp}/icc-frames-XXXXXXXX")
   mkfifo -m 600 "$pHoldDir/i" "$pHoldDir/o"
   # <> to start with, because it is the open that never blocks and there is
@@ -72,25 +133,31 @@ vHold() {
   # one-way too. A <> end is its own reader as well as its own writer, and
   # anything inheriting it can neither be refused nor see EOF: that is what
   # left a killed write's counting pair alive with nothing able to end it.
-  exec 5>&-; exec 5> "$pHoldDir/i"
-  exec 3>&-; exec 3< "$pHoldDir/o"
-  rm -f "$pHoldDir/i" "$pHoldDir/o"; rmdir "$pHoldDir"; pHoldDir=
+  exec 5>&-
+  exec 5> "$pHoldDir/i"
+  exec 3>&-
+  exec 3< "$pHoldDir/o"
+  rm -f "$pHoldDir/i" "$pHoldDir/o"
+  rmdir "$pHoldDir"
+  pHoldDir=
   # A group is a command with one stdin and one stdout, so the chain's ends
   # are the group's ends: the head reads the group's stdin, the tail writes
   # its stdout, and every stage between is a bare copier. The ends are put
   # on the group and closed in the same breath, so no stage inherits either
-  # and every one of them holds nothing but 0, 1 and 2. A stage holding the far
-  # end could never see EOF, which is what left fifteen copiers behind the
-  # first time this was tried; now there is nothing for one to hold. Neither
-  # 3 nor 5 goes either, for the same reason, and handing stdout to the hold
-  # is what lets go of a caller's $( ).
+  # and every one of them holds nothing but 0, 1 and 2. A stage holding the
+  # far end could never see EOF, which is what left fifteen copiers behind
+  # the first time this was tried; now there is nothing for one to hold.
+  # Neither 3 nor 5 goes either, for the same reason, and handing stdout to
+  # the hold is what lets go of a caller's $( ).
   # What eval sees is one spelling of dd and a pipe: nothing a caller
   # controls is in it. Its own process group, so one signal reaches the
   # whole chain, and one lane a side needs no special case -- the group is
   # the same shape.
   local osChain iStage
   osChain="dd bs=4096 status=none"
-  for (( iStage=1; iStage<nPairs; iStage++ )); do osChain="$osChain | dd bs=4096 status=none"; done
+  for (( iStage=1; iStage<nPairs; iStage++ )); do
+    osChain="$osChain | dd bs=4096 status=none"
+  done
   set -m
   eval "{ $osChain ; } <&6 >&7 6<&- 7>&- 3>&- 5>&- &"
   pidChainGroup=$!
@@ -107,9 +174,13 @@ vHold
 # Capped at what the hold can take. head -c reads exactly what it is asked
 # for and leaves the rest where it was, so what is still on stdin after this
 # is what would not have fitted.
-exec 4< <( exec 3>&-; head -c "$nHold" | tee "/dev/fd/5" | wc -c )
+exec 4< <(
+  exec 3>&-
+  head -c "$nHold" | tee "/dev/fd/5" | wc -c
+)
 pidCounter=$!
-read -r nSize <&4; exec 4<&-
+read -r nSize <&4
+exec 4<&-
 pidCounter=
 # One byte more than the hold can take is a payload that never reaches a
 # lane, so no read can free it and waiting cannot end it. Refused here,
@@ -123,10 +194,15 @@ pidCounter=
 # this is the only test in front of the hold, so what it cannot read it
 # refuses rather than waves through.
 nProbe=$(head -c 1 | wc -c)
-[[ $nProbe =~ ^[0-9]+$ ]] ||
-  { echo "write: cannot tell whether the payload is past the hold" >&2; exit 1; }
-(( nProbe > 0 )) &&
-  { echo "write: the payload is past the hold: this bundle carries $nHold, and more lanes is the only remedy" >&2; exit 1; }
+[[ $nProbe =~ ^[0-9]+$ ]] || {
+  echo "write: cannot tell whether the payload is past the hold" >&2
+  exit 1
+}
+(( nProbe > 0 )) && {
+  echo "write: the payload is past the hold: this bundle carries" \
+    "$nHold, and more lanes is the only remedy" >&2
+  exit 1
+}
 # Closing the last writer is what ends the chain: its head opened the hold
 # read-only, so it sees EOF, drains what it has, and exits by itself.
 exec 5>&-
@@ -141,13 +217,23 @@ exec 5>&-
 # frame behind, and the spelling that would not, iflag=fullblock, is the one
 # Pipes says never to add.
 nLeft=$nSize
-nFirst=$(( nPipeBuf - ${#nSize} - 1 )); (( nFirst > nLeft )) && nFirst=$nLeft
-{ printf '%s\n' "$nSize"; (( nFirst > 0 )) && head -c "$nFirst" <&3; } 1<> "$pDir/$eSide"
-nLeft=$(( nLeft - nFirst )); iFrame=1
+nFirst=$(( nPipeBuf - ${#nSize} - 1 ))
+(( nFirst > nLeft )) && nFirst=$nLeft
+{
+  printf '%s\n' "$nSize"
+  (( nFirst > 0 )) && head -c "$nFirst" <&3
+} 1<> "$pDir/$eSide"
+nLeft=$(( nLeft - nFirst ))
+iFrame=1
 while (( nLeft > 0 )); do
   (( nWant = nLeft < nPipeBuf ? nLeft : nPipeBuf ))
   head -c "$nWant" <&3 1<> "$pDir/$(( (iFrame % nPairs) * 2 + eSide ))"
-  nLeft=$(( nLeft - nWant )); iFrame=$(( iFrame + 1 ))
+  nLeft=$(( nLeft - nWant ))
+  iFrame=$(( iFrame + 1 ))
 done
-wait "$pidChainGroup" || { echo "write: the hold failed" >&2; exit 1; }
-pidChainGroup=; pidCounter=
+wait "$pidChainGroup" || {
+  echo "write: the hold failed" >&2
+  exit 1
+}
+pidChainGroup=
+pidCounter=

@@ -9,19 +9,22 @@
 #          takes that lane of SRC and writes it to that lane of every
 #          DST, byte for byte, in order, until removed. The tee's
 #          directory holds two files: tee, naming SRC, SIDE and each DST
-#          a line, and pid, one copier a line in lane order. The tee
-#          makes nothing but itself.
-#          A create that cannot finish takes its copiers and its two
-#          files with it, and its directory unless something else is in
-#          it. Once the tee is whole that is no longer armed, so a create
-#          that then fails to print leaves a whole tee nobody was told
-#          of, which list shows and remove takes.
+#          a line, and pid, one copier a line in lane order, written empty
+#          before the first copier is forked. The tee makes nothing but
+#          itself.
+#          A create that cannot finish, or whose directory is removed
+#          while it starts, takes its copiers and its two files with it,
+#          and its directory unless something else is in it. Once the
+#          tee is whole that is no longer armed, so a create that then
+#          fails to print leaves a whole tee nobody was told of, which
+#          list shows and remove takes.
 # @stdin nothing
 # @stdout the tee's directory, one line
 # @stderr the reason, on refusal
 # @exit 0 the tee is made and printed; 1 the arguments are refused, or
-#       the tee could not be finished and none of it is left, or it
-#       could not be printed and all of it is
+#       the tee could not be finished or was removed while it started,
+#       and none of it is left, or it could not be printed and all of it
+#       is
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -94,6 +97,9 @@ trap 'trap - EXIT INT TERM HUP
   printf '%s\n' "$pSrc" "$eSide"
   printf '%s\n' "${aDsts[@]}"
 } > "$pDir/tee"
+# Both files from here on, so a tee is the same shape to list and to remove
+# before the first copier is forked as after, as Merge's is.
+: > "$pDir/pid"
 iLane=$eSide
 while [ "$iLane" -lt "$nLanes" ]; do
   aOuts=()
@@ -121,5 +127,13 @@ while [ "$iLane" -lt "$nLanes" ]; do
   echo $! >> "$pDir/pid"
   iLane=$((iLane + 2))
 done
+# Still ours? A remove that ran while the loop above forked took the
+# directory, and the copiers already started are copying for a tee that no
+# longer exists, which nothing can list and nothing can stop. They are this
+# shell's to end, and the handler ends them.
+[ -d "$pDir" ] && [ -f "$pDir/tee" ] && [ -f "$pDir/pid" ] || {
+  echo "removed while starting: $pDir" >&2
+  exit 1
+}
 trap - EXIT INT TERM HUP
 echo "$pDir"

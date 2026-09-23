@@ -163,6 +163,14 @@ echo 1 > "$pFake/pid"
 "$pIccTee/list" | grep -q "$pFake" && exit 1
 rm -f "$pFake"/*
 rmdir "$pFake"
+# A tee with its two files and no copier forked yet, as a create killed
+# before its first fork leaves it, is down to list and taken by remove.
+pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' "$pPipeA" 0 "$pPipeB" > "$pFake/tee"
+: > "$pFake/pid"
+"$pIccTee/list" | grep -qx "$pFake down $pPipeA 0 $pPipeB"
+"$pIccTee/remove" "$pFake"
+[ ! -d "$pFake" ]
 vRefused "$pIccTee/remove" "$pPipeA"
 for pPipe in $pPipeA $pPipeB $pPipeC; do
   "$pIccPipes/list" | grep -qx "$pPipe up"

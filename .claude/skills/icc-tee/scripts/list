@@ -4,9 +4,10 @@
 # @brief One line per tee: its directory, up or down, and its tee file.
 # @details list takes nothing. A tee is a /tmp/icc-tee-* directory with a
 #          tee file in it whose SIDE is 0 or 1; anything else is skipped.
-#          eState is up or down: up while every copier the pid file
-#          names still has its lane of SRC open on fd 0, counting lanes
-#          from SIDE in steps of two, and down as soon as one has not.
+#          eState is up or down: up when the pid file names at least one
+#          copier and every one of them still has its lane of SRC open on
+#          fd 0, counting lanes from SIDE in steps of two, and down
+#          otherwise.
 # @stdin nothing
 # @stdout "DIR up|down SRC SIDE DST...", one line per tee, in glob order
 # @stderr nothing
@@ -36,11 +37,18 @@ for pDir in /tmp/icc-tee-*/; do
       continue
       ;;
   esac
-  eState=up
+  # Down until every copier answers, the way Pipes reads a hold and Merge its
+  # copiers: a tee with no copiers yet, or none left, is not up, and only a
+  # positive check says otherwise.
+  eState=down
+  nCopiers=0
+  nUp=0
   for pidCopier in $(cat "$pDir/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "$pSrc/$iLane" ] ||
-      eState=down
+    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "$pSrc/$iLane" ] &&
+      nUp=$((nUp + 1))
+    nCopiers=$((nCopiers + 1))
     iLane=$((iLane + 2))
   done
+  [ "$nCopiers" -gt 0 ] && [ "$nUp" -eq "$nCopiers" ] && eState=up
   echo "$pDir $eState $(paste -sd ' ' < "$pDir/tee")"
 done

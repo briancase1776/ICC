@@ -4,14 +4,14 @@
 # @brief Stop a tee and delete its directory.
 # @details remove DIR. DIR is what create printed, spelled any way that
 #          reaches it. It must hold what create wrote: a tee file naming
-#          an absolute SRC and a SIDE of 0 or 1, and a pid file of at
-#          least one line, every one a number. A copier is killed only
-#          while it is still this tee's: copying, with its lane of SRC on
-#          fd 0, or waiting to open that lane, with this tee's own tee
-#          file on fd 3. A stranger's pid, or a recycled one, has
-#          neither, and is left alone. Then the two files go, and the
-#          directory with them unless something else is in it. The
-#          pipes on either end are left exactly as they were.
+#          an absolute SRC and a SIDE of 0 or 1, and a pid file whose
+#          every line is a number, which an empty one is. A copier is
+#          killed only while it is still this tee's: copying, with its
+#          lane of SRC on fd 0, or waiting to open that lane, with this
+#          tee's own tee file on fd 3. A stranger's pid, or a recycled
+#          one, has neither, and is left alone. Then the two files go,
+#          and the directory with them unless something else is in it.
+#          The pipes on either end are left exactly as they were.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal
@@ -27,13 +27,14 @@ pArg=${1:?usage: remove DIR}
 set -eu
 pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
 [ -n "$pDir" ] && [ -d "$pDir" ] &&
-  [ -s "$pDir/tee" ] && [ -s "$pDir/pid" ] || {
+  [ -s "$pDir/tee" ] && [ -f "$pDir/pid" ] || {
   echo "not a tee: $pArg" >&2
   exit 1
 }
 # What create wrote: SRC absolute, SIDE 0 or 1, a DST per line, and one pid
 # per lane SIDE writes, every one a number. A directory that does not hold
-# that was not made here, so its files are not this script's to delete.
+# that was not made here, so its files are not this script's to delete. The
+# pid file is empty until the first copier is forked, and that is a tee too.
 pSrc=$(sed -n 1p "$pDir/tee")
 eSide=$(sed -n 2p "$pDir/tee")
 nPids=$(grep -c '^[0-9][0-9]*$' "$pDir/pid" || :)
@@ -46,7 +47,7 @@ case $pSrc:$eSide in
     exit 1
     ;;
 esac
-[ "$nPids" -ge 1 ] && [ "$nPids" -eq "$nLines" ] || {
+[ "$nPids" -eq "$nLines" ] || {
   echo "not a tee: $pArg" >&2
   exit 1
 }

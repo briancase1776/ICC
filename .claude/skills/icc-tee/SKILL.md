@@ -74,8 +74,8 @@ of that and of the lanes. The skill adds nothing to them.
   copiers end one at a time as traffic reaches their lanes, and a tee
   that has lost an outlet goes on copying the lanes that are quiet.
   list says up while every copier still has its lane of SRC, so one
-  ended lane reads down for the whole fitting. remove it and create it
-  again.
+  ended lane reads down for the whole fitting, and so does a tee with
+  no copier yet. remove it and create it again.
 - A copier opens its lane of SRC when it starts. A lane whose pipe has no
   writer blocks that open, so the copier waits there and list says down.
   create neither waits with it nor fails: it prints the tee either way,

@@ -344,6 +344,17 @@ rm -f "$pHeld/obstruct"
 "$pIccPatch/remove" "$pDir" 2>/dev/null
 [ ! -d "$pDir" ]
 rmdir "$pHeld" 2>/dev/null || :
+# A piece whose skill cannot be reached is not one its skill has forgotten:
+# remove keeps the record and DIR, and says so, and once the skill is back
+# it takes the lot.
+vMake star 1 2
+cp "$pDir/made" "$pWork/made"
+sed -i 's| .*| /nonexistent/scripts|' "$pDir/made"
+"$pIccPatch/remove" "$pDir" 2>/dev/null && exit 1
+[ -d "$pDir" ]
+cp "$pWork/made" "$pDir/made"
+"$pIccPatch/remove" "$pDir"
+[ ! -d "$pDir" ]
 # A checkout whose path has a space in it: the made record still reads back
 # whole, so list sees the pieces up and remove takes every one of them.
 mkdir "$pWork/with space"

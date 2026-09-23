@@ -15,10 +15,12 @@
 #          than tried for ever. One that is listed and will not go is
 #          named too, and DIR is left standing with the made file that
 #          names the rest, so a second remove can carry on: the record
-#          outlives the attempt, or nothing can find what is left. bLeft
-#          is 0, and 1 once a piece has not gone. The made file is trusted
-#          as create wrote it: the list and remove it names are run, and
-#          nothing here checks what they are.
+#          outlives the attempt, or nothing can find what is left. A piece
+#          whose skill's scripts cannot be run is named and kept the same
+#          way: that skill was not asked, which is not the same as not
+#          knowing the piece. bLeft is 0, and 1 once a piece has not gone.
+#          The made file is trusted as create wrote it: the list and
+#          remove it names are run, and nothing here checks what they are.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal, and every piece it could not take
@@ -54,9 +56,19 @@ bLeft=0
 pListed=$(mktemp)
 trap 'rm -f "$pListed"' EXIT
 cut -d' ' -f2- "$pDir/made" | sort -u | while read -r pScripts; do
-  "$pScripts/list" | cut -d' ' -f1
+  if [ -x "$pScripts/list" ]; then
+    "$pScripts/list" | cut -d' ' -f1
+  fi
 done > "$pListed"
 while read -r pPiece pScripts; do
+  # A skill whose scripts cannot be run cannot be asked, which is not the
+  # same as a skill that no longer knows its piece: the piece may be running
+  # still, so its record stays, and DIR with it.
+  [ -x "$pScripts/list" ] && [ -x "$pScripts/remove" ] || {
+    echo "cannot reach its skill: $pPiece" >&2
+    bLeft=1
+    continue
+  }
   if grep -qxF "$pPiece" "$pListed"; then
     "$pScripts/remove" "$pPiece" || {
       echo "would not go: $pPiece" >&2

@@ -359,11 +359,12 @@ sed -i 's| .*| /nonexistent/scripts|' "$pDir/made"
 cp "$pWork/made" "$pDir/made"
 "$pIccPatch/remove" "$pDir"
 [ ! -d "$pDir" ]
-# A checkout whose path has a space in it: the made record still reads back
-# whole, so list sees the pieces up and remove takes every one of them.
+# A copy of the skills whose path has a space in it, and no .claude: create
+# finds its siblings beside it, the made record still reads back whole, so
+# list sees the pieces up and remove takes every one of them.
 mkdir "$pWork/with space"
-cp -r .claude "$pWork/with space/"
-pSpaced="$pWork/with space/.claude/skills/icc-patch/scripts"
+cp -r .claude/skills "$pWork/with space/"
+pSpaced="$pWork/with space/skills/icc-patch/scripts"
 pDir=$("$pSpaced/create" star 1)
 osMine="$osMine $pDir"
 "$pSpaced/list" | grep -qx "$pDir up star 1 2"

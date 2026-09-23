@@ -22,8 +22,7 @@
 pDir=${1:?usage: in DIR SIDE}
 eSide=${2:?usage: in DIR SIDE}
 set -eu
-pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
-pIccFrames=$(cd "$pTop/.claude/skills/icc-frames/scripts" && pwd)
+pIccFrames=$(cd "$(dirname "$0")/../../icc-frames/scripts" && pwd)
 pTemp=$(mktemp)
 trap 'rm -f "$pTemp"' EXIT
 trap 'trap - EXIT INT TERM HUP

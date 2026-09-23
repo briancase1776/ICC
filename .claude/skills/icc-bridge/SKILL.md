@@ -25,8 +25,8 @@ to in.
 DIR is what Pipes' create printed, or an end in a Patch map. SIDE is 0
 or 1, as Pipes says. Which side you are, and where the text goes, is
 agreed outside this skill. Both scripts run Frames' read and write from
-beside this skill, `../../icc-frames/scripts` under the same
-`.claude/skills`. There is nothing to configure and nothing to set.
+beside this skill, `../../icc-frames/scripts` in the same skills
+directory. There is nothing to configure and nothing to set.
 
     timeout 5 scripts/out "$pDir" 1 > text  # off the wire, one tool call
     SendMessage to=ADDRESS message=text     # the Claude, not a script

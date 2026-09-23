@@ -8,7 +8,8 @@
 #          whether it is even is Pipes' to say. Both numbers are read in
 #          base ten, and neither may run past 18 significant digits. The
 #          pieces come from icc-pipes, icc-tee and icc-merge, beside this
-#          skill under .claude/skills; the bay makes nothing but the map.
+#          skill in the same skills directory; the bay makes nothing but
+#          the map.
 #          The patch's directory holds two files: patch, the line SHAPE
 #          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
 #          made, one line per piece in the order it was made, its
@@ -83,10 +84,9 @@ nLanes=$((10#$nLanes))
   echo "seats must be 1 or more" >&2
   exit 1
 }
-pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
-pIccPipes=$(cd "$pTop/.claude/skills/icc-pipes/scripts" && pwd)
-pIccTee=$(cd "$pTop/.claude/skills/icc-tee/scripts" && pwd)
-pIccMerge=$(cd "$pTop/.claude/skills/icc-merge/scripts" && pwd)
+pIccPipes=$(cd "$(dirname "$0")/../../icc-pipes/scripts" && pwd)
+pIccTee=$(cd "$(dirname "$0")/../../icc-tee/scripts" && pwd)
+pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 trap 'rm -rf "$pDir"' EXIT
 # A signal is a create that cannot finish, like any other: the handler exits,

@@ -28,8 +28,8 @@ a cable runs to. The parent, when it is in on it, is seat p.
                                     then DIR
 
 create runs icc-pipes', icc-tee' and icc-merge' create scripts from
-beside this one, `../../icc-pipes/scripts` and so on under the same
-`.claude/skills`. There is nothing to configure and nothing to set.
+beside this one, `../../icc-pipes/scripts` and so on in the same skills
+directory. There is nothing to configure and nothing to set.
 remove runs the remove scripts create used. If a piece is missing,
 create makes nothing and says which.
 

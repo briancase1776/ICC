@@ -3,10 +3,10 @@
 # @file list
 # @brief One line per tee: its directory, up or down, and its tee file.
 # @details list takes nothing. A tee is a /tmp/icc-tee-* directory with a
-#          tee file in it. eState is up or down: up while every copier
-#          the pid file names still has its lane of SRC open on fd 0,
-#          counting lanes from SIDE in steps of two, and down as soon as
-#          one has not.
+#          tee file in it whose SIDE is 0 or 1; anything else is skipped.
+#          eState is up or down: up while every copier the pid file
+#          names still has its lane of SRC open on fd 0, counting lanes
+#          from SIDE in steps of two, and down as soon as one has not.
 # @stdin nothing
 # @stdout "DIR up|down SRC SIDE DST...", one line per tee, in glob order
 # @stderr nothing
@@ -26,6 +26,16 @@ for pDir in /tmp/icc-tee-*/; do
   [ -f "$pDir/tee" ] || continue
   pSrc=$(sed -n 1p "$pDir/tee")
   iLane=$(sed -n 2p "$pDir/tee")
+  # A SIDE that is not 0 or 1 was not written by create either. It goes into
+  # arithmetic below, where it stopped the listing, or ran what a subscript
+  # in it spelled.
+  case $iLane in
+    0|1)
+      ;;
+    *)
+      continue
+      ;;
+  esac
   eState=up
   for pidCopier in $(cat "$pDir/pid" 2>/dev/null); do
     [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "$pSrc/$iLane" ] ||

@@ -77,6 +77,15 @@ printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pDeep/merge"
 pNoSrc=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 printf '%s\n0\n' "$pPipeC" > "$pNoSrc/merge"
 echo 1 > "$pNoSrc/pid"
+# A SIDE that is not 0 or 1 is not a merge either, and list skips it:
+# arithmetic on it stopped the listing, and a subscript in it ran.
+pBadSide=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
+printf '%s\n' "$pPipeC" 'a[$(touch pwned)]' "$pPipeA" > "$pBadSide/merge"
+echo 1 > "$pBadSide/pid"
+"$pIccMerge/list" > /dev/null
+[ -z "$("$pIccMerge/list" 2>&1 >/dev/null)" ]
+[ ! -e pwned ]
+"$pIccMerge/list" | grep -q "$pBadSide" && exit 1
 "$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
 pIdle=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pIdle/merge"
@@ -84,7 +93,7 @@ printf '%s\n0\n%s\n' "$pPipeC" "$pPipeA" > "$pIdle/merge"
 "$pIccMerge/list" | grep -qx "$pIdle down $pPipeC 0 $pPipeA"
 "$pIccMerge/remove" "$pIdle"
 [ ! -d "$pIdle" ]
-rm -rf "$pOutside" "$pDeep" "$pNoSrc"
+rm -rf "$pOutside" "$pDeep" "$pNoSrc" "$pBadSide"
 head -c 150000 /dev/urandom > in
 "$pIccFrames/write" "$pPipeA" 0 < in
 timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out

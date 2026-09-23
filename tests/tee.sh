@@ -139,6 +139,17 @@ echo 1 > "$pFake/pid"
 "$pIccTee/list" 2>/dev/null | grep -q "$pFake" && exit 1
 rm -f "$pFake"/*
 rmdir "$pFake"
+# A SIDE that is not 0 or 1 was not written by create, and list skips it:
+# arithmetic on it stopped the listing, and a subscript in it ran.
+pFake=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+printf '%s\n' /tmp/not-a-pipe 'a[$(touch pwned)]' /tmp/nor-this > "$pFake/tee"
+echo 1 > "$pFake/pid"
+"$pIccTee/list" > /dev/null
+[ -z "$("$pIccTee/list" 2>&1 >/dev/null)" ]
+[ ! -e pwned ]
+"$pIccTee/list" | grep -q "$pFake" && exit 1
+rm -f "$pFake"/*
+rmdir "$pFake"
 vRefused "$pIccTee/remove" "$pPipeA"
 for pPipe in $pPipeA $pPipeB $pPipeC; do
   "$pIccPipes/list" | grep -qx "$pPipe up"

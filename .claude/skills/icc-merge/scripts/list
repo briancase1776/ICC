@@ -3,13 +3,14 @@
 # @file list
 # @brief One line per merge: its directory, up or down, and its merge file.
 # @details list takes nothing. A merge is a /tmp/icc-merge-* directory
-#          with a merge file naming at least one SRC. eState is up or
-#          down: up when the pid file names at least one copier and
-#          every one of them still has its own inlet lane open on fd 0,
-#          and down otherwise. A copier's inlet lane is read off its
-#          place in the pid file: SRC order within a lane, and lanes
-#          from SIDE in steps of two. eSide is that SIDE, 0 or 1, as
-#          the merge file's second line has it.
+#          with a merge file naming a SIDE of 0 or 1 and at least one
+#          SRC; anything else is skipped. eState is up or down: up when
+#          the pid file names at least one copier and every one of them
+#          still has its own inlet lane open on fd 0, and down otherwise.
+#          A copier's inlet lane is read off its place in the pid file:
+#          SRC order within a lane, and lanes from SIDE in steps of two.
+#          eSide is that SIDE, 0 or 1, as the merge file's second line
+#          has it.
 # @stdin nothing
 # @stdout "DIR up|down DST SIDE SRC...", one line per merge, in glob order
 # @stderr nothing
@@ -26,6 +27,15 @@ for pDir in /tmp/icc-merge-*/; do
   # stray mkdir both look like one from here, and neither is.
   [ -f "$pDir/merge" ] || continue
   eSide=$(sed -n 2p "$pDir/merge")
+  # Nor is one whose SIDE is not 0 or 1. It goes into arithmetic below, where
+  # it stopped the listing, or ran what a subscript in it spelled.
+  case $eSide in
+    0|1)
+      ;;
+    *)
+      continue
+      ;;
+  esac
   mapfile -t aSrcs < <(sed -n '3,$p' "$pDir/merge")
   # A merge file with no SRC line is not one either, and saying so by dividing
   # by zero would take the whole listing with it: the glob is sorted, so one

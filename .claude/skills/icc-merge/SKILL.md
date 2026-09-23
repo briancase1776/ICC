@@ -58,7 +58,10 @@ them.
 - Every inlet lane is copied whole, in order, onto the same lane number
   of the outlet, and every pipe has the same lane count. That is all
   icc-frames' rule needs, so a Frames write into one inlet while the
-  others are quiet is a Frames read on the outlet.
+  others are quiet is a Frames read on the outlet. A payload that fits
+  in one frame, a page less its count line, goes over as one write, so
+  those come through whole even when inlets write at once; one that
+  spills into a second frame needs the others quiet.
 - The merge is one more writer on each outlet lane per inlet. Everything
   Pipes says of a writer holds for each. Between inlets nothing holds:
   a copier writes whatever one read of its inlet lane returned, and

@@ -182,6 +182,27 @@ cmp in out
 "$pIccFrames/write" "$pPipeB" 0 < in
 timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out
 cmp in out
+# Inlets that write at once: a payload that fits in one frame is one write,
+# so the merge passes each whole, in either order. Random bytes, random
+# sizes up to a frame, and many rounds, because what broke it did so only
+# now and then.
+for iRound in $(seq 30); do
+  head -c $((1 + RANDOM % 4000)) /dev/urandom > inA
+  head -c $((1 + RANDOM % 4000)) /dev/urandom > inB
+  "$pIccFrames/write" "$pPipeA" 0 < inA &
+  pidA=$!
+  "$pIccFrames/write" "$pPipeB" 0 < inB &
+  pidB=$!
+  wait "$pidA" "$pidB"
+  timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out1
+  timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out2
+  if cmp -s inA out1; then
+    cmp inB out2
+  else
+    cmp inA out2
+    cmp inB out1
+  fi
+done
 printf 'a' > "$pPipeA/2"
 printf 'b' > "$pPipeB/2"
 case $(timeout 1 dd if="$pPipeC/2" bs=4096 status=none) in

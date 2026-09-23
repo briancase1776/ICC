@@ -226,8 +226,16 @@ nProbe=$(head -c 1 | wc -c)
 exec 5>&-
 # The count and the head of the payload go out as one write, so the count
 # does not take a whole page of the first lane that a 4096-byte frame can
-# never share. Frame 0 is short by the count's own length; every frame
-# after it is PIPE_BUF, and the last is short as ever.
+# never share, and so a payload that fits in this frame is one write of at
+# most PIPE_BUF, which lands whole: through a merge it reaches the outlet
+# whole even while other inlets write. printf and then head were two writes,
+# and a merge's copier could pass the count on alone and let another inlet's
+# frame in between it and its bytes. dd gathers the two into one block and
+# writes it once. iflag=fullblock is what makes it wait for the whole block,
+# and it is not the case Pipes warns of: this reads the hold, which has the
+# whole payload already, not a lane that can dribble or stop. Frame 0 is
+# short by the count's own length; every frame after it is PIPE_BUF, and the
+# last is short as ever.
 # head -c and not dd, and it is the same discipline either way: both write
 # what their read returned and hold nothing of their own, which is why Pipes
 # names dd and refuses cat. What dd cannot spell is an exact count. `count=`
@@ -240,7 +248,8 @@ nFirst=$(( nPipeBuf - ${#nSize} - 1 ))
 {
   printf '%s\n' "$nSize"
   (( nFirst > 0 )) && head -c "$nFirst" <&3
-} 1<> "$pDir/$eSide"
+} | dd bs=$(( ${#nSize} + 1 + nFirst )) count=1 iflag=fullblock status=none \
+  1<> "$pDir/$eSide"
 nLeft=$(( nLeft - nFirst ))
 iFrame=1
 while (( nLeft > 0 )); do

@@ -8,13 +8,12 @@ instruction to that session.
 
 ## This repo
 
-Seven skills under one `.claude/`, one harness apiece under `tests/`, and
-this file. One of the skills, icc-lib, is the functions the others share;
-each of them sources it by fixed path.
+Eight skills under one `.claude/`, one harness apiece under `tests/`, and
+this file. Two of the skills serve the others: icc-lib is the functions
+they share, which each of them sources by fixed path, and icc-raspberry
+is the test data, a raspberry of sixteen kinds that the harnesses blow.
 
-    ./tests/run.sh               every piece's harness, bottom up
-    ./tests/raspberry [BYTES]    test data: a raspberry, one of sixteen
-                                 kinds, fresh from /dev/urandom, BYTES long
+    ./tests/run.sh    every piece's harness, bottom up
 
 Pieces reach each other by fixed path: a script in
 `.claude/skills/icc-patch/scripts/` finds Pipes at

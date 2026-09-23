@@ -29,15 +29,16 @@ rather than hangs when you ask for more than the wire holds.
 
 ## The pieces
 
-    icc-bridge   the spelling  a payload as a message, and back
-    icc-patch    the bay       shapes over N seats, and a map
-    icc-frames   the payload   slice, carry, reassemble
-    icc-tee      the fitting   copy one pipe onto many
-    icc-merge    the fitting   copy many pipes onto one
-    icc-pipes    the lane      a bidirectional channel at a path
-    icc-lib      the bench     the functions every other piece sources
+    icc-bridge     the spelling  a payload as a message, and back
+    icc-patch      the bay       shapes over N seats, and a map
+    icc-frames     the payload   slice, carry, reassemble
+    icc-tee        the fitting   copy one pipe onto many
+    icc-merge      the fitting   copy many pipes onto one
+    icc-pipes      the lane      a bidirectional channel at a path
+    icc-lib        the bench     the functions every other piece sources
+    icc-raspberry  the egg       test data: sixteen kinds, from urandom
 
-Seven Claude Code skills in one repo, under one `.claude/skills/`.
+Eight Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage, and only a Claude can call that.

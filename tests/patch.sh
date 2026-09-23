@@ -33,6 +33,7 @@ source .claude/skills/icc-lib/scripts/lib
 pIccPipes=.claude/skills/icc-pipes/scripts
 pIccFrames=.claude/skills/icc-frames/scripts
 pIccPatch=.claude/skills/icc-patch/scripts
+pIccRaspberry=.claude/skills/icc-raspberry/scripts
 
 ##
 # @fn pEnd()
@@ -354,7 +355,7 @@ pReadEnd=$(pAt 0 1 p)
 # each round every seat blows a raspberry at the next, the hop tees copy each
 # one to the chair through the merge, and the chair blows one at every seat
 # through the broadcast tee. Every seat hands back its spittle count. The
-# raspberries come from tests/raspberry, fresh each time; in the Final the
+# raspberries come from icc-raspberry, fresh each time; in the Final the
 # chair's is 20000 bytes and spills over five frames, which the broadcast
 # tee, one writer to a lane, carries whole.
 
@@ -372,6 +373,7 @@ pReadEnd=$(pAt 0 1 p)
 # @global pDir - read, the patch
 # @global pWork - read, where the seat's files go
 # @global pIccFrames - read, where Frames' scripts are
+# @global pIccRaspberry - read, where the raspberries come from
 # @return 0; a write or read that fails ends the seat, and the chair's wait
 #         for it with it
 ##
@@ -386,7 +388,7 @@ vSeat() {
   pHop=$(pAt "$iSeat" 1 $(( (iSeat + 2) % 3 )))
   pChair=$(pAt "$iSeat" 1 p)
   for iRound in 1 2 3 4; do
-    osBlown=$(tests/raspberry)
+    osBlown=$("$pIccRaspberry/raspberry")
     echo "$osBlown" >> "$pWork/blown$iSeat"
     printf '%s' "$osBlown" | "$pIccFrames/write" "$pSend" 0
     timeout 10 "$pIccFrames/read" "$pHop" 1 >> "$pWork/hop$iSeat"
@@ -407,7 +409,7 @@ for iSeat in 0 1 2; do
   aSeats+=($!)
 done
 for nBytes in '' '' '' 20000; do
-  osBlown=$(tests/raspberry "$nBytes")
+  osBlown=$("$pIccRaspberry/raspberry" "$nBytes")
   echo "$osBlown" >> "$pWork/blownp"
   printf '%s' "$osBlown" | "$pIccFrames/write" "$pBroadcast" 0
   for iSeat in 0 1 2; do

@@ -26,6 +26,9 @@
 ##
 nBytes=${1-}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+# Every refusal says it is raspberry speaking.
+osWho=raspberry
 # Sixteen kinds, LEAD:BODY. Every lead is one or two letters, so four bytes
 # always hold a lead, a body and some spittle.
 aKinds=(P:T PF:F PB:B TH:P B:R BL:L BZ:Z PH:T
@@ -38,17 +41,7 @@ if [ -z "$nBytes" ]; then
   nBody=$((5 + nA % 36))
   nSpit=$((1 + nB % 15))
 else
-  case $nBytes in
-    *[!0-9]*)
-      echo "raspberry: BYTES must be a whole number: $nBytes" >&2
-      exit 1
-      ;;
-  esac
-  [[ $nBytes =~ ^0*[0-9]{1,18}$ ]] || {
-    echo "raspberry: BYTES too big: $nBytes" >&2
-    exit 1
-  }
-  nBytes=$((10#$nBytes))
+  nBytes=$(nCount BYTES "$nBytes")
   [ "$nBytes" -ge 4 ] || {
     echo "raspberry: BYTES must be 4 or more: $nBytes" >&2
     exit 1

@@ -24,9 +24,12 @@
 for pDir in /tmp/icc-merge-*/; do
   pDir=${pDir%/}
   # A directory of the right name is not a merge. An unfinished create and a
-  # stray mkdir both look like one from here, and neither is.
-  [ -f "$pDir/merge" ] || continue
-  eSide=$(sed -n 2p "$pDir/merge")
+  # stray mkdir both look like one from here, and neither is. The file is
+  # read once, and quietly: a merge can go while this runs, which is not this
+  # script's to report, so one gone is skipped like one never made. stderr
+  # is silenced before the file is opened, or the open's own error prints.
+  mapfile -t aRecord 2>/dev/null < "$pDir/merge" || continue
+  eSide=${aRecord[1]}
   # Nor is one whose SIDE is not 0 or 1. It goes into arithmetic below, where
   # it stopped the listing, or ran what a subscript in it spelled.
   case $eSide in
@@ -36,7 +39,7 @@ for pDir in /tmp/icc-merge-*/; do
       continue
       ;;
   esac
-  mapfile -t aSrcs < <(sed -n '3,$p' "$pDir/merge")
+  aSrcs=("${aRecord[@]:2}")
   # A merge file with no SRC line is not one either, and saying so by dividing
   # by zero would take the whole listing with it: the glob is sorted, so one
   # such directory named early hides every merge after it from every caller.
@@ -57,5 +60,5 @@ for pDir in /tmp/icc-merge-*/; do
     iCopier=$((iCopier + 1))
   done
   [ "$iCopier" -gt 0 ] && [ "$nUp" -eq "$iCopier" ] && eState=up
-  echo "$pDir $eState $(paste -sd ' ' < "$pDir/merge")"
+  echo "$pDir $eState ${aRecord[*]}"
 done

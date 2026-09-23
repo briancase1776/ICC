@@ -23,10 +23,14 @@ for pDir in /tmp/icc-tee-*/; do
   pDir=${pDir%/}
   # A directory matching the glob with no DIR/tee in it was not made here, or
   # was not finished. Announcing it printed a line with no SRC, SIDE or DST
-  # in it and three errors on stderr.
-  [ -f "$pDir/tee" ] || continue
-  pSrc=$(sed -n 1p "$pDir/tee")
-  eSide=$(sed -n 2p "$pDir/tee")
+  # in it and three errors on stderr. The file is read once, and quietly: a
+  # tee can go while this runs, which is a normal thing on a shared box and
+  # not this script's to report, so one gone is skipped like one never made.
+  # stderr is silenced before the file is opened, or the open's own error
+  # still prints.
+  mapfile -t aRecord 2>/dev/null < "$pDir/tee" || continue
+  pSrc=${aRecord[0]}
+  eSide=${aRecord[1]}
   # A SIDE that is not 0 or 1 was not written by create either. It goes into
   # arithmetic below, where it stopped the listing, or ran what a subscript
   # in it spelled.
@@ -51,5 +55,5 @@ for pDir in /tmp/icc-tee-*/; do
     iLane=$((iLane + 2))
   done
   [ "$nCopiers" -gt 0 ] && [ "$nUp" -eq "$nCopiers" ] && eState=up
-  echo "$pDir $eState $(paste -sd ' ' < "$pDir/tee")"
+  echo "$pDir $eState ${aRecord[*]}"
 done

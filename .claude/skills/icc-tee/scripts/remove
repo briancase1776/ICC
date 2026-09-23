@@ -1,24 +1,53 @@
 #!/bin/bash
-# .claude/skills/icc-tee/scripts/remove
-# remove DIR: stop the tee, delete its directory. DIR is what create printed.
-# The pipes on either end are left exactly as they were.
+##
+# @file remove
+# @brief Stop a tee and delete its directory.
+# @details remove DIR. DIR is what create printed, spelled any way that
+#          reaches it. It must hold what create wrote: a tee file naming
+#          an absolute SRC and a SIDE of 0 or 1, and a pid file of at
+#          least one line, every one a number. A copier is killed only
+#          while it has its lane of SRC open on fd 0, so a stranger's
+#          pid, or a recycled one, is left alone. Then the two files go,
+#          and the directory with them unless something else is in it.
+#          The pipes on either end are left exactly as they were.
+# @stdin nothing
+# @stdout nothing
+# @stderr the reason, on refusal
+# @exit 0 the tee is gone; 1 DIR is missing or not a tee, or held
+#       something create did not make and was left in place
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 pArg=${1:?usage: remove DIR}
 set -eu
 pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
-[ -n "$pDir" ] && [ -d "$pDir" ] && [ -s "$pDir/tee" ] && [ -s "$pDir/pid" ] ||
-  { echo "not a tee: $pArg" >&2; exit 1; }
+[ -n "$pDir" ] && [ -d "$pDir" ] &&
+  [ -s "$pDir/tee" ] && [ -s "$pDir/pid" ] || {
+  echo "not a tee: $pArg" >&2
+  exit 1
+}
 # What create wrote: SRC absolute, SIDE 0 or 1, a DST per line, and one pid
 # per lane SIDE writes, every one a number. A directory that does not hold
 # that was not made here, so its files are not this script's to delete.
-pSrc=$(sed -n 1p "$pDir/tee"); eSide=$(sed -n 2p "$pDir/tee")
-nPids=$(grep -c '^[0-9][0-9]*$' "$pDir/pid" || :); nLines=$(wc -l < "$pDir/pid")
-case $pSrc:$eSide in /*:0|/*:1) ;; *) echo "not a tee: $pArg" >&2; exit 1 ;; esac
-[ "$nPids" -ge 1 ] && [ "$nPids" -eq "$nLines" ] ||
-  { echo "not a tee: $pArg" >&2; exit 1; }
+pSrc=$(sed -n 1p "$pDir/tee")
+eSide=$(sed -n 2p "$pDir/tee")
+nPids=$(grep -c '^[0-9][0-9]*$' "$pDir/pid" || :)
+nLines=$(wc -l < "$pDir/pid")
+case $pSrc:$eSide in
+  /*:0|/*:1)
+    ;;
+  *)
+    echo "not a tee: $pArg" >&2
+    exit 1
+    ;;
+esac
+[ "$nPids" -ge 1 ] && [ "$nPids" -eq "$nLines" ] || {
+  echo "not a tee: $pArg" >&2
+  exit 1
+}
 # Kill a copier only when it is still this tee's: create gives each copier
 # its lane of SRC on stdin, which is what list reads. A stranger's pid, or a
 # recycled one, will not match, and a copier that has ended matches nothing.
@@ -33,4 +62,7 @@ done < "$pDir/pid"
 # refuses a directory with anything left in it, so a wrong path costs a
 # look-alike its own two files and never a stranger's tree.
 rm -f "$pDir/tee" "$pDir/pid"
-rmdir "$pDir" || { echo "not a tee, left in place: $pArg" >&2; exit 1; }
+rmdir "$pDir" || {
+  echo "not a tee, left in place: $pArg" >&2
+  exit 1
+}

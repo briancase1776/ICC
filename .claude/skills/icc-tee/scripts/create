@@ -1,20 +1,50 @@
 #!/bin/bash
-# .claude/skills/icc-tee/scripts/create
-# create SRC SIDE DST...: copy what SIDE writes into pipe SRC onto the same
-# lanes of every pipe DST, byte for byte, in order, until removed. Print the
-# tee's directory. Every pipe must exist and have the same lane count; the
-# tee makes nothing but itself.
+##
+# @file create
+# @brief Copy what SIDE writes into SRC onto every DST, and print the tee.
+# @details create SRC SIDE DST... SRC and every DST are pipes Pipes made,
+#          all with the same lane count. SIDE is 0 or 1, the side whose
+#          writes are copied. No DST is SRC and none is given twice, in
+#          any spelling. For each lane SIDE writes, a copier, tee(1),
+#          takes that lane of SRC and writes it to that lane of every
+#          DST, byte for byte, in order, until removed. The tee's
+#          directory holds two files: tee, naming SRC, SIDE and each DST
+#          a line, and pid, one copier a line in lane order. The tee
+#          makes nothing but itself.
+#          A create that cannot finish takes its copiers and its two
+#          files with it, and its directory unless something else is in
+#          it. Once the tee is whole that is no longer armed, so a create
+#          that then fails to print leaves a whole tee nobody was told
+#          of, which list shows and remove takes.
+# @stdin nothing
+# @stdout the tee's directory, one line
+# @stderr the reason, on refusal
+# @exit 0 the tee is made and printed; 1 the arguments are refused, or
+#       the tee could not be finished and none of it is left, or it
+#       could not be printed and all of it is
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-pSrc=$1; eSide=$2
+# MIT Licence. See LICENCE.TXT
+##
+pSrc=$1
+eSide=$2
 set -eu
-[ $# -ge 3 ] || { echo "usage: create SRC SIDE DST..." >&2; exit 1; }
+[ $# -ge 3 ] || {
+  echo "usage: create SRC SIDE DST..." >&2
+  exit 1
+}
 shift 2
-[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || { echo "side is 0 or 1" >&2; exit 1; }
+[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || {
+  echo "side is 0 or 1" >&2
+  exit 1
+}
 for pPipe in "$pSrc" "$@"; do
-  [ -p "$pPipe/0" ] || { echo "not a pipe: $pPipe" >&2; exit 1; }
+  [ -p "$pPipe/0" ] || {
+    echo "not a pipe: $pPipe" >&2
+    exit 1
+  }
 done
 # Canonicalise before anything compares or is written: one pipe has many
 # spellings, the checks below are comparisons, and the outlets go in the
@@ -26,16 +56,24 @@ for pPipe; do
   # SRC as its own DST copies a lane back into itself and spins on one byte
   # forever. The same DST twice writes every byte to that lane twice, count
   # line and all, so a Frames read there yields something nobody sent.
-  [ "$pDst" != "$pSrc" ] || { echo "DST is SRC: $pPipe" >&2; exit 1; }
+  [ "$pDst" != "$pSrc" ] || {
+    echo "DST is SRC: $pPipe" >&2
+    exit 1
+  }
   for pSeen in "${aDsts[@]}"; do
-    [ "$pDst" != "$pSeen" ] || { echo "DST twice: $pPipe" >&2; exit 1; }
+    [ "$pDst" != "$pSeen" ] || {
+      echo "DST twice: $pPipe" >&2
+      exit 1
+    }
   done
   aDsts+=("$pDst")
 done
 nLanes=$(ls "$pSrc" | grep -c '^[0-9][0-9]*$')
 for pDst in "${aDsts[@]}"; do
-  [ "$(ls "$pDst" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] ||
-    { echo "lanes differ: $pDst" >&2; exit 1; }
+  [ "$(ls "$pDst" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
+    echo "lanes differ: $pDst" >&2
+    exit 1
+  }
 done
 pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 # Until the tee is whole it is not a tee: a create that cannot finish takes
@@ -49,12 +87,17 @@ aPids=()
 trap 'trap - EXIT INT TERM HUP
       [ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
       rm -f "$pDir/tee" "$pDir/pid"
-      rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] || echo "left in place: $pDir" >&2
+      rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
+        echo "left in place: $pDir" >&2
       exit 1' EXIT INT TERM HUP
-{ printf '%s\n' "$pSrc" "$eSide"; printf '%s\n' "${aDsts[@]}"; } > "$pDir/tee"
+{
+  printf '%s\n' "$pSrc" "$eSide"
+  printf '%s\n' "${aDsts[@]}"
+} > "$pDir/tee"
 iLane=$eSide
 while [ "$iLane" -lt "$nLanes" ]; do
-  aOuts=(); for pDst in "${aDsts[@]}"; do aOuts+=("$pDst/$iLane"); done
+  aOuts=()
+  for pDst in "${aDsts[@]}"; do aOuts+=("$pDst/$iLane"); done
   # A copier is this shell's child until it execs, so it inherits the traps
   # above: killing one from the handler ran the handler again, in it, racing
   # the shell that sent the signal. Clear them and exec, so a copier is
@@ -63,9 +106,11 @@ while [ "$iLane" -lt "$nLanes" ]; do
   # lane whose pipe has no writer blocks the open, and a copier still
   # holding what it inherited held d=$(create ...) open with it. Its own
   # output goes nowhere either way; only the order matters.
-  ( trap - EXIT INT TERM HUP
+  (
+    trap - EXIT INT TERM HUP
     exec >/dev/null 2>&1
-    exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane" ) &
+    exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane"
+  ) &
   aPids+=($!)
   echo $! >> "$pDir/pid"
   iLane=$((iLane + 2))

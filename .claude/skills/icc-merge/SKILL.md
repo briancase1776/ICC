@@ -26,7 +26,7 @@ and which lanes each side writes; see its SKILL.md.
     scripts/create DST SIDE SRC...  copy what SIDE writes into every SRC
                                     onto DST, print the merge's directory.
                                     Every pipe must exist and have the
-                                    same lane count, no inlet is the
+                                    same even lane count, no inlet is the
                                     outlet, and none is given twice.
     scripts/list                    one line per merge: DIR up|down DST SIDE SRC...
     scripts/remove DIR              stop the merge, delete DIR. The pipes on

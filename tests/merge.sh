@@ -3,14 +3,14 @@
 # @file merge.sh
 # @brief Prove the merge: two pipes' side copied whole onto a third.
 # @details Prove the merge: get three pipes, merge side 0 of two into the
-#          third, push a Frames payload bigger than one lane holds
-#          through each inlet in turn, read it back whole from the outlet
-#          each time, then plain bytes on one lane from both inlets,
-#          remove it. The pipes stay up. An inlet that is the outlet, one
-#          given twice, and a lane that is not a lane are refused; remove
-#          takes what create made and not a path out of it or a
-#          look-alike; list answers for every merge whatever else /tmp
-#          holds, and calls a copierless merge down.
+#          third, push a Frames payload bigger than one lane holds through
+#          each inlet in turn, read it back whole from the outlet each
+#          time, then plain bytes on one lane from both inlets, remove it.
+#          The pipes stay up. An inlet that is the outlet, one given
+#          twice, a lane that is not a lane, and an odd lane count are
+#          refused; remove takes what create made and not a path out of it
+#          or a look-alike; list answers for every merge whatever else
+#          /tmp holds, and calls a copierless merge down.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -51,10 +51,17 @@ mkdir "$pBroken/2"
 "$pIccMerge/create" "$pPipeC" 0 "$pBroken" 2>/dev/null && exit 1
 rmdir "$pBroken/2"
 "$pIccPipes/remove" "$pBroken"
-# a pipe with no lane for SIDE, which would start no copier
+# an odd lane count, refused in Pipes' words: one lane, where SIDE 1 has
+# none to copy and no copier would start, and three
 mkdir one two
 mkfifo one/0 two/0
 "$pIccMerge/create" one 1 two 2>/dev/null && exit 1
+pOddA=$("$pIccPipes/create" 4)
+pOddB=$("$pIccPipes/create" 4)
+rm -f "$pOddA/3" "$pOddB/3"
+"$pIccMerge/create" "$pOddA" 0 "$pOddB" 2>/dev/null && exit 1
+"$pIccPipes/remove" "$pOddA"
+"$pIccPipes/remove" "$pOddB"
 pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeB")
 trap '"$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :
       for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow; do

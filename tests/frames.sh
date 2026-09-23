@@ -2,13 +2,14 @@
 ##
 # @file frames.sh
 # @brief Prove read and write: payloads round trip whole, and bad input fails.
-# @details Prove read and write: get a pipe, push a payload bigger than one
-#          lane holds through it, read it back whole, compare bytes, both
-#          directions; push one far bigger with a read draining it;
-#          refuse a SIDE that is not a side and a count that is not a
-#          count, too big to count among them; do the round trip again on
-#          two lanes, one straw each way; remove the pipes. Runs in a
-#          directory of its own and touches nothing else.
+# @details Prove read and write: get a pipe, push a payload bigger than
+#          one lane holds through it, read it back whole, compare bytes,
+#          both directions; push one far bigger with a read draining it;
+#          refuse a SIDE that is not a side, a pipe with an odd lane
+#          count, and a count that is not a count, too big to count among
+#          them; do the round trip again on two lanes, one straw each way;
+#          remove the pipes. Runs in a directory of its own and touches
+#          nothing else.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -75,6 +76,15 @@ printf '99999999999999999999\n' 1<> "$pDir/0"
 timeout 5 "$pIccFrames/read" "$pDir" 1 >/dev/null 2>&1 && exit 1
 printf '010\n0123456789' 1<> "$pDir/0"
 [[ $(timeout 5 "$pIccFrames/read" "$pDir" 1) == 0123456789 ]]
+# An odd lane count is not a pipe Pipes makes, and both ends refuse it
+# rather than pair it down: the read says so, and does not wait.
+pOdd=$("$pIccPipes/create" 4)
+osMade="$osMade $pOdd"
+rm -f "$pOdd/3"
+"$pIccFrames/write" "$pOdd" 0 < /dev/null 2>/dev/null && exit 1
+nStatus=0
+timeout 1 "$pIccFrames/read" "$pOdd" 1 >/dev/null 2>&1 || nStatus=$?
+[ "$nStatus" -eq 1 ]
 # Two lanes is one straw each way and the same script, as Frames' SKILL.md
 # says. Bigger than the one lane this side writes cannot be left on the wire
 # here at all, so the read drains while the write runs, as above; sized

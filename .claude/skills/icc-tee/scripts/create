@@ -3,16 +3,15 @@
 # @file create
 # @brief Copy what SIDE writes into SRC onto every DST, and print the tee.
 # @details create SRC SIDE DST... SRC and every DST are pipes Pipes made,
-#          all with the same lane count, every lane of them a fifo, and a
-#          lane for SIDE among them. SIDE is 0 or 1, the side whose
-#          writes are copied. No DST is SRC and none is given twice, in
-#          any spelling. For each lane SIDE writes, a copier, tee(1),
-#          takes that lane of SRC and writes it to that lane of every
-#          DST, byte for byte, in order, until removed. The tee's
-#          directory holds two files: tee, naming SRC, SIDE and each DST
-#          a line, and pid, one copier a line in lane order, written empty
-#          before the first copier is forked. The tee makes nothing but
-#          itself.
+#          all with the same even lane count, every lane of them a fifo.
+#          SIDE is 0 or 1, the side whose writes are copied. No DST is SRC
+#          and none is given twice, in any spelling. For each lane SIDE
+#          writes, a copier, tee(1), takes that lane of SRC and writes it
+#          to that lane of every DST, byte for byte, in order, until
+#          removed. The tee's directory holds two files: tee, naming SRC,
+#          SIDE and each DST a line, and pid, one copier a line in lane
+#          order, written empty before the first copier is forked. The tee
+#          makes nothing but itself.
 #          A create that cannot finish, or whose directory is removed
 #          while it starts, takes its copiers and its two files with it,
 #          and its directory unless something else is in it. Once the
@@ -50,10 +49,11 @@ case $eSide in
 esac
 # A pipe is what Pipes makes, and the same checks, in the same order, as
 # Merge's create: lane 0 of every pipe first, so a path that is no pipe at
-# all says so; then a lane for SIDE to copy, or the tee would start no
-# copier; then every pipe the same count, and every lane of it a lane. A
-# numeric entry that is not a lane counts toward the count, and then its
-# copier appends to it as a file, or reads it as one and ends.
+# all says so; then an even count, in Pipes' words, which with lane 0 there
+# is two or more, so either SIDE has a lane to copy; then every pipe the same
+# count, and every lane of it a lane. A numeric entry that is not a lane
+# counts toward the count, and then its copier appends to it as a file, or
+# reads it as one and ends.
 for pPipe in "$pSrc" "$@"; do
   [ -p "$pPipe/0" ] || {
     echo "not a pipe: $pPipe" >&2
@@ -61,10 +61,12 @@ for pPipe in "$pSrc" "$@"; do
   }
 done
 nLanes=$(ls -- "$pSrc" | grep -c '^[0-9][0-9]*$')
-[ "$nLanes" -gt "$eSide" ] || {
-  echo "no lane for SIDE $eSide: $pSrc" >&2
-  exit 1
-}
+case $nLanes in
+  *[13579])
+    echo "lanes must be even: $pSrc" >&2
+    exit 1
+    ;;
+esac
 for pPipe in "$pSrc" "$@"; do
   [ "$(ls -- "$pPipe" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] || {
     echo "lanes differ: $pPipe" >&2

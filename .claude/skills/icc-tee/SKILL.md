@@ -24,7 +24,7 @@ each side writes; see its SKILL.md.
     scripts/create SRC SIDE DST...  copy what SIDE writes into SRC onto
                                     every DST, print the tee's directory.
                                     Every pipe must exist and have the
-                                    same lane count.
+                                    same even lane count.
     scripts/list                    one line per tee: DIR up|down SRC SIDE DST...
     scripts/remove DIR              stop the tee, delete DIR. The pipes on
                                     either end are left as they were.

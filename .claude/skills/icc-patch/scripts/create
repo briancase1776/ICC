@@ -4,12 +4,11 @@
 # @brief Patch pipes, tees and merges into SHAPE over N seats; print it.
 # @details create SHAPE N [LANES]. SHAPE is star, ring, mesh, ring-p or
 #          mesh-p. N is how many seats there are besides p, 1 or more.
-#          LANES is how many lanes every pipe has, 2 when not given, and
-#          whether it is even is Pipes' to say. Both numbers are read in
-#          base ten, and neither may run past 18 significant digits. The
-#          pieces come from icc-pipes, icc-tee and icc-merge, beside this
-#          skill in the same skills directory; the bay makes nothing but
-#          the map.
+#          LANES is how many lanes every pipe has, even, and 2 when not
+#          given. Both numbers are read in base ten, and neither may run
+#          past 18 significant digits. The pieces come from icc-pipes,
+#          icc-tee and icc-merge, beside this skill in the same skills
+#          directory; the bay makes nothing but the map.
 #          The patch's directory holds two files: patch, the line SHAPE
 #          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
 #          made, one line per piece in the order it was made, its
@@ -52,8 +51,9 @@ esac
 # of them and eight to the other. Both are used here -- the shape counts
 # seats with [ and wraps a ring with $(( )) -- so force decimal before either
 # sees it.
-# Whether lanes are even is Pipes' to say, and it says it when a pipe is made;
-# a shape that makes no pipe still writes the header, which is the bay's own.
+# Lanes are even, checked here as Pipes checks them and in its words: a shape
+# that makes no pipe still writes LANES into the header, and nothing else
+# would say so.
 case $nSeats in
   ''|*[!0-9]*)
     echo "seats must be a whole number: $nSeats" >&2
@@ -63,6 +63,10 @@ esac
 case $nLanes in
   ''|*[!0-9]*)
     echo "lanes must be a whole number: $nLanes" >&2
+    exit 1
+    ;;
+  *[13579])
+    echo "lanes must be even: $nLanes" >&2
     exit 1
     ;;
 esac

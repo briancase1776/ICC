@@ -2,11 +2,12 @@
 ##
 # @file read
 # @brief Take frames off the lanes SIDE reads and put the payload back.
-# @details read DIR SIDE. DIR is what Pipes' create printed. SIDE is 0 or
-#          1, the side this end is: side 0 reads the odd lanes, side 1
-#          the even ones. The count comes first, as a decimal line on
-#          the first lane SIDE reads, then frames round-robin in lane
-#          order until that many bytes have come.
+# @details read DIR SIDE. DIR is what Pipes' create printed, and one with
+#          an odd lane count is refused. SIDE is 0 or 1, the side this end
+#          is: side 0 reads the odd lanes, side 1 the even ones. The count
+#          comes first, as a decimal line on the first lane SIDE reads,
+#          then frames round-robin in lane order until that many bytes
+#          have come.
 #          A count that is not a count is a failure, not an empty
 #          payload: bytes in, the same bytes out, or say so. A count
 #          that has not come is a different thing and is not failed:
@@ -38,6 +39,14 @@ case $eSide in
     ;;
 esac
 aLanes=("$pDir"/[0-9]*)
+# An odd count is not a pipe Pipes makes: refused in Pipes' words, as the
+# fittings refuse it, and not paired down to the lanes that have a partner.
+case ${#aLanes[@]} in
+  *[13579])
+    echo "read: lanes must be even: $pDir" >&2
+    exit 1
+    ;;
+esac
 nPairs=$(( ${#aLanes[@]} / 2 ))
 (( nPairs > 0 )) || {
   echo "read: no lanes in $pDir" >&2

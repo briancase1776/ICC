@@ -40,10 +40,14 @@ set -eu
   exit 1
 }
 shift 2
-[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || {
-  echo "side is 0 or 1" >&2
-  exit 1
-}
+case $eSide in
+  0|1)
+    ;;
+  *)
+    echo "SIDE is 0 or 1, not $eSide" >&2
+    exit 1
+    ;;
+esac
 # Lane 0 of every pipe first, so a path that is no pipe at all says so, and
 # not what ls says of it; then a lane for SIDE to copy, or the merge would
 # start no copier. The same checks, in the same order, as Tee's create.
@@ -80,20 +84,24 @@ done
 # finds the copiers.
 pDst=$(readlink -f -- "$pDst")
 aSrcs=()
-for pPipe; do aSrcs+=("$(readlink -f -- "$pPipe")"); done
-for pSrc in "${aSrcs[@]}"; do
+for pPipe; do
+  pSrc=$(readlink -f -- "$pPipe")
+  # A SRC that is DST copies a lane back into itself. The same SRC twice is
+  # two copiers on one inlet lane, two readers of it, and the order it went
+  # in on that inlet is the one thing a merge promises. Checked as Tee's
+  # create checks its DSTs, and said in the caller's spelling.
   [ "$pSrc" != "$pDst" ] || {
-    echo "inlet is the outlet: $pSrc" >&2
+    echo "SRC is DST: $pPipe" >&2
     exit 1
   }
+  for pSeen in "${aSrcs[@]}"; do
+    [ "$pSrc" != "$pSeen" ] || {
+      echo "SRC twice: $pPipe" >&2
+      exit 1
+    }
+  done
+  aSrcs+=("$pSrc")
 done
-# Two copiers on one inlet lane are two readers of it, and the order it went
-# in on that inlet is the one thing a merge promises.
-pDup=$(printf '%s\n' "${aSrcs[@]}" | sort | uniq -d | sed -n 1p)
-[ -z "$pDup" ] || {
-  echo "inlet twice: $pDup" >&2
-  exit 1
-}
 pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 # Until the merge is whole it is not a merge: a create that cannot finish
 # takes its copiers and its directory with it. It kills them from its own

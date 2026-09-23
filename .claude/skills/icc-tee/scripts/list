@@ -26,11 +26,11 @@ for pDir in /tmp/icc-tee-*/; do
   # in it and three errors on stderr.
   [ -f "$pDir/tee" ] || continue
   pSrc=$(sed -n 1p "$pDir/tee")
-  iLane=$(sed -n 2p "$pDir/tee")
+  eSide=$(sed -n 2p "$pDir/tee")
   # A SIDE that is not 0 or 1 was not written by create either. It goes into
   # arithmetic below, where it stopped the listing, or ran what a subscript
   # in it spelled.
-  case $iLane in
+  case $eSide in
     0|1)
       ;;
     *)
@@ -40,6 +40,7 @@ for pDir in /tmp/icc-tee-*/; do
   # Down until every copier answers, the way Pipes reads a hold and Merge its
   # copiers: a tee with no copiers yet, or none left, is not up, and only a
   # positive check says otherwise.
+  iLane=$eSide
   eState=down
   nCopiers=0
   nUp=0

@@ -40,10 +40,14 @@ set -eu
   exit 1
 }
 shift 2
-[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || {
-  echo "side is 0 or 1" >&2
-  exit 1
-}
+case $eSide in
+  0|1)
+    ;;
+  *)
+    echo "SIDE is 0 or 1, not $eSide" >&2
+    exit 1
+    ;;
+esac
 # A pipe is what Pipes makes, and the same checks, in the same order, as
 # Merge's create: lane 0 of every pipe first, so a path that is no pipe at
 # all says so; then a lane for SIDE to copy, or the tee would start no

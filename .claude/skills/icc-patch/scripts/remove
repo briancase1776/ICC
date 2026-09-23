@@ -1,34 +1,57 @@
 #!/bin/bash
-# .claude/skills/icc-patch/scripts/remove
-# remove DIR: remove the fittings, then the pipes, in the reverse of the order
-# create made them, then delete DIR. DIR is what create printed. Reverse is
-# only the right order because create appends a fitting after the pipes it is
-# attached to; move a fitting earlier in create and this walk pulls a pipe out
-# from under a live copier. What the bay
-# can remove is what each piece's own skill still lists: a piece that skill no
-# longer knows is beyond removing by anything here, and is named where it lies
-# rather than tried for ever. One that is listed and will not go is named too,
-# and DIR is left standing with the made file that names the rest, so a second
-# remove can carry on: the record outlives the attempt, or nothing can find
-# what is left.
+##
+# @file remove
+# @brief Remove a patch's fittings, then its pipes, then its directory.
+# @details remove DIR. DIR is what create printed. Its pieces go in the
+#          reverse of the order create made them, each by its own
+#          skill's remove, and then DIR. Reverse is only the right order
+#          because create appends a fitting after the pipes it is
+#          attached to; move a fitting earlier in create and this walk
+#          pulls a pipe out from under a live copier. What the bay can
+#          remove is what each piece's own skill still lists: a piece
+#          that skill no longer knows is beyond removing by anything
+#          here, and is named where it lies rather than tried for ever.
+#          One that is listed and will not go is named too, and DIR is
+#          left standing with the made file that names the rest, so a
+#          second remove can carry on: the record outlives the attempt,
+#          or nothing can find what is left. bLeft is 0, and 1 once a
+#          piece has not gone.
+# @stdin nothing
+# @stdout nothing
+# @stderr the reason, on refusal, and every piece it could not take
+# @exit 0 the patch is gone; 1 DIR is not a patch, or a piece would not
+#       go and DIR is left standing
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 pDir=${1:?usage: remove DIR}
 set -eu
-[ -f "$pDir/patch" ] && [ -f "$pDir/made" ] || { echo "not a patch: $pDir" >&2; exit 1; }
+[ -f "$pDir/patch" ] && [ -f "$pDir/made" ] || {
+  echo "not a patch: $pDir" >&2
+  exit 1
+}
 bLeft=0
 # One question per skill, not one per piece: see list.
-pListed=$(mktemp); trap 'rm -f "$pListed"' EXIT
-cut -d' ' -f1 "$pDir/made" | sort -u | while read -r pScripts; do "$pScripts/list" | cut -d' ' -f1
+pListed=$(mktemp)
+trap 'rm -f "$pListed"' EXIT
+cut -d' ' -f1 "$pDir/made" | sort -u | while read -r pScripts; do
+  "$pScripts/list" | cut -d' ' -f1
 done > "$pListed"
 while read -r pScripts pPiece; do
   if grep -qxF "$pPiece" "$pListed"; then
-    "$pScripts/remove" "$pPiece" || { echo "would not go: $pPiece" >&2; bLeft=1; }
+    "$pScripts/remove" "$pPiece" || {
+      echo "would not go: $pPiece" >&2
+      bLeft=1
+    }
   else
     [ ! -e "$pPiece" ] || echo "its own skill no longer knows it: $pPiece" >&2
   fi
 done < <(sed '1!G;h;$!d' "$pDir/made")
-[ "$bLeft" -eq 0 ] || { echo "left standing: $pDir" >&2; exit 1; }
+[ "$bLeft" -eq 0 ] || {
+  echo "left standing: $pDir" >&2
+  exit 1
+}
 rm -rf "$pDir"

@@ -1,21 +1,33 @@
 #!/bin/bash
-# .claude/skills/icc-patch/scripts/list
-# list: one line per patch, "DIR up|down SHAPE N LANES".
-# Up means every pipe and fitting in it says up. A patch whose made file is
-# gone is down: nothing can say its pieces are up, and its pieces cannot be
-# reached to remove.
+##
+# @file list
+# @brief One line per patch: its directory, up or down, and its header.
+# @details list takes nothing. A patch is a /tmp/icc-patch-* directory
+#          whose patch file has a first line. eState is up or down: up
+#          when every piece its made file names is listed up by that
+#          piece's own skill, and down otherwise. A patch whose made file
+#          is gone is down: nothing can say its pieces are up, and its
+#          pieces cannot be reached to remove.
+# @stdin nothing
+# @stdout "DIR up|down SHAPE N LANES", one line per patch, in glob order
+# @stderr whatever a piece's own list says
+# @exit 0, with patches or without
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 set -eu
 # Ask each skill once what it has, not once per piece it has: a sibling's list
 # names every piece of its kind on the box, so asking per piece makes listing
 # one patch cost as much as everyone else's work put together.
-pListed=$(mktemp); trap 'rm -f "$pListed"' EXIT
-cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u | while read -r pScripts; do
-  [ -x "$pScripts/list" ] && "$pScripts/list" | cut -d' ' -f1,2
-done > "$pListed" || :
+pListed=$(mktemp)
+trap 'rm -f "$pListed"' EXIT
+cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u |
+  while read -r pScripts; do
+    [ -x "$pScripts/list" ] && "$pScripts/list" | cut -d' ' -f1,2
+  done > "$pListed" || :
 # A patch can go while this runs. That is a normal thing on a shared box, not
 # an error: read each file once, and skip a patch that is no longer there.
 for pDir in /tmp/icc-patch-*/; do

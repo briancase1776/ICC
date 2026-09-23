@@ -1,91 +1,284 @@
 #!/bin/bash
-# .claude/skills/icc-patch/scripts/create
-# create SHAPE N [LANES]: make the pipes, tees and merges SHAPE needs over N
-# seats, LANES lanes each (even, default 2), write the map, print the patch's
-# directory. The pieces come from icc-pipes, icc-tee and icc-merge, beside
-# this skill under .claude/skills; the bay makes nothing but the map.
+##
+# @file create
+# @brief Patch pipes, tees and merges into SHAPE over N seats; print it.
+# @details create SHAPE N [LANES]. SHAPE is star, ring, mesh, ring-p or
+#          mesh-p. N is how many seats there are besides p, 1 or more.
+#          LANES is how many lanes every pipe has, 2 when not given, and
+#          whether it is even is Pipes' to say. Both numbers are read in
+#          base ten. The pieces come from icc-pipes, icc-tee and
+#          icc-merge, beside this skill under .claude/skills; the bay
+#          makes nothing but the map.
+#          The patch's directory holds two files: patch, the line SHAPE
+#          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
+#          made, one line per piece in the order it was made, the
+#          scripts that made it and its directory. bBuilt is empty until
+#          a shape's arm has run to its end, and y after.
+#          A create that cannot finish hands what it made to its own
+#          remove. Once the patch is whole that is no longer armed, so a
+#          create that then fails to print leaves a whole patch nobody
+#          was told of, which list shows and remove takes.
+# @stdin nothing
+# @stdout the patch's directory, one line
+# @stderr the reason, on refusal, and whatever a piece's scripts say
+# @exit 0 the patch is made and printed; 1 the arguments are refused, a
+#       piece could not be made, or the shape made nothing, and what was
+#       made is removed, or it could not be printed and all of it is left
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
-eShape=$1; nSeats=$2; nLanes=${3:-2}
+# MIT Licence. See LICENCE.TXT
+##
+eShape=$1
+nSeats=$2
+nLanes=${3:-2}
 set -eu
-[ $# -ge 2 ] || { echo "usage: create SHAPE N [LANES]" >&2; exit 1; }
-case $eShape in star|ring|mesh|ring-p|mesh-p) ;;
-  *) echo "shape is star, ring, mesh, ring-p or mesh-p" >&2; exit 1;; esac
+[ $# -ge 2 ] || {
+  echo "usage: create SHAPE N [LANES]" >&2
+  exit 1
+}
+case $eShape in
+  star|ring|mesh|ring-p|mesh-p)
+    ;;
+  *)
+    echo "shape is star, ring, mesh, ring-p or mesh-p" >&2
+    exit 1
+    ;;
+esac
 # [ reads a number decimally and $(( )) reads it C-style, so 010 is ten to one
-# of them and eight to the other. Both are used here — the shape counts seats
-# with [ and wraps a ring with $(( )) — so force decimal before either sees it.
+# of them and eight to the other. Both are used here -- the shape counts
+# seats with [ and wraps a ring with $(( )) -- so force decimal before either
+# sees it.
 # Whether lanes are even is Pipes' to say, and it says it when a pipe is made;
 # a shape that makes no pipe still writes the header, which is the bay's own.
-case $nSeats in ''|*[!0-9]*) echo "seats must be a whole number: $nSeats" >&2; exit 1;; esac
-case $nLanes in ''|*[!0-9]*) echo "lanes must be a whole number: $nLanes" >&2; exit 1;; esac
-nSeats=$((10#$nSeats)); nLanes=$((10#$nLanes))
-[ "$nSeats" -ge 1 ] || { echo "seats must be 1 or more" >&2; exit 1; }
+case $nSeats in
+  ''|*[!0-9]*)
+    echo "seats must be a whole number: $nSeats" >&2
+    exit 1
+    ;;
+esac
+case $nLanes in
+  ''|*[!0-9]*)
+    echo "lanes must be a whole number: $nLanes" >&2
+    exit 1
+    ;;
+esac
+nSeats=$((10#$nSeats))
+nLanes=$((10#$nLanes))
+[ "$nSeats" -ge 1 ] || {
+  echo "seats must be 1 or more" >&2
+  exit 1
+}
 pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
 pIccPipes=$(cd "$pTop/.claude/skills/icc-pipes/scripts" && pwd)
 pIccTee=$(cd "$pTop/.claude/skills/icc-tee/scripts" && pwd)
 pIccMerge=$(cd "$pTop/.claude/skills/icc-merge/scripts" && pwd)
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 trap 'rm -rf "$pDir"' EXIT
-echo "$eShape $nSeats $nLanes" > "$pDir/patch"; : > "$pDir/made"
+echo "$eShape $nSeats $nLanes" > "$pDir/patch"
+: > "$pDir/made"
 trap '"$(dirname "$0")/remove" "$pDir"' EXIT
-# Make a piece and write it down before a signal can part the two. Interrupted
-# between them, create would leave a piece no made file names, which its own
-# list cannot see and its own remove cannot reach. The signal is handled, not
-# ignored: an ignored signal is inherited through fork and exec and cannot be
-# put back by the child, so the hold Pipes starts here would come out deaf to
-# the TERM Pipes' own remove sends it. A handler is reset to default on exec,
-# and this one only sets a flag, so the piece is written down first and the
-# signal honoured after. A failure inside $( ) is not set -e's business here,
-# so each says so itself.
-vPiece() { local pScripts=$1; shift
-  bSignalled=; trap 'bSignalled=1' INT TERM HUP
+
+##
+# @fn vPiece()
+# @brief Make one piece with a sibling skill's create, and write it down.
+# @details Make a piece and write it down before a signal can part the
+#          two. Interrupted between them, create would leave a piece no
+#          made file names, which its own list cannot see and its own
+#          remove cannot reach. The signal is handled, not ignored: an
+#          ignored signal is inherited through fork and exec and cannot
+#          be put back by the child, so the hold Pipes starts here would
+#          come out deaf to the TERM Pipes' own remove sends it. A
+#          handler is reset to default on exec, and this one only sets a
+#          flag, so the piece is written down first and the signal
+#          honoured after. A failure inside $( ) is not set -e's
+#          business here, so each says so itself.
+# @param $1 pScripts - the scripts directory of the skill that makes it
+# @param $2... - what that skill's create takes
+# @stderr what that skill's create says, on refusal
+# @global pDir - read, the patch, whose made file it adds a line to
+# @global pPiece - set, the directory that skill's create printed
+# @global bSignalled - set, empty, and 1 once a signal has come
+# @return 0 the piece is made and written down; it exits 1 instead when
+#         the piece could not be made, or a signal came while it was
+##
+vPiece() {
+  local pScripts=$1
+  shift
+  bSignalled=
+  trap 'bSignalled=1' INT TERM HUP
   pPiece=$("$pScripts/create" "$@") || exit 1
   echo "$pScripts $pPiece" >> "$pDir/made"
   trap - INT TERM HUP
   [ -z "$bSignalled" ] || exit 1
 }
-vPipe() { vPiece "$pIccPipes" "$nLanes"; pPipe=$pPiece; }
-vTee() { vPiece "$pIccTee" "$@"; }
-vMerge() { vPiece "$pIccMerge" "$@"; }
-vEnd() { local osSeat=$1 eSide=$2 pCable=$3 osPeers=$4
-  echo "$osSeat $eSide $pCable $(echo "$osPeers" | tr ' ' ,)" >> "$pDir/patch"; }
-vCable() {  # vCable A B: one pipe, seat A on side 0, seat B on side 1
-  local osSeatA=$1 osSeatB=$2
-  vPipe; vEnd "$osSeatA" 0 "$pPipe" "$osSeatB"; vEnd "$osSeatB" 1 "$pPipe" "$osSeatA"
+
+##
+# @fn vPipe()
+# @brief Make a pipe of nLanes lanes with Pipes' create.
+# @global pIccPipes - read, where Pipes' scripts are
+# @global nLanes - read, the lanes every pipe in the patch has
+# @global pPipe - set, the pipe it made
+# @return 0; it exits 1 as vPiece does
+##
+vPipe() {
+  vPiece "$pIccPipes" "$nLanes"
+  pPipe=$pPiece
 }
-osSeats=0; iSeat=1; while [ "$iSeat" -lt "$nSeats" ]; do osSeats="$osSeats $iSeat"; iSeat=$((iSeat + 1)); done
+
+##
+# @fn vTee()
+# @brief Make a tee with Tee's create.
+# @param $1... - SRC SIDE DST..., as Tee's create takes them
+# @global pIccTee - read, where Tee's scripts are
+# @return 0; it exits 1 as vPiece does
+##
+vTee() { vPiece "$pIccTee" "$@"; }
+
+##
+# @fn vMerge()
+# @brief Make a merge with Merge's create.
+# @param $1... - DST SIDE SRC..., as Merge's create takes them
+# @global pIccMerge - read, where Merge's scripts are
+# @return 0; it exits 1 as vPiece does
+##
+vMerge() { vPiece "$pIccMerge" "$@"; }
+
+##
+# @fn vEnd()
+# @brief Write one end into the map.
+# @param $1 osSeat - the seat that holds it: a number, p, or - for nobody
+# @param $2 eSide - the side of the pipe it holds, 0 or 1
+# @param $3 pCable - the pipe it is on
+# @param $4 osPeers - the seats on the other side, space separated, or -
+# @global pDir - read, the patch, whose patch file it adds a line to
+# @return 0
+##
+vEnd() {
+  local osSeat=$1
+  local eSide=$2
+  local pCable=$3
+  local osPeers=$4
+  echo "$osSeat $eSide $pCable $(echo "$osPeers" | tr ' ' ,)" >> "$pDir/patch"
+}
+
+##
+# @fn vCable()
+# @brief One pipe between two seats, the first on side 0, the other on 1.
+# @param $1 osSeatA - the seat on side 0
+# @param $2 osSeatB - the seat on side 1
+# @global pPipe - set, the pipe it made
+# @return 0; it exits 1 as vPiece does
+##
+vCable() {
+  local osSeatA=$1
+  local osSeatB=$2
+  vPipe
+  vEnd "$osSeatA" 0 "$pPipe" "$osSeatB"
+  vEnd "$osSeatB" 1 "$pPipe" "$osSeatA"
+}
+
+osSeats=0
+iSeat=1
+while [ "$iSeat" -lt "$nSeats" ]; do
+  osSeats="$osSeats $iSeat"
+  iSeat=$((iSeat + 1))
+done
 case $eShape in
-  star) for iSeat in $osSeats; do vCable "$iSeat" p; done; bBuilt=y ;;
+  star)
+    for iSeat in $osSeats; do vCable "$iSeat" p; done
+    bBuilt=y
+    ;;
   ring)
-    case $nSeats in 1) vCable 0 0 ;; 2) vCable 0 1 ;;
-      *) for iSeat in $osSeats; do vCable "$iSeat" $(( (iSeat + 1) % nSeats )); done ;; esac
-    bBuilt=y ;;
+    case $nSeats in
+      1)
+        vCable 0 0
+        ;;
+      2)
+        vCable 0 1
+        ;;
+      *)
+        for iSeat in $osSeats; do
+          vCable "$iSeat" $(( (iSeat + 1) % nSeats ))
+        done
+        ;;
+    esac
+    bBuilt=y
+    ;;
   mesh|mesh-p)
-    aSeats=($osSeats); [ "$eShape" = mesh ] || aSeats+=(p)
-    case ${#aSeats[@]} in 1) ;; 2) vCable "${aSeats[0]}" "${aSeats[1]}" ;;
-      *) vPipe; pBus=$pPipe; osInlets=; osOutlets=
-         for osSeat in "${aSeats[@]}"; do vPipe; pInlet=$pPipe; vPipe; pOutlet=$pPipe; osInlets="$osInlets $pInlet"; osOutlets="$osOutlets $pOutlet"
-           vEnd "$osSeat" 0 "$pInlet" "${aSeats[*]}"; vEnd "$osSeat" 1 "$pOutlet" "${aSeats[*]}"; done
-         vMerge "$pBus" 0 $osInlets; vTee "$pBus" 0 $osOutlets; vEnd - 1 "$pBus" - ;; esac
-    bBuilt=y ;;
+    aSeats=($osSeats)
+    [ "$eShape" = mesh ] || aSeats+=(p)
+    case ${#aSeats[@]} in
+      1)
+        ;;
+      2)
+        vCable "${aSeats[0]}" "${aSeats[1]}"
+        ;;
+      *)
+        vPipe
+        pBus=$pPipe
+        osInlets=
+        osOutlets=
+        for osSeat in "${aSeats[@]}"; do
+          vPipe
+          pInlet=$pPipe
+          vPipe
+          pOutlet=$pPipe
+          osInlets="$osInlets $pInlet"
+          osOutlets="$osOutlets $pOutlet"
+          vEnd "$osSeat" 0 "$pInlet" "${aSeats[*]}"
+          vEnd "$osSeat" 1 "$pOutlet" "${aSeats[*]}"
+        done
+        vMerge "$pBus" 0 $osInlets
+        vTee "$pBus" 0 $osOutlets
+        vEnd - 1 "$pBus" -
+        ;;
+    esac
+    bBuilt=y
+    ;;
   ring-p)
-    osToParent=; osFromParent=
-    for iSeat in $osSeats; do iNext=$(( (iSeat + 1) % nSeats ))
-      vPipe; pSend=$pPipe; vPipe; pRecv=$pPipe; vPipe; pToParent=$pPipe; vPipe; pFromParent=$pPipe
-      osToParent="$osToParent $pToParent"; osFromParent="$osFromParent $pFromParent"
-      vEnd "$iSeat" 0 "$pSend" "$iNext p"; vEnd "$iNext" 1 "$pRecv" "$iSeat"; vEnd "$iSeat" 1 "$pFromParent" p
+    osToParent=
+    osFromParent=
+    for iSeat in $osSeats; do
+      iNext=$(( (iSeat + 1) % nSeats ))
+      vPipe
+      pSend=$pPipe
+      vPipe
+      pRecv=$pPipe
+      vPipe
+      pToParent=$pPipe
+      vPipe
+      pFromParent=$pPipe
+      osToParent="$osToParent $pToParent"
+      osFromParent="$osFromParent $pFromParent"
+      vEnd "$iSeat" 0 "$pSend" "$iNext p"
+      vEnd "$iNext" 1 "$pRecv" "$iSeat"
+      vEnd "$iSeat" 1 "$pFromParent" p
       vTee "$pSend" 0 "$pRecv" "$pToParent"
     done
-    pParentRead=$pToParent; pParentWrite=$pFromParent
-    [ "$nSeats" -eq 1 ] || { vPipe; pParentRead=$pPipe; vMerge "$pParentRead" 0 $osToParent; vPipe; pParentWrite=$pPipe; vTee "$pParentWrite" 0 $osFromParent
-      for pCoupler in $osToParent; do vEnd - 1 "$pCoupler" -; done; }
-    vEnd p 1 "$pParentRead" "$osSeats"; vEnd p 0 "$pParentWrite" "$osSeats"; bBuilt=y ;;
+    pParentRead=$pToParent
+    pParentWrite=$pFromParent
+    [ "$nSeats" -eq 1 ] || {
+      vPipe
+      pParentRead=$pPipe
+      vMerge "$pParentRead" 0 $osToParent
+      vPipe
+      pParentWrite=$pPipe
+      vTee "$pParentWrite" 0 $osFromParent
+      for pCoupler in $osToParent; do vEnd - 1 "$pCoupler" -; done
+    }
+    vEnd p 1 "$pParentRead" "$osSeats"
+    vEnd p 0 "$pParentWrite" "$osSeats"
+    bBuilt=y
+    ;;
 esac
 # An error inside $(( )) is not a command failure, so set -e does not stop it:
 # bash abandons the case and lands here. Without this line, "here" is where
 # cleanup is disarmed and a directory with no cables in it is reported as one.
-[ "${bBuilt:-}" = y ] || { echo "made nothing: $eShape $nSeats $nLanes" >&2; exit 1; }
+[ "${bBuilt:-}" = y ] || {
+  echo "made nothing: $eShape $nSeats $nLanes" >&2
+  exit 1
+}
 trap - EXIT
 echo "$pDir"

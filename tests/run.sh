@@ -17,7 +17,7 @@
 ##
 set -eu
 cd "$(dirname "$0")/.."
-for osPiece in pipes frames tee merge patch bridge; do
+for osPiece in lib pipes frames tee merge patch bridge; do
   printf '%-8s' "$osPiece"
   "tests/$osPiece.sh"
 done

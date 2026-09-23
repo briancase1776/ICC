@@ -1,0 +1,274 @@
+#!/bin/bash
+##
+# @file lib
+# @brief The functions ICC's pieces and harnesses share, written once.
+# @details Sourced, not run. A script names its positional parameters,
+#          sets -eu, and then sources this by fixed path, as the pieces
+#          reach each other:
+#              source "$(dirname "$0")/../../icc-lib/scripts/lib"
+#          What is here is what more than one piece does, so they all do
+#          it one way: counts checked, pipes checked, cleanup armed before
+#          anything is made, servers started deaf to a hangup, and the
+#          harnesses' cut-off check. Sourcing turns on extglob, which the
+#          lane glob needs when this file is read.
+#          A function that refuses says why on stderr and exits 1. Called
+#          in $( ), that exit ends only the substitution, and bash does
+#          not carry set -e into one: the caller assigns the result, and
+#          the failed assignment stops it, and a function here that calls
+#          another in $( ) says || exit 1 itself. osWho, when a script
+#          sets it, goes in front of every refusal, as Frames' read and
+#          write name themselves in all they say.
+# @stdin nothing
+# @stdout nothing
+# @stderr nothing
+# @exit 0
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+shopt -s extglob
+
+##
+# @fn nCount()
+# @brief Print a count given as digits, in base ten, or refuse it.
+# @details Digits only, and no more than 18 significant ones, which 64
+#          bits always hold: bash wraps a longer run without a word, and
+#          a ring of 18446744073709551618 seats was a ring of 2. Then base
+#          ten, because $(( )) reads a leading zero as octal and [ does
+#          not, and two readings of one count is how an odd one got past.
+#          What else the count must be, even or more than zero, is the
+#          caller's to say.
+# @param $1 osWhat - what the count is of, for the refusal: lanes, seats
+# @param $2 osValue - the count as given
+# @stdout the count, in base ten
+# @stderr the reason, on refusal
+# @global osWho - read, what goes in front of a refusal, when set
+# @return 0; it exits 1 instead when the count is refused
+##
+nCount() {
+  local osWhat=$1
+  local osValue=$2
+  case $osValue in
+    ''|*[!0-9]*)
+      echo "${osWho:+$osWho: }$osWhat must be a whole number: $osValue" >&2
+      exit 1
+      ;;
+  esac
+  [[ $osValue =~ ^0*[0-9]{1,18}$ ]] || {
+    echo "${osWho:+$osWho: }$osWhat too big: $osValue" >&2
+    exit 1
+  }
+  echo $((10#$osValue))
+}
+
+##
+# @fn nLanesGiven()
+# @brief Print a lane count someone gave, in base ten, or refuse it.
+# @details A count as nCount takes one, then even, then more than zero:
+#          what Pipes' create asks of N, in its words. Patch's create asks
+#          the same of LANES, so a shape that makes no pipe still refuses
+#          what Pipes would.
+# @param $1 osValue - the count as given
+# @stdout the count, in base ten
+# @stderr the reason, on refusal
+# @global osWho - read, as nCount reads it
+# @return 0; it exits 1 instead when the count is refused
+##
+nLanesGiven() {
+  local osValue=$1
+  local nLanes
+  nLanes=$(nCount lanes "$osValue") || exit 1
+  case $nLanes in
+    *[13579])
+      echo "${osWho:+$osWho: }lanes must be even: $osValue" >&2
+      exit 1
+      ;;
+  esac
+  [ "$nLanes" -gt 0 ] || {
+    echo "${osWho:+$osWho: }lanes must be more than zero" >&2
+    exit 1
+  }
+  echo "$nLanes"
+}
+
+##
+# @fn vSide()
+# @brief Refuse a SIDE that is not 0 or 1.
+# @details Called before SIDE is used anywhere: it ends up in arithmetic,
+#          where a subscript is evaluated, so anything but 0 or 1 is
+#          refused rather than worked out.
+# @param $1 eSide - the side as given
+# @stderr the reason, on refusal
+# @global osWho - read, as nCount reads it
+# @return 0; it exits 1 instead when SIDE is refused
+##
+vSide() {
+  local eSide=$1
+  case $eSide in
+    0|1)
+      ;;
+    *)
+      echo "${osWho:+$osWho: }SIDE is 0 or 1, not $eSide" >&2
+      exit 1
+      ;;
+  esac
+}
+
+##
+# @fn nLanesOf()
+# @brief Print the lane count the pipes given share, or refuse them.
+# @details Lane 0 of every pipe first, so a path that is no pipe at all
+#          says so. Then the first pipe's count: its names of digits and
+#          nothing else, from a glob, never from ls, whose output is for
+#          people to read. Lane 0 is there, so the glob matches at least
+#          that. Then that count even, in Pipes' words, which with lane 0
+#          there is two or more, so either SIDE has a lane. Then every
+#          pipe the same count, and every lane of each a fifo: a numeric
+#          entry that is not a lane would count toward the count and then
+#          be written to or read as a file.
+# @param $1 pFirst - the pipe whose count the others must match
+# @param $2... - the other pipes
+# @stdout the lane count
+# @stderr the reason, on refusal, naming the pipe as the caller spelled it
+# @global osWho - read, as nCount reads it
+# @return 0; it exits 1 instead when a pipe is refused
+##
+nLanesOf() {
+  local pFirst=$1
+  local pPipe
+  local aLanes
+  local nLanes
+  local iLane
+  for pPipe; do
+    [ -p "$pPipe/0" ] || {
+      echo "${osWho:+$osWho: }not a pipe: $pPipe" >&2
+      exit 1
+    }
+  done
+  aLanes=("$pFirst"/+([0-9]))
+  nLanes=${#aLanes[@]}
+  case $nLanes in
+    *[13579])
+      echo "${osWho:+$osWho: }lanes must be even: $pFirst" >&2
+      exit 1
+      ;;
+  esac
+  for pPipe; do
+    aLanes=("$pPipe"/+([0-9]))
+    [ "${#aLanes[@]}" -eq "$nLanes" ] || {
+      echo "${osWho:+$osWho: }lanes differ: $pPipe" >&2
+      exit 1
+    }
+    iLane=0
+    while [ "$iLane" -lt "$nLanes" ]; do
+      [ -p "$pPipe/$iLane" ] || {
+        echo "${osWho:+$osWho: }not a pipe: $pPipe" >&2
+        exit 1
+      }
+      iLane=$((iLane + 1))
+    done
+  done
+  echo "$nLanes"
+}
+
+##
+# @fn vArm()
+# @brief Arm a cleanup before anything is made, and have a signal run it.
+# @details The one way every piece and every harness arms its cleanup.
+#          Each name the cleanup reads starts empty, this is called, and
+#          only then is anything made: bash runs a caught signal only once
+#          the $( ) that makes a thing, and its assignment, are done, so
+#          the cleanup always knows what there is to take. A signal exits
+#          1, which runs it. Called again, it arms a new cleanup in place
+#          of the old.
+# @param $1 osCleanup - the cleanup, as trap takes it
+# @return 0
+##
+vArm() {
+  local osCleanup=$1
+  trap "$osCleanup" EXIT
+  vStopOnSignal
+}
+
+##
+# @fn vStopOnSignal()
+# @brief Have INT, TERM and HUP exit 1, which runs the EXIT trap.
+# @details vArm's second half, and what a handler that swapped the signal
+#          traps for a while puts back.
+# @return 0
+##
+vStopOnSignal() {
+  trap 'exit 1' INT TERM HUP
+}
+
+##
+# @fn vDisarm()
+# @brief Clear the cleanup and the signal traps: what was made is whole.
+# @return 0
+##
+vDisarm() {
+  trap - EXIT INT TERM HUP
+}
+
+##
+# @fn vServe()
+# @brief Make this subshell a server: none of the traps, deaf to HUP.
+# @details The first thing a hold or a copier does, before it execs. It is
+#          its maker's child until then, so it has its maker's traps: one
+#          killed from the handler ran the handler again, in it, racing
+#          the shell that sent the signal. And it is a server: it serves
+#          whoever holds the pipes' ends long after its maker, and whoever
+#          ran that, are gone, so a hangup is not its business. It ignores
+#          HUP, as a server run under nohup does, and exec keeps it
+#          ignored; TERM, which remove sends, still ends it.
+# @return 0
+##
+vServe() {
+  trap - EXIT INT TERM
+  trap '' HUP
+}
+
+##
+# @fn vCutOff()
+# @brief For the harnesses: cut a command off just after its first
+#        mktemp, and check it goes and takes what that made with it.
+# @details A stand-in mktemp makes what the real one would, prints it and
+#          waits, so the signal lands once the thing exists and before the
+#          command has its name: the moment a cleanup armed after mktemp
+#          misses. The stand-in takes itself away first, so any later
+#          mktemp in the command is the real one.
+# @param $1... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1 and what its mktemp made is gone; it exits
+#         1 instead when not
+##
+vCutOff() {
+  local aCommand=("$@")
+  local pBin
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
+    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
+  chmod +x "$pBin/mktemp"
+  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill -TERM "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    rm -rf "$pMade"
+    exit 1
+  }
+}

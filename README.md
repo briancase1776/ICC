@@ -35,8 +35,9 @@ rather than hangs when you ask for more than the wire holds.
     icc-tee      the fitting   copy one pipe onto many
     icc-merge    the fitting   copy many pipes onto one
     icc-pipes    the lane      a bidirectional channel at a path
+    icc-lib      the bench     the functions every other piece sources
 
-Six Claude Code skills in one repo, under one `.claude/skills/`.
+Seven Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage, and only a Claude can call that.

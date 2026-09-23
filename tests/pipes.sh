@@ -24,6 +24,12 @@ set -eu
 cd "$(dirname "$0")/../.claude/skills/icc-pipes"
 scripts/create 3 2>/dev/null && exit 1
 scripts/create 09 2>/dev/null && exit 1
+# remove refuses a directory outside /tmp/icc-pipes-*, and leaves its fifos.
+pFake=$(mktemp -d)
+mkfifo "$pFake/0"
+scripts/remove "$pFake" 2>/dev/null && exit 1
+[ -p "$pFake/0" ]
+rm -rf "$pFake"
 # a create that cannot finish leaves nothing behind. Checked against what
 # was there before, not by emptying /tmp: other pipes may be up beside this
 # one, which is also why a new directory with lanes in it is let pass.

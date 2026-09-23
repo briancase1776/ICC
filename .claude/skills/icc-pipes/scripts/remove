@@ -3,11 +3,12 @@
 # @file remove
 # @brief Drop a pipe's hold and delete the pipe.
 # @details remove DIR. DIR is what create printed, spelled any way that
-#          reaches it. Only what create made is taken: the fifos, and
-#          the pid file when it holds a number. The hold is killed only
-#          while it still has this pipe's lane 0 open on fd 3, so a
-#          stranger's pid, or a recycled one, is left alone. A directory
-#          holding anything else keeps it and is left in place.
+#          resolves to a /tmp/icc-pipes-* directory. Only what create made
+#          is taken: the fifos, and the pid file when it holds a number.
+#          The hold is killed only while it still has this pipe's lane 0
+#          open on fd 3, so a stranger's pid, or a recycled one, is left
+#          alone. A directory holding anything else keeps it and is left
+#          in place.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal
@@ -30,6 +31,14 @@ pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
   echo "not a pipe: $pArg" >&2
   exit 1
 }
+case $pDir in
+  /tmp/icc-pipes-*)
+    ;;
+  *)
+    echo "not a pipe: $pArg" >&2
+    exit 1
+    ;;
+esac
 # Kill the hold only when it is this pipe's: create opens lane 0 on fd 3,
 # which is what list reads. A stranger's pid, or a recycled one, will not
 # match, and a dead hold matches nothing. A pid file that is not a number
@@ -44,8 +53,9 @@ esac
   [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] &&
   kill "$pidHold" 2>/dev/null || :
 # The fifos and our own pid file are what create made; take those and
-# nothing else. rmdir refuses a directory with anything left in it, so a
-# wrong path costs a fifo node, which holds no bytes, and never a file.
+# nothing else. Only a /tmp/icc-pipes-* directory gets this far, and rmdir
+# refuses one with anything left in it, so a look-alike costs its fifo
+# nodes, which hold no bytes, and never a file.
 find "$pDir" -maxdepth 1 -type p -exec rm -f {} +
 [ -n "$pidHold" ] && rm -f "$pDir/pid" || :
 rmdir "$pDir" || {

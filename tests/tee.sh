@@ -185,6 +185,12 @@ printf '%s\n' "$pPipeA" 0 "$pPipeB" > "$pFake/tee"
 "$pIccTee/list" | grep -qx "$pFake down $pPipeA 0 $pPipeB"
 "$pIccTee/remove" "$pFake"
 [ ! -d "$pFake" ]
+# and one outside /tmp/icc-tee-* is refused, and keeps its files
+mkdir look
+printf '%s\n' "$pPipeA" 0 "$pPipeB" > look/tee
+: > look/pid
+vRefused "$pIccTee/remove" look
+[ -f look/tee ]
 vRefused "$pIccTee/remove" "$pPipeA"
 for pPipe in $pPipeA $pPipeB $pPipeC; do
   "$pIccPipes/list" | grep -qx "$pPipe up"

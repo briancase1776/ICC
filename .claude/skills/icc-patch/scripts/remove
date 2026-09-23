@@ -2,37 +2,53 @@
 ##
 # @file remove
 # @brief Remove a patch's fittings, then its pipes, then its directory.
-# @details remove DIR. DIR is what create printed. Its pieces go in the
-#          reverse of the order create made them, each by its own
-#          skill's remove, and then DIR. Reverse is only the right order
-#          because create appends a fitting after the pipes it is
-#          attached to; move a fitting earlier in create and this walk
-#          pulls a pipe out from under a live copier. What the bay can
-#          remove is what each piece's own skill still lists: a piece
-#          that skill no longer knows is beyond removing by anything
-#          here, and is named where it lies rather than tried for ever.
-#          One that is listed and will not go is named too, and DIR is
-#          left standing with the made file that names the rest, so a
-#          second remove can carry on: the record outlives the attempt,
-#          or nothing can find what is left. bLeft is 0, and 1 once a
-#          piece has not gone.
+# @details remove DIR. DIR is what create printed, spelled any way that
+#          resolves to a /tmp/icc-patch-* directory with a patch file and
+#          a made file in it. Its pieces go in the reverse of the order
+#          create made them, each by its own skill's remove, and then DIR.
+#          Reverse is only the right order because create appends a
+#          fitting after the pipes it is attached to; move a fitting
+#          earlier in create and this walk pulls a pipe out from under a
+#          live copier. What the bay can remove is what each piece's own
+#          skill still lists: a piece that skill no longer knows is beyond
+#          removing by anything here, and is named where it lies rather
+#          than tried for ever. One that is listed and will not go is
+#          named too, and DIR is left standing with the made file that
+#          names the rest, so a second remove can carry on: the record
+#          outlives the attempt, or nothing can find what is left. bLeft
+#          is 0, and 1 once a piece has not gone. The made file is trusted
+#          as create wrote it: the list and remove it names are run, and
+#          nothing here checks what they are.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal, and every piece it could not take
-# @exit 0 the patch is gone; 1 DIR is not a patch, or a piece would not
-#       go and DIR is left standing
+# @exit 0 the patch is gone; 1 DIR is missing or not a patch, or a piece
+#       would not go and DIR is left standing
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT Licence. See LICENCE.TXT
 ##
-pDir=${1:?usage: remove DIR}
+pArg=${1:?usage: remove DIR}
 set -eu
-[ -f "$pDir/patch" ] && [ -f "$pDir/made" ] || {
-  echo "not a patch: $pDir" >&2
+# Canonical first, and one of ours by name, as Merge's remove checks. This is
+# the one remove that takes its directory with rm -rf, so a wrong path here
+# costs a whole tree, where the others cost a look-alike its own files.
+pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
+[ -n "$pDir" ] && [ -d "$pDir" ] &&
+  [ -f "$pDir/patch" ] && [ -f "$pDir/made" ] || {
+  echo "not a patch: $pArg" >&2
   exit 1
 }
+case $pDir in
+  /tmp/icc-patch-*)
+    ;;
+  *)
+    echo "not a patch: $pArg" >&2
+    exit 1
+    ;;
+esac
 bLeft=0
 # One question per skill, not one per piece: see list.
 pListed=$(mktemp)
@@ -51,7 +67,7 @@ while read -r pScripts pPiece; do
   fi
 done < <(sed '1!G;h;$!d' "$pDir/made")
 [ "$bLeft" -eq 0 ] || {
-  echo "left standing: $pDir" >&2
+  echo "left standing: $pArg" >&2
   exit 1
 }
 rm -rf "$pDir"

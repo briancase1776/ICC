@@ -145,6 +145,15 @@ trap 'for pMine in $osMine; do
         "$pIccPatch/remove" "$pMine" 2>/dev/null || :
       done
       rm -rf "$pWork"' EXIT
+# remove knows a patch by name as well as by shape: a directory outside
+# /tmp/icc-patch-* with a patch file and a made file in it is refused, and
+# keeps everything in it.
+mkdir "$pWork/fake"
+: > "$pWork/fake/patch"
+: > "$pWork/fake/made"
+: > "$pWork/fake/precious"
+"$pIccPatch/remove" "$pWork/fake" 2>/dev/null && exit 1
+[ -f "$pWork/fake/precious" ]
 vMake star 3 6
 "$pIccPatch/list" | grep -qx "$pDir up star 3 6"
 vMade icc-pipes 3

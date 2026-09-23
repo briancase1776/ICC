@@ -3,15 +3,16 @@
 # @file remove
 # @brief Stop a tee and delete its directory.
 # @details remove DIR. DIR is what create printed, spelled any way that
-#          reaches it. It must hold what create wrote: a tee file naming
-#          an absolute SRC and a SIDE of 0 or 1, and a pid file whose
-#          every line is a number, which an empty one is. A copier is
-#          killed only while it is still this tee's: copying, with its
-#          lane of SRC on fd 0, or waiting to open that lane, with this
-#          tee's own tee file on fd 3. A stranger's pid, or a recycled
-#          one, has neither, and is left alone. Then the two files go,
-#          and the directory with them unless something else is in it.
-#          The pipes on either end are left exactly as they were.
+#          resolves to a /tmp/icc-tee-* directory. It must hold what
+#          create wrote: a tee file naming an absolute SRC and a SIDE of 0
+#          or 1, and a pid file whose every line is a number, which an
+#          empty one is. A copier is killed only while it is still this
+#          tee's: copying, with its lane of SRC on fd 0, or waiting to
+#          open that lane, with this tee's own tee file on fd 3. A
+#          stranger's pid, or a recycled one, has neither, and is left
+#          alone. Then the two files go, and the directory with them
+#          unless something else is in it. The pipes on either end are
+#          left exactly as they were.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal
@@ -31,6 +32,14 @@ pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
   echo "not a tee: $pArg" >&2
   exit 1
 }
+case $pDir in
+  /tmp/icc-tee-*)
+    ;;
+  *)
+    echo "not a tee: $pArg" >&2
+    exit 1
+    ;;
+esac
 # What create wrote: SRC absolute, SIDE 0 or 1, a DST per line, and one pid
 # per lane SIDE writes, every one a number. A directory that does not hold
 # that was not made here, so its files are not this script's to delete. The
@@ -66,9 +75,10 @@ while read -r pidCopier; do
   fi
   iLane=$((iLane + 2))
 done < "$pDir/pid"
-# tee and pid are what create made; take those and nothing else. rmdir
-# refuses a directory with anything left in it, so a wrong path costs a
-# look-alike its own two files and never a stranger's tree.
+# tee and pid are what create made; take those and nothing else. Only a
+# /tmp/icc-tee-* directory gets this far, and rmdir refuses one with anything
+# left in it, so a look-alike costs its own two files and never a stranger's
+# tree.
 rm -f "$pDir/tee" "$pDir/pid"
 rmdir "$pDir" || {
   echo "not a tee, left in place: $pArg" >&2

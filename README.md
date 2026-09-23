@@ -8,17 +8,19 @@ agent, a program, or a person at a terminal — the name says Claude for
 historical reasons and only one piece still means it.
 
     # four parties on a mesh, six lanes each
-    x=$(.claude/skills/icc-patch/scripts/create mesh 4 6)
+    pPatchDir=$(.claude/skills/icc-patch/scripts/create mesh 4 6)
 
     # seat 0 sends a photo
-    w=$(awk '$1==0 && $2==0 {print $3}' "$x/patch")
-    .claude/skills/icc-frames/scripts/write "$w" 0 < photo.jpg
+    pWriteEnd=$(awk '$1==0 && $2==0 {print $3}' "$pPatchDir/patch")
+    .claude/skills/icc-frames/scripts/write "$pWriteEnd" 0 < photo.jpg
 
     # every seat reads it whole, the sender included -- and every seat
     # must read, because the one that does not stalls the rest
-    for s in 0 1 2 3; do
-      r=$(awk -v s=$s '$1==s && $2==1 {print $3}' "$x/patch")
-      timeout 5 .claude/skills/icc-frames/scripts/read "$r" 1 > "seat$s.jpg"
+    for osSeat in 0 1 2 3; do
+      pReadEnd=$(awk -v s="$osSeat" '$1==s && $2==1 {print $3}' \
+        "$pPatchDir/patch")
+      timeout 5 .claude/skills/icc-frames/scripts/read "$pReadEnd" 1 \
+        > "seat$osSeat.jpg"
     done
 
 Nothing in the middle looked at a byte. Six lanes carry about 200K across

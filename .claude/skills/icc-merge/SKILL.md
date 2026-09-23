@@ -36,11 +36,12 @@ SIDE is 0 or 1, as Pipes says: side 0 writes the even lanes, side 1 the
 odd ones. To use a merge, write an inlet as SIDE and read the outlet as
 the other side. There is nothing else to do.
 
-    a=$(.../icc-pipes/scripts/create 6); b=$(.../icc-pipes/scripts/create 6)
-    c=$(.../icc-pipes/scripts/create 6)
-    m=$(scripts/create "$c" 0 "$a" "$b")
-    .../icc-frames/scripts/write "$a" 0 < photo.jpg
-    timeout 5 .../icc-frames/scripts/read "$c" 1 > photo.jpg
+    pPipeA=$(.../icc-pipes/scripts/create 6)
+    pPipeB=$(.../icc-pipes/scripts/create 6)
+    pPipeC=$(.../icc-pipes/scripts/create 6)
+    pMergeDir=$(scripts/create "$pPipeC" 0 "$pPipeA" "$pPipeB")
+    .../icc-frames/scripts/write "$pPipeA" 0 < photo.jpg
+    timeout 5 .../icc-frames/scripts/read "$pPipeC" 1 > photo.jpg
 
 ## Facts about the merge
 

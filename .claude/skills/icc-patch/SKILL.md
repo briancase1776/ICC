@@ -99,13 +99,15 @@ those pipes with the rest.
   merge's outlet does have two, one per inlet, and no seat holds it, so
   its line names none.
 
-    grep '^3 ' "$x/patch"                          every end seat 3 holds
+    grep '^3 ' "$pPatchDir/patch"                  every end seat 3 holds
 
-    x=$(scripts/create mesh 4 6)
-    e=$(awk '$1==0 && $2==0 {print $3}' "$x/patch")  # seat 0's write end
-    .../icc-frames/scripts/write "$e" 0 < photo.jpg
-    e=$(awk '$1==2 && $2==1 {print $3}' "$x/patch")  # seat 2's read end
-    timeout 5 .../icc-frames/scripts/read "$e" 1 > photo.jpg
+    pPatchDir=$(scripts/create mesh 4 6)
+    # seat 0's write end
+    pWriteEnd=$(awk '$1==0 && $2==0 {print $3}' "$pPatchDir/patch")
+    .../icc-frames/scripts/write "$pWriteEnd" 0 < photo.jpg
+    # seat 2's read end
+    pReadEnd=$(awk '$1==2 && $2==1 {print $3}' "$pPatchDir/patch")
+    timeout 5 .../icc-frames/scripts/read "$pReadEnd" 1 > photo.jpg
 
 ## Facts
 

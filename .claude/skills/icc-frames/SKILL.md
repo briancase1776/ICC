@@ -23,9 +23,9 @@ DIR is what Pipes' create printed. SIDE is 0 or 1: side 0 writes the even
 lanes and reads the odd ones, side 1 the reverse, as Pipes says. Which
 side you are is agreed outside this skill.
 
-    d=$(.../icc-pipes/scripts/create 8)
-    scripts/write "$d" 0 < photo.jpg          # side 0, one tool call
-    timeout 5 scripts/read "$d" 1 > photo.jpg # side 1, another tool call
+    pDir=$(.../icc-pipes/scripts/create 8)
+    scripts/write "$pDir" 0 < photo.jpg          # side 0, one tool call
+    timeout 5 scripts/read "$pDir" 1 > photo.jpg # side 1, another tool call
 
 ## The rule
 

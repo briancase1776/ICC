@@ -33,10 +33,11 @@ SIDE is 0 or 1, as Pipes says: side 0 writes the even lanes, side 1 the
 odd ones. To use a tee, write the inlet as SIDE and read each outlet as
 the other side. There is nothing else to do.
 
-    a=$(.../icc-pipes/scripts/create 6); b=$(.../icc-pipes/scripts/create 6)
-    t=$(scripts/create "$a" 0 "$b")
-    .../icc-frames/scripts/write "$a" 0 < photo.jpg
-    timeout 5 .../icc-frames/scripts/read "$b" 1 > photo.jpg
+    pPipeA=$(.../icc-pipes/scripts/create 6)
+    pPipeB=$(.../icc-pipes/scripts/create 6)
+    pTeeDir=$(scripts/create "$pPipeA" 0 "$pPipeB")
+    .../icc-frames/scripts/write "$pPipeA" 0 < photo.jpg
+    timeout 5 .../icc-frames/scripts/read "$pPipeB" 1 > photo.jpg
 
 ## Facts about the tee
 

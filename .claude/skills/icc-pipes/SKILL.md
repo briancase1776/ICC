@@ -42,9 +42,12 @@ To attach, open the path. There is nothing else to do.
 
 A lane is a file. Move bytes with `dd bs=4096`. Do not use `cat`.
 
-    dd if="$src/0" of="$dst/0" bs=4096 status=none       lane to lane
-    printf '%s' "$b" | dd of="$d/0" bs=4096 status=none  stdout to a lane
-    timeout 1 dd if="$d/1" bs=4096 status=none           a lane to stdout
+    # lane to lane
+    dd if="$pSrc/0" of="$pDst/0" bs=4096 status=none
+    # stdout to a lane
+    printf '%s' "$osBytes" | dd of="$pDir/0" bs=4096 status=none
+    # a lane to stdout
+    timeout 1 dd if="$pDir/1" bs=4096 status=none
 
 `bs=4096` is PIPE_BUF and the page both; `getconf PIPE_BUF /tmp` and
 `getconf PAGESIZE` say so. Two things follow.
@@ -71,8 +74,8 @@ Do not add `iflag=fullblock`. It makes dd wait for a whole block
 before passing anything on: latency on a lane that dribbles, a stall
 on one that stops.
 
-One write under PIPE_BUF needs no copier at all. `printf '%s' "$b" >
-"$d/0"` is a single write and lands whole.
+One write under PIPE_BUF needs no copier at all.
+`printf '%s' "$osBytes" > "$pDir/0"` is a single write and lands whole.
 
 ## Facts about the pipe
 

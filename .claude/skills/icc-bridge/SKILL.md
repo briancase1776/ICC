@@ -28,10 +28,10 @@ agreed outside this skill. Both scripts run Frames' read and write from
 beside this skill, `../../icc-frames/scripts` under the same
 `.claude/skills`. There is nothing to configure and nothing to set.
 
-    timeout 5 scripts/out "$d" 1 > text     # off the wire, one tool call
+    timeout 5 scripts/out "$pDir" 1 > text  # off the wire, one tool call
     SendMessage to=ADDRESS message=text     # the Claude, not a script
                                             # ... over there, a message arrives
-    scripts/in "$d" 0 < text                # onto the wire, one tool call
+    scripts/in "$pDir" 0 < text             # onto the wire, one tool call
 
 ## The text
 

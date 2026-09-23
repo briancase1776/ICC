@@ -16,7 +16,7 @@ is a number. Who holds it is agreed outside this skill, like whose desk
 a cable runs to. The parent, when it is in on it, is seat p.
 
     /tmp/icc-patch-XXXXXXXX/patch    SHAPE N LANES, then one line per end
-    /tmp/icc-patch-XXXXXXXX/made     SCRIPTS DIR per pipe and fitting, in order
+    /tmp/icc-patch-XXXXXXXX/made     DIR SCRIPTS per pipe and fitting, in order
 
 ## Operations
 

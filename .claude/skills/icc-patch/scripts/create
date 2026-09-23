@@ -11,8 +11,8 @@
 #          makes nothing but the map.
 #          The patch's directory holds two files: patch, the line SHAPE
 #          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
-#          made, one line per piece in the order it was made, the
-#          scripts that made it and its directory. bBuilt is empty until
+#          made, one line per piece in the order it was made, its
+#          directory and the scripts that made it. bBuilt is empty until
 #          a shape's arm has run to its end, and y after.
 #          A create that cannot finish hands what it made to its own
 #          remove. Once the patch is whole that is no longer armed, so a
@@ -110,7 +110,10 @@ vPiece() {
   bSignalled=
   trap 'bSignalled=1' INT TERM HUP
   pPiece=$("$pScripts/create" "$@") || exit 1
-  echo "$pScripts $pPiece" >> "$pDir/made"
+  # The piece first and its scripts last. A piece is always
+  # /tmp/icc-KIND-XXXXXXXX; the scripts are wherever the checkout is, which
+  # can hold a space, and read gives its last name the rest of the line.
+  echo "$pPiece $pScripts" >> "$pDir/made"
   trap - INT TERM HUP
   [ -z "$bSignalled" ] || exit 1
 }

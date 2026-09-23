@@ -305,7 +305,7 @@ for osSeat in 0 1 2; do
   pReadEnd=$(pAt $osSeat 1 p)
   [ "$(timeout 1 cat "$pReadEnd/2")" = all ]
 done
-osPieces=$(cut -d' ' -f2 "$pDir/made")
+osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pIccPatch/remove" "$pDir"
 [ ! -d "$pDir" ]
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
@@ -344,6 +344,18 @@ rm -f "$pHeld/obstruct"
 "$pIccPatch/remove" "$pDir" 2>/dev/null
 [ ! -d "$pDir" ]
 rmdir "$pHeld" 2>/dev/null || :
+# A checkout whose path has a space in it: the made record still reads back
+# whole, so list sees the pieces up and remove takes every one of them.
+mkdir "$pWork/with space"
+cp -r .claude "$pWork/with space/"
+pSpaced="$pWork/with space/.claude/skills/icc-patch/scripts"
+pDir=$("$pSpaced/create" star 1)
+osMine="$osMine $pDir"
+"$pSpaced/list" | grep -qx "$pDir up star 1 2"
+osPieces=$(cut -d' ' -f1 "$pDir/made")
+"$pSpaced/remove" "$pDir"
+[ ! -d "$pDir" ]
+for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
 trap - EXIT

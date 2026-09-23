@@ -53,10 +53,10 @@ bLeft=0
 # One question per skill, not one per piece: see list.
 pListed=$(mktemp)
 trap 'rm -f "$pListed"' EXIT
-cut -d' ' -f1 "$pDir/made" | sort -u | while read -r pScripts; do
+cut -d' ' -f2- "$pDir/made" | sort -u | while read -r pScripts; do
   "$pScripts/list" | cut -d' ' -f1
 done > "$pListed"
-while read -r pScripts pPiece; do
+while read -r pPiece pScripts; do
   if grep -qxF "$pPiece" "$pListed"; then
     "$pScripts/remove" "$pPiece" || {
       echo "would not go: $pPiece" >&2

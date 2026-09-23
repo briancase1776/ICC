@@ -24,7 +24,7 @@ set -eu
 # one patch cost as much as everyone else's work put together.
 pListed=$(mktemp)
 trap 'rm -f "$pListed"' EXIT
-cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u |
+cut -d' ' -f2- /tmp/icc-patch-*/made 2>/dev/null | sort -u |
   while read -r pScripts; do
     [ -x "$pScripts/list" ] && "$pScripts/list" | cut -d' ' -f1,2
   done > "$pListed" || :
@@ -36,7 +36,7 @@ for pDir in /tmp/icc-patch-*/; do
   [ -n "$osHeader" ] || continue
   if osMade=$(cat "$pDir/made" 2>/dev/null); then
     eState=up
-    [ -z "$osMade" ] || while read -r pScripts pPiece; do
+    [ -z "$osMade" ] || while read -r pPiece pScripts; do
       grep -qxF "$pPiece up" "$pListed" || eState=down
     done <<< "$osMade"
   else

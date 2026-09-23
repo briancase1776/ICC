@@ -78,8 +78,8 @@ cmp in out
 timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out
 cmp in out
 printf 'plain' > "$pPipeA/2"
-[ "$(timeout 1 cat "$pPipeB/2")" = plain ] &&
-  [ "$(timeout 1 cat "$pPipeC/2")" = plain ]
+[ "$(timeout 1 cat "$pPipeB/2")" = plain ]
+[ "$(timeout 1 cat "$pPipeC/2")" = plain ]
 "$pIccTee/remove" "$pTeeDir"
 [ ! -d "$pTeeDir" ]
 # remove signals a copier, not whatever pid sits in the file, and takes the

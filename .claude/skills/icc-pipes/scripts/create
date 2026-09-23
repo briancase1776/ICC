@@ -6,8 +6,9 @@
 #          in base ten and no more than 18 significant digits, and 2 when
 #          it is not given. A pipe is a directory holding a fifo per lane,
 #          named 0 to N-1, and a pid file naming the hold: a sleep that
-#          keeps every lane open, so nothing blocks on open. Even lanes go
-#          one way, odd lanes the other.
+#          keeps every lane open, so nothing blocks on open, and ignores a
+#          hangup, as a server does. Even lanes go one way, odd lanes the
+#          other.
 #          A create that cannot finish takes its directory and its hold
 #          with it. Once the pipe is whole that is no longer armed, so a
 #          create that then fails to print leaves a whole pipe nobody
@@ -77,7 +78,16 @@ done
 # instead made create report success whatever became of the opens, so a pipe
 # whose hold never opened a lane was printed, and blocked on first write.
 eval "exec $osRedirs"
-sleep infinity </dev/null >/dev/null 2>&1 &
+# The hold clears the traps above and execs, as every server here does. It
+# is a server: it serves whoever holds the pipe's ends long after this create,
+# and whoever ran it, are gone, so a hangup is not its business. It ignores
+# HUP, as a server run under nohup does; TERM, which remove sends, still ends
+# it.
+(
+  trap - EXIT INT TERM
+  trap '' HUP
+  exec sleep infinity
+) </dev/null >/dev/null 2>&1 &
 pidHold=$!
 echo "$pidHold" > "$pDir/pid"
 trap - EXIT INT TERM HUP

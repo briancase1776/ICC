@@ -76,6 +76,9 @@ of that and of the lanes. The skill adds nothing to them.
   list says up while every copier still has its lane of SRC, so one
   ended lane reads down for the whole fitting, and so does a tee with
   no copier yet. remove it and create it again.
+- A copier is a server, as Pipes' hold is. It ignores HUP, so a tee
+  outlives the terminal or shell it was made from. TERM, which remove
+  sends, ends it.
 - A copier opens its lane of SRC when it starts. A lane whose pipe has no
   writer blocks that open, so the copier waits there and list says down.
   create neither waits with it nor fails: it prints the tee either way,

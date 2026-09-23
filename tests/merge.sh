@@ -134,6 +134,12 @@ vCutOff() {
 vCutOff "$pIccMerge/create" "$pPipeC" 0 "$pPipeA"
 pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA" "$pPipeB")
 "$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
+# A copier is a server, as Pipes' hold is, and a hangup is not its business:
+# the merge is still up after every copier has had one.
+mapfile -t aCopiers < "$pMergeDir/pid"
+kill -HUP "${aCopiers[@]}"
+sleep 1
+"$pIccMerge/list" | grep -qx "$pMergeDir up $pPipeC 0 $pPipeA $pPipeB"
 # remove takes what create made and nothing else, and list answers for every
 # merge whatever else is in /tmp.
 pOutside=$(mktemp -d)

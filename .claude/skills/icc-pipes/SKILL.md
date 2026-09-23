@@ -116,6 +116,9 @@ Linux and POSIX differ, both are given; this skill is Linux.
   as list does.
 - If the hold dies (list says down), opens and writes can block.
   remove it and create it again.
+- The hold is a server. It ignores HUP, as one run under nohup does, so
+  a pipe outlives the terminal or shell it was made from. TERM, which
+  remove sends, ends it.
 
 ## In Claude Code
 

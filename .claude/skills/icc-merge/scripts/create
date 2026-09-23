@@ -8,12 +8,13 @@
 #          and none is given twice, in any spelling. For each lane SIDE
 #          writes, of each SRC, a copier, dd(1) at bs=4096, takes that
 #          lane of that SRC and writes it to that lane of DST, byte for
-#          byte, in order per inlet, until removed. create opens each lane
-#          of DST itself, so a DST whose hold is dead blocks create, where
-#          the caller's bound reaches it. The merge's directory holds two
-#          files: merge, naming DST, SIDE and each SRC a line, and pid,
-#          one copier a line in lane order, SRC order within a lane. The
-#          merge makes nothing but itself.
+#          byte, in order per inlet, until removed; a copier ignores a
+#          hangup, as a server does. create opens each lane of DST itself,
+#          so a DST whose hold is dead blocks create, where the caller's
+#          bound reaches it. The merge's directory holds two files: merge,
+#          naming DST, SIDE and each SRC a line, and pid, one copier a
+#          line in lane order, SRC order within a lane. The merge makes
+#          nothing but itself.
 #          A create that cannot finish takes its copiers and its
 #          directory with it. Once the merge is whole that is no longer
 #          armed, so a create that then fails to print leaves a whole
@@ -151,11 +152,16 @@ while [ "$iLane" -lt "$nLanes" ]; do
     # diagnostic on it would be bytes no inlet ever wrote -- so dd's summary
     # needs no status=none. dd opens if= onto its stdin, which is /dev/null
     # until it has, and that fd is what list and remove know a copier by.
-    {
-      trap - EXIT INT TERM HUP
+    # It clears the traps above and execs, as every server here does. It is
+    # a server: it copies long after this create, and whoever ran it, are
+    # gone, so a hangup is not its business. It ignores HUP, as a server run
+    # under nohup does; TERM, which remove sends, still ends it.
+    (
+      trap - EXIT INT TERM
+      trap '' HUP
       exec >&3 2>/dev/null 3>&-
       exec dd if="$pSrc/$iLane" bs=4096 < /dev/null
-    } &
+    ) &
     aPids+=($!)
     echo $! >> "$pDir/pid"
   done

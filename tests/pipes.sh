@@ -125,6 +125,11 @@ done
 rm -rf "$pFakeBin"
 pDir=$(scripts/create 4)
 scripts/list | grep -qx "$pDir up"
+# The hold is a server, and a hangup is not its business: it is still up
+# after one. TERM, which remove sends, is what ends it.
+kill -HUP "$(cat "$pDir/pid")"
+sleep 1
+scripts/list | grep -qx "$pDir up"
 # The other side is a child of this shell: it reads the even lanes and
 # answers on their odd partners, so nothing is read at the end that wrote
 # it, and every lane carries.

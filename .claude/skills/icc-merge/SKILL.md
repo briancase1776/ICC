@@ -88,6 +88,9 @@ them.
   lane fails. Held lanes never do either, so the merge runs until removed
   or until a pipe on either end is removed. Then list says down. remove
   it and create it again.
+- A copier is a server, as Pipes' hold is. It ignores HUP, so a merge
+  outlives the terminal or shell it was made from. TERM, which remove
+  sends, ends it.
 - One inlet, one merge. create refuses the same inlet twice on its own
   command line; it does not know what another merge is doing, and two merges
   from one inlet are two copiers reading one lane, which race as Pipes says

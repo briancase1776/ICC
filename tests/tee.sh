@@ -118,6 +118,12 @@ vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeB/"
 pTeeDir=$("$pIccTee/create" "$pPipeA" 0 "$pPipeB" "$pPipeC")
 "$pIccTee/list" | grep -qx "$pTeeDir up $pPipeA 0 $pPipeB $pPipeC"
+# A copier is a server, as Pipes' hold is, and a hangup is not its business:
+# the tee is still up after every copier has had one.
+mapfile -t aCopiers < "$pTeeDir/pid"
+kill -HUP "${aCopiers[@]}"
+sleep 1
+"$pIccTee/list" | grep -qx "$pTeeDir up $pPipeA 0 $pPipeB $pPipeC"
 head -c 150000 /dev/urandom > in
 "$pIccFrames/write" "$pPipeA" 0 < in
 timeout 5 "$pIccFrames/read" "$pPipeB" 1 > out

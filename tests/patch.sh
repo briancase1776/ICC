@@ -48,10 +48,11 @@ pEnd() {
 # @fn pAt()
 # @brief Print the pipe pEnd finds, and exit 1 if it finds none.
 # @details eSide is 0 or 1, as for pEnd. Every call is inside $( ), so the
-#          exit ends only that substitution. Where the result is assigned
-#          first, as pHeld is, set -e stops the harness on it; used in
-#          place, as an argument or a redirection, it leaves an empty
-#          string there and the command goes on with it.
+#          exit ends only that substitution. Each result is therefore
+#          assigned before it is used: the assignment fails with it, and
+#          set -e stops the harness there. Used in place, as an argument
+#          or a redirection, it would leave an empty string and the
+#          command would go on with it.
 # @param $1 osSeat - the seat, a number or p
 # @param $2 eSide - the side it holds, 0 or 1
 # @param $3 osPeer - one of the seats in its PEERS
@@ -151,14 +152,20 @@ vMade icc-tee 0
 vMade icc-merge 0
 vEnds 6
 [ "$(grep -c '^p ' "$pDir/patch")" -eq 3 ]
-"$pIccFrames/write" "$(pAt 1 0 p)" 0 < "$pIn"
-timeout 5 "$pIccFrames/read" "$(pAt p 1 1)" 1 > "$pOut"
+pWriteEnd=$(pAt 1 0 p)
+"$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
+pReadEnd=$(pAt p 1 1)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
 cmp "$pIn" "$pOut"
-"$pIccFrames/write" "$(pAt p 1 2)" 1 < "$pIn"
-timeout 5 "$pIccFrames/read" "$(pAt 2 0 p)" 0 > "$pOut"
+pWriteEnd=$(pAt p 1 2)
+"$pIccFrames/write" "$pWriteEnd" 1 < "$pIn"
+pReadEnd=$(pAt 2 0 p)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 0 > "$pOut"
 cmp "$pIn" "$pOut"
-printf 'me' > "$(pAt 0 0 p)/0"
-[ "$(timeout 1 cat "$(pAt p 1 0)/0")" = me ]
+pWriteEnd=$(pAt 0 0 p)
+printf 'me' > "$pWriteEnd/0"
+pReadEnd=$(pAt p 1 0)
+[ "$(timeout 1 cat "$pReadEnd/0")" = me ]
 [ -z "$(pEnd 0 0 2)" ]
 [ -z "$(pEnd 0 1 p)" ]
 "$pIccPatch/remove" "$pDir"
@@ -173,11 +180,15 @@ vMade icc-pipes 3
 vMade icc-tee 0
 vMade icc-merge 0
 vEnds 6
-"$pIccFrames/write" "$(pAt 2 0 0)" 0 < "$pIn"
-timeout 5 "$pIccFrames/read" "$(pAt 0 1 2)" 1 > "$pOut"
+pWriteEnd=$(pAt 2 0 0)
+"$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
+pReadEnd=$(pAt 0 1 2)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
 cmp "$pIn" "$pOut"
-"$pIccFrames/write" "$(pAt 0 1 2)" 1 < "$pIn"
-timeout 5 "$pIccFrames/read" "$(pAt 2 0 0)" 0 > "$pOut"
+pWriteEnd=$(pAt 0 1 2)
+"$pIccFrames/write" "$pWriteEnd" 1 < "$pIn"
+pReadEnd=$(pAt 2 0 0)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 0 > "$pOut"
 cmp "$pIn" "$pOut"
 [ -z "$(pEnd 0 0 2)" ]
 "$pIccPatch/remove" "$pDir"
@@ -189,8 +200,10 @@ vEnds 2
 vMake ring 1
 vMade icc-pipes 1
 vEnds 2
-printf 'me' > "$(pAt 0 0 0)/0"
-[ "$(timeout 1 cat "$(pAt 0 1 0)/0")" = me ]
+pWriteEnd=$(pAt 0 0 0)
+printf 'me' > "$pWriteEnd/0"
+pReadEnd=$(pAt 0 1 0)
+[ "$(timeout 1 cat "$pReadEnd/0")" = me ]
 "$pIccPatch/remove" "$pDir"
 vMake mesh 4 6
 "$pIccPatch/list" | grep -qx "$pDir up mesh 4 6"
@@ -201,14 +214,19 @@ vEnds 9
 # the hub, named, held by nobody
 [ "$(grep -c '^- ' "$pDir/patch")" -eq 1 ]
 [ "$(grep -c '^3 ' "$pDir/patch")" -eq 2 ]
-"$pIccFrames/write" "$(pAt 1 0 3)" 0 < "$pIn"
+pWriteEnd=$(pAt 1 0 3)
+"$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
 for osSeat in 0 1 2 3; do
-  timeout 5 "$pIccFrames/read" "$(pAt $osSeat 1 1)" 1 > "$pOut"
+  pReadEnd=$(pAt $osSeat 1 1)
+  timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
   cmp "$pIn" "$pOut"
 done
-printf 'a' > "$(pAt 0 0 2)/2"
-printf 'b' > "$(pAt 2 0 0)/2"
-case $(timeout 1 cat "$(pAt 3 1 0)/2") in
+pWriteEnd=$(pAt 0 0 2)
+printf 'a' > "$pWriteEnd/2"
+pWriteEnd=$(pAt 2 0 0)
+printf 'b' > "$pWriteEnd/2"
+pReadEnd=$(pAt 3 1 0)
+case $(timeout 1 cat "$pReadEnd/2") in
   ab|ba)
     ;;
   *)
@@ -234,19 +252,25 @@ vMake mesh-p 1
 vMade icc-pipes 1
 vMade icc-merge 0
 vEnds 2
-printf 'hi' > "$(pAt 0 0 p)/0"
-[ "$(timeout 1 cat "$(pAt p 1 0)/0")" = hi ]
-printf 'yo' > "$(pAt p 1 0)/1"
-[ "$(timeout 1 cat "$(pAt 0 0 p)/1")" = yo ]
+pWriteEnd=$(pAt 0 0 p)
+printf 'hi' > "$pWriteEnd/0"
+pReadEnd=$(pAt p 1 0)
+[ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
+pWriteEnd=$(pAt p 1 0)
+printf 'yo' > "$pWriteEnd/1"
+pReadEnd=$(pAt 0 0 p)
+[ "$(timeout 1 cat "$pReadEnd/1")" = yo ]
 "$pIccPatch/remove" "$pDir"
 vMake mesh-p 2
 vMade icc-pipes 7
 vMade icc-tee 1
 vMade icc-merge 1
 vEnds 7
-printf 'all' > "$(pAt p 0 1)/0"
+pWriteEnd=$(pAt p 0 1)
+printf 'all' > "$pWriteEnd/0"
 for osSeat in 0 1 p; do
-  [ "$(timeout 1 cat "$(pAt $osSeat 1 p)/0")" = all ]
+  pReadEnd=$(pAt $osSeat 1 p)
+  [ "$(timeout 1 cat "$pReadEnd/0")" = all ]
 done
 "$pIccPatch/remove" "$pDir"
 vMake ring-p 3 6
@@ -257,15 +281,20 @@ vEnds 14
 # one coupler per seat
 [ "$(grep -c '^- ' "$pDir/patch")" -eq 3 ]
 [ "$(pEnd 1 1 0)" != "$(pEnd 1 1 p)" ]
-"$pIccFrames/write" "$(pAt 1 0 2)" 0 < "$pIn"
-timeout 5 "$pIccFrames/read" "$(pAt 2 1 1)" 1 > "$pOut"
+pWriteEnd=$(pAt 1 0 2)
+"$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
+pReadEnd=$(pAt 2 1 1)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
 cmp "$pIn" "$pOut"
-timeout 5 "$pIccFrames/read" "$(pAt p 1 1)" 1 > "$pOut"
+pReadEnd=$(pAt p 1 1)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
 cmp "$pIn" "$pOut"
 [ -z "$(pEnd 0 1 1)" ]
-printf 'all' > "$(pAt p 0 1)/2"
+pWriteEnd=$(pAt p 0 1)
+printf 'all' > "$pWriteEnd/2"
 for osSeat in 0 1 2; do
-  [ "$(timeout 1 cat "$(pAt $osSeat 1 p)/2")" = all ]
+  pReadEnd=$(pAt $osSeat 1 p)
+  [ "$(timeout 1 cat "$pReadEnd/2")" = all ]
 done
 osPieces=$(cut -d' ' -f2 "$pDir/made")
 "$pIccPatch/remove" "$pDir"
@@ -278,8 +307,10 @@ vMade icc-merge 0
 vEnds 5
 # ring-p 1 has no coupler: p holds both
 [ -z "$(grep '^- ' "$pDir/patch")" ]
-printf 'hi' > "$(pAt p 0 0)/0"
-[ "$(timeout 1 cat "$(pAt 0 1 p)/0")" = hi ]
+pWriteEnd=$(pAt p 0 0)
+printf 'hi' > "$pWriteEnd/0"
+pReadEnd=$(pAt 0 1 p)
+[ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
 "$pIccPatch/remove" "$pDir"
 vMake star 1 2
 pHeld=$(pAt 0 0 p)

@@ -53,7 +53,7 @@ pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
 pidHold=
 trap '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
       rm -rf "$pDir"
-      exit 1' EXIT INT TERM
+      exit 1' EXIT INT TERM HUP
 osRedirs=
 iLane=0
 while [ "$iLane" -lt "$nLanes" ]; do
@@ -69,5 +69,5 @@ eval "exec $osRedirs"
 sleep infinity </dev/null >/dev/null 2>&1 &
 pidHold=$!
 echo "$pidHold" > "$pDir/pid"
-trap - EXIT INT TERM
+trap - EXIT INT TERM HUP
 echo "$pDir"

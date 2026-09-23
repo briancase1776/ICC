@@ -4,11 +4,12 @@
 # @brief Prove the pipe: make it, refuse bad counts, carry bytes, remove it.
 # @details Prove the pipe: create it, refuse a bad lane count, hand bytes
 #          from one process to another and back again on every pair,
-#          remove it. A create that cannot finish is made to fail twice,
-#          once before its first fifo and once after its last. What is
-#          left in /tmp is checked only for new directories that are
-#          empty, since one with lanes in it may be anyone's pipe, so a
-#          leak from the second failure would pass.
+#          remove it. A create that cannot finish is made to fail three
+#          times: before its first fifo, after its last, and on a hangup
+#          while it waits on its first. What is left in /tmp is checked
+#          only for new directories that are empty, since one with lanes
+#          in it may be anyone's pipe, so a leak from the second failure
+#          would pass.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -42,6 +43,21 @@ PATH=$pFakeBin:$PATH scripts/create 2 2>/dev/null && exit 1
   ulimit -n 30
   scripts/create 40 2>/dev/null
 ) && exit 1
+# A hangup is a create that cannot finish too, and exits 1 as a TERM does.
+# This mkfifo stalls until it is killed, so the signal lands while create
+# waits on it, with its directory made.
+printf '#!/bin/bash\necho $$ > "${0%%/*}/stalled"\nexec sleep 30\n' \
+  > "$pFakeBin/mkfifo"
+PATH=$pFakeBin:$PATH scripts/create 2 >/dev/null 2>&1 &
+pidCreate=$!
+while [ ! -s "$pFakeBin/stalled" ]; do
+  kill -0 $pidCreate 2>/dev/null || break
+done
+kill -HUP $pidCreate
+kill "$(cat "$pFakeBin/stalled")"
+nStatus=0
+wait $pidCreate || nStatus=$?
+[ "$nStatus" -eq 1 ]
 for pPipe in $(ls -d /tmp/icc-pipes-*/ 2>/dev/null || :); do
   printf '%s\n' "$osBefore" | grep -qxF "$pPipe" || [ -n "$(ls -A "$pPipe")" ]
 done

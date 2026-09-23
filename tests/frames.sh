@@ -5,11 +5,11 @@
 # @details Prove read and write: get a pipe, push a payload bigger than
 #          one lane holds through it, read it back whole, compare bytes,
 #          both directions; push one far bigger with a read draining it;
-#          refuse a SIDE that is not a side, a pipe with an odd lane
-#          count, and a count that is not a count, too big to count among
-#          them; do the round trip again on two lanes, one straw each way;
-#          remove the pipes. Runs in a directory of its own and touches
-#          nothing else.
+#          refuse a SIDE that is not a side, a pipe with an odd lane count
+#          or a lane that is a file on either side, and a count that is
+#          not a count, too big to count among them; do the round trip
+#          again on two lanes, one straw each way; remove the pipes. Runs
+#          in a directory of its own and touches nothing else.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -85,6 +85,28 @@ rm -f "$pOdd/3"
 nStatus=0
 timeout 1 "$pIccFrames/read" "$pOdd" 1 >/dev/null 2>&1 || nStatus=$?
 [ "$nStatus" -eq 1 ]
+# Every lane is checked, as the fittings check them, not only the ones this
+# end uses: a lane that is a file is refused from either side, and nothing is
+# written to it.
+pBroken=$("$pIccPipes/create" 4)
+osMade="$osMade $pBroken"
+rm -f "$pBroken/1"
+: > "$pBroken/1"
+"$pIccFrames/write" "$pBroken" 0 < /dev/null 2>/dev/null && exit 1
+nStatus=0
+timeout 1 "$pIccFrames/read" "$pBroken" 1 >/dev/null 2>&1 || nStatus=$?
+[ "$nStatus" -eq 1 ]
+[ ! -s "$pBroken/1" ]
+rm -f "$pBroken/1"
+mkfifo "$pBroken/1"
+# Lanes are counted as the fittings count them: a name that only starts with
+# a digit is not a lane, and does not make the count odd.
+pStray=$("$pIccPipes/create" 2)
+osMade="$osMade $pStray"
+: > "$pStray/2x"
+printf 'done' | "$pIccFrames/write" "$pStray" 0
+[[ $(timeout 5 "$pIccFrames/read" "$pStray" 1) == done ]]
+rm -f "$pStray/2x"
 # Two lanes is one straw each way and the same script, as Frames' SKILL.md
 # says. Bigger than the one lane this side writes cannot be left on the wire
 # here at all, so the read drains while the write runs, as above; sized

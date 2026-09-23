@@ -48,12 +48,12 @@ case $eSide in
     ;;
 esac
 # A pipe is what Pipes makes, and the same checks, in the same order, as
-# Merge's create: lane 0 of every pipe first, so a path that is no pipe at
-# all says so; then an even count, in Pipes' words, which with lane 0 there
-# is two or more, so either SIDE has a lane to copy; then every pipe the same
-# count, and every lane of it a lane. A numeric entry that is not a lane
-# counts toward the count, and then its copier appends to it as a file, or
-# reads it as one and ends.
+# Merge's create and Frames' read and write: lane 0 of every pipe first, so a
+# path that is no pipe at all says so; then an even count, in Pipes' words,
+# which with lane 0 there is two or more, so either SIDE has a lane to copy;
+# then every pipe the same count, and every lane of it a lane. A numeric
+# entry that is not a lane counts toward the count, and then its copier
+# appends to it as a file, or reads it as one and ends.
 for pPipe in "$pSrc" "$@"; do
   [ -p "$pPipe/0" ] || {
     echo "not a pipe: $pPipe" >&2

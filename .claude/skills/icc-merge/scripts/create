@@ -50,7 +50,7 @@ esac
 # Lane 0 of every pipe first, so a path that is no pipe at all says so, and
 # not what ls says of it; then an even count, in Pipes' words, which with
 # lane 0 there is two or more, so either SIDE has a lane to copy. The same
-# checks, in the same order, as Tee's create.
+# checks, in the same order, as Tee's create and Frames' read and write.
 for pPipe in "$pDst" "$@"; do
   [ -p "$pPipe/0" ] || {
     echo "not a pipe: $pPipe" >&2

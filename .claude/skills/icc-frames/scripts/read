@@ -28,7 +28,6 @@
 pDir=${1:?usage: read DIR SIDE}
 eSide=${2:?usage: read DIR SIDE}
 set -eu
-shopt -s nullglob
 # SIDE before it is used, for the reason write says.
 case $eSide in
   0|1)
@@ -38,27 +37,28 @@ case $eSide in
     exit 1
     ;;
 esac
-aLanes=("$pDir"/[0-9]*)
-# An odd count is not a pipe Pipes makes: refused in Pipes' words, as the
-# fittings refuse it, and not paired down to the lanes that have a partner.
-case ${#aLanes[@]} in
+# The pipe is checked as write checks it, for the reasons write says.
+[ -p "$pDir/0" ] || {
+  echo "read: not a pipe: $pDir" >&2
+  exit 1
+}
+nLanes=$(ls -- "$pDir" | grep -c '^[0-9][0-9]*$')
+case $nLanes in
   *[13579])
     echo "read: lanes must be even: $pDir" >&2
     exit 1
     ;;
 esac
-nPairs=$(( ${#aLanes[@]} / 2 ))
-(( nPairs > 0 )) || {
-  echo "read: no lanes in $pDir" >&2
-  exit 1
-}
-iFirstLane=$(( 1 - eSide ))
-for (( iPair=0; iPair<nPairs; iPair++ )); do
-  [ -p "$pDir/$(( iPair * 2 + iFirstLane ))" ] || {
-    echo "read: not a lane: $pDir/$(( iPair * 2 + iFirstLane ))" >&2
+iLane=0
+while [ "$iLane" -lt "$nLanes" ]; do
+  [ -p "$pDir/$iLane" ] || {
+    echo "read: not a pipe: $pDir" >&2
     exit 1
   }
+  iLane=$((iLane + 1))
 done
+nPairs=$((nLanes / 2))
+iFirstLane=$(( 1 - eSide ))
 nPipeBuf=$(getconf PIPE_BUF "$pDir")
 # Not the nothing-was-sent case: this lane never says EOF, so a count that
 # has not come is waited for here rather than failed. The branch is for a

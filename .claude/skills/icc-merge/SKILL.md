@@ -60,7 +60,9 @@ them.
   icc-frames' rule needs, so a Frames write into one inlet while the
   others are quiet is a Frames read on the outlet. A payload that fits
   in one frame, a page less its count line, goes over as one write, so
-  those come through whole even when inlets write at once; one that
+  those come through whole even when inlets write at once, as long as
+  no more than a page waits on any one inlet: a copier reads up to a
+  page of whatever is there, and more can be cut mid-payload. One that
   spills into a second frame needs the others quiet.
 - The merge is one more writer on each outlet lane per inlet. Everything
   Pipes says of a writer holds for each. Between inlets nothing holds:

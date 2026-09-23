@@ -29,6 +29,7 @@ set -eu
 # matches nothing is no paths at all, not the pattern itself.
 shopt -s nullglob
 cd "$(dirname "$0")/.."
+source .claude/skills/icc-lib/scripts/lib
 pIccPipes=.claude/skills/icc-pipes/scripts
 pIccFrames=.claude/skills/icc-frames/scripts
 pIccPatch=.claude/skills/icc-patch/scripts
@@ -156,20 +157,18 @@ done
 # past 64 bits, where a count wrapped: this one was a ring of 2
 "$pIccPatch/create" ring 18446744073709551618 2>/dev/null && exit 1
 "$pIccPatch/create" star 1 99999999999999999998 2>/dev/null && exit 1
-# Armed before anything is made, as in every piece: each name is empty until
-# what it names exists, and the one EXIT trap takes whatever is named, so a
-# check that fails leaves nothing of the harness's own behind. A signal exits
-# 1, which runs it.
+# Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
+# whatever is named, so a check that fails leaves nothing of the harness's
+# own behind.
 # osMine is every patch made so far, and pDir the latest, which a signal can
 # catch before vMake has added it to the list.
 osMine=
 pDir=
 pWork=
-trap 'for pMine in $osMine $pDir; do
+vArm 'for pMine in $osMine $pDir; do
         "$pIccPatch/remove" "$pMine" 2>/dev/null || :
       done
-      [ -n "$pWork" ] && rm -rf "$pWork" || :' EXIT
-trap 'exit 1' INT TERM HUP
+      [ -n "$pWork" ] && rm -rf "$pWork" || :'
 pWork=$(mktemp -d)
 pIn=$pWork/in
 pOut=$pWork/out
@@ -484,50 +483,6 @@ osPieces=$(cut -d' ' -f1 "$pDir/made")
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
 # Cut off just after it makes its directory or its temp file, each script
 # takes it with it: create, list, and remove, which leaves the patch alone.
-##
-# @fn vCutOff()
-# @brief Cut a command off just after its first mktemp, and check it goes
-#        and takes what that made with it.
-# @details A stand-in mktemp makes what the real one would, prints it and
-#          waits, so the signal lands once the thing exists and before the
-#          command has its name: the moment a cleanup armed after mktemp
-#          misses. The stand-in takes itself away first, so any later
-#          mktemp in the command is the real one. The same check in every
-#          harness whose piece makes something.
-# @param $1... aCommand - the command and its arguments
-# @stderr "cut off, not taken" and the command, when it failed
-# @return 0 the command exited 1 and what its mktemp made is gone; it exits
-#         1 instead when not
-##
-vCutOff() {
-  local aCommand=("$@")
-  local pBin
-  local pidCommand
-  local pidStub
-  local pMade
-  local nStatus=0
-  pBin=$(mktemp -d)
-  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
-    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
-    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
-  chmod +x "$pBin/mktemp"
-  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
-  pidCommand=$!
-  while [ ! -s "$pBin/stalled" ]; do
-    kill -0 "$pidCommand" 2>/dev/null || break
-  done
-  read -r pidStub pMade < "$pBin/stalled"
-  kill -TERM "$pidCommand"
-  kill "$pidStub"
-  wait "$pidCommand" || nStatus=$?
-  rm -rf "$pBin"
-  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
-    echo "cut off, not taken: ${aCommand[*]}" >&2
-    rm -rf "$pMade"
-    exit 1
-  }
-}
-
 vCutOff "$pIccPatch/create" star 1
 vCutOff "$pIccPatch/list"
 pDir=$("$pIccPatch/create" star 1)
@@ -562,5 +517,5 @@ aPipes=(/tmp/icc-pipes-*/)
 [ "${#aPipes[@]}" -eq "$nPipes" ]
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
-trap - EXIT INT TERM HUP
+vDisarm
 echo ok

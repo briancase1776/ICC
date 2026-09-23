@@ -1,31 +1,61 @@
 #!/bin/bash
-# .claude/skills/icc-pipes/scripts/create
-# create [N]: make a fresh pipe of N lanes (even, default 2), hold every lane
-# open, print its directory. Even lanes go one way, odd lanes the other.
+##
+# @file create
+# @brief Make a fresh pipe of N lanes, hold every lane open, print it.
+# @details create [N]. N is how many lanes, even and more than zero, and
+#          2 when it is not given. A pipe is a directory holding a fifo
+#          per lane, named 0 to N-1, and a pid file naming the hold: a
+#          sleep that keeps every lane open, so nothing blocks on open.
+#          Even lanes go one way, odd lanes the other.
+#          A create that cannot finish takes its directory and its hold
+#          with it. Once the pipe is whole that is no longer armed, so a
+#          create that then fails to print leaves a whole pipe nobody
+#          was told of, which list shows and remove takes.
+# @stdin nothing
+# @stdout the pipe's directory, one line
+# @stderr the reason, on refusal
+# @exit 0 the pipe is made and printed; 1 N is refused, or the pipe
+#       could not be finished and none of it is left, or it could not
+#       be printed and all of it is
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 nLanes=${1-2}
 set -eu
 # Digits only, parity from the last digit, size from test(1). Arithmetic
 # expansion reads a leading zero as octal and the build loop does not, so
-# it is not used here: two readings of $nLanes is what let an odd count past.
+# it is not used here: two readings of $nLanes is what let an odd count
+# past.
 case $nLanes in
-  ''|*[!0-9]*) echo "lanes must be a positive whole number: $nLanes" >&2; exit 1 ;;
-  *[13579])    echo "lanes must be even: $nLanes" >&2; exit 1 ;;
+  ''|*[!0-9]*)
+    echo "lanes must be a positive whole number: $nLanes" >&2
+    exit 1
+    ;;
+  *[13579])
+    echo "lanes must be even: $nLanes" >&2
+    exit 1
+    ;;
 esac
-[ "$nLanes" -gt 0 ] || { echo "lanes must be more than zero" >&2; exit 1; }
+[ "$nLanes" -gt 0 ] || {
+  echo "lanes must be more than zero" >&2
+  exit 1
+}
 pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
 # Until the pipe is whole, it is not a pipe: a create that cannot finish
 # takes its directory with it, and its hold if one started. pidHold stays
-# empty until there is a hold, because kill 0 would signal the process group.
-# The handler exits: without that, a signal caught between the pid write and
-# the disarm would clean up and let create print the path it just deleted.
+# empty until there is a hold, because kill 0 would signal the process
+# group. The handler exits: without that, a signal caught between the pid
+# write and the disarm would clean up and let create print the path it
+# just deleted.
 pidHold=
-trap '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :; rm -rf "$pDir"; exit 1' \
-  EXIT INT TERM
-osRedirs=; iLane=0
+trap '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
+      rm -rf "$pDir"
+      exit 1' EXIT INT TERM
+osRedirs=
+iLane=0
 while [ "$iLane" -lt "$nLanes" ]; do
   mkfifo "$pDir/$iLane"
   osRedirs="$osRedirs $((iLane + 3))<>'$pDir/$iLane'"

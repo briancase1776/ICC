@@ -1,10 +1,24 @@
 #!/bin/bash
-# .claude/skills/icc-pipes/scripts/remove
-# remove DIR: drop the hold, delete the pipe. DIR is what create printed.
+##
+# @file remove
+# @brief Drop a pipe's hold and delete the pipe.
+# @details remove DIR. DIR is what create printed, spelled any way that
+#          reaches it. Only what create made is taken: the fifos, and
+#          the pid file when it holds a number. The hold is killed only
+#          while it still has this pipe's lane 0 open on fd 3, so a
+#          stranger's pid, or a recycled one, is left alone. A directory
+#          holding anything else keeps it and is left in place.
+# @stdin nothing
+# @stdout nothing
+# @stderr the reason, on refusal
+# @exit 0 the pipe is gone; 1 DIR is missing or not a pipe, or held
+#       something create did not make and was left in place
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 pArg=${1:?usage: remove DIR}
 set -eu
 # /proc/PID/fd spells a path one way, and the caller may spell it any of
@@ -12,19 +26,29 @@ set -eu
 # paths come off a glob, and lifting its check here without this let
 # `remove "$d/"` skip the kill and orphan the hold.
 pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
-[ -n "$pDir" ] && [ -d "$pDir" ] && [ -p "$pDir/0" ] ||
-  { echo "not a pipe: ${pArg}" >&2; exit 1; }
+[ -n "$pDir" ] && [ -d "$pDir" ] && [ -p "$pDir/0" ] || {
+  echo "not a pipe: $pArg" >&2
+  exit 1
+}
 # Kill the hold only when it is this pipe's: create opens lane 0 on fd 3,
 # which is what list reads. A stranger's pid, or a recycled one, will not
 # match, and a dead hold matches nothing. A pid file that is not a number
 # was not written by create, so it is neither read nor removed.
 pidHold=$(cat "$pDir/pid" 2>/dev/null || :)
-case $pidHold in ''|*[!0-9]*) pidHold= ;; esac
-[ -n "$pidHold" ] && [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] &&
+case $pidHold in
+  ''|*[!0-9]*)
+    pidHold=
+    ;;
+esac
+[ -n "$pidHold" ] &&
+  [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] &&
   kill "$pidHold" 2>/dev/null || :
 # The fifos and our own pid file are what create made; take those and
 # nothing else. rmdir refuses a directory with anything left in it, so a
 # wrong path costs a fifo node, which holds no bytes, and never a file.
 find "$pDir" -maxdepth 1 -type p -exec rm -f {} +
 [ -n "$pidHold" ] && rm -f "$pDir/pid" || :
-rmdir "$pDir" || { echo "not a pipe, left in place: $pDir" >&2; exit 1; }
+rmdir "$pDir" || {
+  echo "not a pipe, left in place: $pDir" >&2
+  exit 1
+}

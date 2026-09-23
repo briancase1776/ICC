@@ -1,17 +1,29 @@
 #!/bin/bash
-# .claude/skills/icc-pipes/scripts/list
-# list: one line per pipe, "DIR up" or "DIR down".
-# Up means the hold still has lane 0 open.
+##
+# @file list
+# @brief One line per pipe: its directory, then up or down.
+# @details list takes nothing. A pipe is a /tmp/icc-pipes-* directory
+#          with a fifo at lane 0. eState is up or down: up when the hold
+#          named in the pid file still has lane 0 open on fd 3, which is
+#          where create left it, and down otherwise, for a missing pid
+#          file, a dead hold, or a pid since recycled to a stranger.
+# @stdin nothing
+# @stdout "DIR up" or "DIR down", one line per pipe, in glob order
+# @stderr nothing
+# @exit 0, with pipes or without
+#
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
-# MIT License text omitted for brevity, See LICENCE.TXT
+# MIT Licence. See LICENCE.TXT
+##
 for pDir in /tmp/icc-pipes-*/; do
   [ -d "$pDir" ] || continue
   pDir=${pDir%/}
   [ -p "$pDir/0" ] || continue
   pidHold=$(cat "$pDir/pid" 2>/dev/null)
   eState=down
-  [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] && eState=up
+  [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] &&
+    eState=up
   echo "$pDir $eState"
 done

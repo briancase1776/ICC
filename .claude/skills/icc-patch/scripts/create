@@ -63,11 +63,11 @@ case $eShape in
       *) for iSeat in $osSeats; do vCable "$iSeat" $(( (iSeat + 1) % nSeats )); done ;; esac
     bBuilt=y ;;
   mesh|mesh-p)
-    set -- $osSeats; [ "$eShape" = mesh ] || set -- "$@" p
-    case $# in 1) ;; 2) vCable "$1" "$2" ;;
+    aSeats=($osSeats); [ "$eShape" = mesh ] || aSeats+=(p)
+    case ${#aSeats[@]} in 1) ;; 2) vCable "${aSeats[0]}" "${aSeats[1]}" ;;
       *) vPipe; pBus=$pPipe; osInlets=; osOutlets=
-         for osSeat; do vPipe; pInlet=$pPipe; vPipe; pOutlet=$pPipe; osInlets="$osInlets $pInlet"; osOutlets="$osOutlets $pOutlet"
-           vEnd "$osSeat" 0 "$pInlet" "$*"; vEnd "$osSeat" 1 "$pOutlet" "$*"; done
+         for osSeat in "${aSeats[@]}"; do vPipe; pInlet=$pPipe; vPipe; pOutlet=$pPipe; osInlets="$osInlets $pInlet"; osOutlets="$osOutlets $pOutlet"
+           vEnd "$osSeat" 0 "$pInlet" "${aSeats[*]}"; vEnd "$osSeat" 1 "$pOutlet" "${aSeats[*]}"; done
          vMerge "$pBus" 0 $osInlets; vTee "$pBus" 0 $osOutlets; vEnd - 1 "$pBus" - ;; esac
     bBuilt=y ;;
   ring-p)

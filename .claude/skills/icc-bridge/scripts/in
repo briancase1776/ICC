@@ -7,13 +7,13 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+pDir=${1:?usage: in DIR SIDE}; eSide=${2:?usage: in DIR SIDE}
 set -eu
-d=${1:?usage: in DIR SIDE}; s=${2:?usage: in DIR SIDE}
-top=$(cd "$(dirname "$0")/../../../.." && pwd)
-F=$(cd "$top/.claude/skills/icc-frames/scripts" && pwd)
-p=$(mktemp)
-trap 'rm -f "$p"' EXIT
-trap 'trap - EXIT INT TERM HUP; rm -f "$p"; exit 1' INT TERM HUP
-base64 -d > "$p" 2>/dev/null ||
+pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
+pIccFrames=$(cd "$pTop/.claude/skills/icc-frames/scripts" && pwd)
+pTemp=$(mktemp)
+trap 'rm -f "$pTemp"' EXIT
+trap 'trap - EXIT INT TERM HUP; rm -f "$pTemp"; exit 1' INT TERM HUP
+base64 -d > "$pTemp" 2>/dev/null ||
   { echo "in: not the alphabet; nothing put on the wire" >&2; exit 1; }
-"$F/write" "$d" "$s" < "$p"
+"$pIccFrames/write" "$pDir" "$eSide" < "$pTemp"

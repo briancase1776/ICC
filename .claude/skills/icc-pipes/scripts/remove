@@ -5,26 +5,26 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+pArg=${1:?usage: remove DIR}
 set -eu
-d=${1:?usage: remove DIR}
 # /proc/PID/fd spells a path one way, and the caller may spell it any of
 # several. Canonicalise before comparing: list never had to, because its
 # paths come off a glob, and lifting its check here without this let
 # `remove "$d/"` skip the kill and orphan the hold.
-d=$(readlink -f -- "$d" 2>/dev/null || :)
-[ -n "$d" ] && [ -d "$d" ] && [ -p "$d/0" ] ||
-  { echo "not a pipe: ${1}" >&2; exit 1; }
+pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
+[ -n "$pDir" ] && [ -d "$pDir" ] && [ -p "$pDir/0" ] ||
+  { echo "not a pipe: ${pArg}" >&2; exit 1; }
 # Kill the hold only when it is this pipe's: create opens lane 0 on fd 3,
 # which is what list reads. A stranger's pid, or a recycled one, will not
 # match, and a dead hold matches nothing. A pid file that is not a number
 # was not written by create, so it is neither read nor removed.
-p=$(cat "$d/pid" 2>/dev/null || :)
-case $p in ''|*[!0-9]*) p= ;; esac
-[ -n "$p" ] && [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$d/0" ] &&
-  kill "$p" 2>/dev/null || :
+pidHold=$(cat "$pDir/pid" 2>/dev/null || :)
+case $pidHold in ''|*[!0-9]*) pidHold= ;; esac
+[ -n "$pidHold" ] && [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] &&
+  kill "$pidHold" 2>/dev/null || :
 # The fifos and our own pid file are what create made; take those and
 # nothing else. rmdir refuses a directory with anything left in it, so a
 # wrong path costs a fifo node, which holds no bytes, and never a file.
-find "$d" -maxdepth 1 -type p -exec rm -f {} +
-[ -n "$p" ] && rm -f "$d/pid" || :
-rmdir "$d" || { echo "not a pipe, left in place: $d" >&2; exit 1; }
+find "$pDir" -maxdepth 1 -type p -exec rm -f {} +
+[ -n "$pidHold" ] && rm -f "$pDir/pid" || :
+rmdir "$pDir" || { echo "not a pipe, left in place: $pDir" >&2; exit 1; }

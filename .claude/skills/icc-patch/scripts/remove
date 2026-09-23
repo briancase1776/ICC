@@ -15,20 +15,20 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+pDir=${1:?usage: remove DIR}
 set -eu
-d=${1:?usage: remove DIR}
-[ -f "$d/patch" ] && [ -f "$d/made" ] || { echo "not a patch: $d" >&2; exit 1; }
-left=0
+[ -f "$pDir/patch" ] && [ -f "$pDir/made" ] || { echo "not a patch: $pDir" >&2; exit 1; }
+bLeft=0
 # One question per skill, not one per piece: see list.
-u=$(mktemp); trap 'rm -f "$u"' EXIT
-cut -d' ' -f1 "$d/made" | sort -u | while read -r sc; do "$sc/list" | cut -d' ' -f1
-done > "$u"
-while read -r sc p; do
-  if grep -qxF "$p" "$u"; then
-    "$sc/remove" "$p" || { echo "would not go: $p" >&2; left=1; }
+pListed=$(mktemp); trap 'rm -f "$pListed"' EXIT
+cut -d' ' -f1 "$pDir/made" | sort -u | while read -r pScripts; do "$pScripts/list" | cut -d' ' -f1
+done > "$pListed"
+while read -r pScripts pPiece; do
+  if grep -qxF "$pPiece" "$pListed"; then
+    "$pScripts/remove" "$pPiece" || { echo "would not go: $pPiece" >&2; bLeft=1; }
   else
-    [ ! -e "$p" ] || echo "its own skill no longer knows it: $p" >&2
+    [ ! -e "$pPiece" ] || echo "its own skill no longer knows it: $pPiece" >&2
   fi
-done < <(sed '1!G;h;$!d' "$d/made")
-[ "$left" -eq 0 ] || { echo "left standing: $d" >&2; exit 1; }
-rm -rf "$d"
+done < <(sed '1!G;h;$!d' "$pDir/made")
+[ "$bLeft" -eq 0 ] || { echo "left standing: $pDir" >&2; exit 1; }
+rm -rf "$pDir"

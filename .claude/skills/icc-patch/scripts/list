@@ -12,23 +12,23 @@ set -eu
 # Ask each skill once what it has, not once per piece it has: a sibling's list
 # names every piece of its kind on the box, so asking per piece makes listing
 # one patch cost as much as everyone else's work put together.
-u=$(mktemp); trap 'rm -f "$u"' EXIT
-cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u | while read -r sc; do
-  [ -x "$sc/list" ] && "$sc/list" | cut -d' ' -f1,2
-done > "$u" || :
+pListed=$(mktemp); trap 'rm -f "$pListed"' EXIT
+cut -d' ' -f1 /tmp/icc-patch-*/made 2>/dev/null | sort -u | while read -r pScripts; do
+  [ -x "$pScripts/list" ] && "$pScripts/list" | cut -d' ' -f1,2
+done > "$pListed" || :
 # A patch can go while this runs. That is a normal thing on a shared box, not
 # an error: read each file once, and skip a patch that is no longer there.
-for d in /tmp/icc-patch-*/; do
-  d=${d%/}
-  h=$(sed -n 1p "$d/patch" 2>/dev/null) || h=
-  [ -n "$h" ] || continue
-  if m=$(cat "$d/made" 2>/dev/null); then
-    s=up
-    [ -z "$m" ] || while read -r sc p; do
-      grep -qxF "$p up" "$u" || s=down
-    done <<< "$m"
+for pDir in /tmp/icc-patch-*/; do
+  pDir=${pDir%/}
+  osHeader=$(sed -n 1p "$pDir/patch" 2>/dev/null) || osHeader=
+  [ -n "$osHeader" ] || continue
+  if osMade=$(cat "$pDir/made" 2>/dev/null); then
+    eState=up
+    [ -z "$osMade" ] || while read -r pScripts pPiece; do
+      grep -qxF "$pPiece up" "$pListed" || eState=down
+    done <<< "$osMade"
   else
-    s=down
+    eState=down
   fi
-  echo "$d $s $h"
+  echo "$pDir $eState $osHeader"
 done

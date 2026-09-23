@@ -6,12 +6,12 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
-for d in /tmp/icc-pipes-*/; do
-  [ -d "$d" ] || continue
-  d=${d%/}
-  [ -p "$d/0" ] || continue
-  p=$(cat "$d/pid" 2>/dev/null)
-  s=down
-  [ "$(readlink "/proc/$p/fd/3" 2>/dev/null)" = "$d/0" ] && s=up
-  echo "$d $s"
+for pDir in /tmp/icc-pipes-*/; do
+  [ -d "$pDir" ] || continue
+  pDir=${pDir%/}
+  [ -p "$pDir/0" ] || continue
+  pidHold=$(cat "$pDir/pid" 2>/dev/null)
+  eState=down
+  [ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pDir/0" ] && eState=up
+  echo "$pDir $eState"
 done

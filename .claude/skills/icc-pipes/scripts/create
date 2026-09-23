@@ -6,38 +6,38 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+nLanes=${1-2}
 set -eu
-n=${1-2}
 # Digits only, parity from the last digit, size from test(1). Arithmetic
 # expansion reads a leading zero as octal and the build loop does not, so
-# it is not used here: two readings of $n is what let an odd count past.
-case $n in
-  ''|*[!0-9]*) echo "lanes must be a positive whole number: $n" >&2; exit 1 ;;
-  *[13579])    echo "lanes must be even: $n" >&2; exit 1 ;;
+# it is not used here: two readings of $nLanes is what let an odd count past.
+case $nLanes in
+  ''|*[!0-9]*) echo "lanes must be a positive whole number: $nLanes" >&2; exit 1 ;;
+  *[13579])    echo "lanes must be even: $nLanes" >&2; exit 1 ;;
 esac
-[ "$n" -gt 0 ] || { echo "lanes must be more than zero" >&2; exit 1; }
-d=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
+[ "$nLanes" -gt 0 ] || { echo "lanes must be more than zero" >&2; exit 1; }
+pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
 # Until the pipe is whole, it is not a pipe: a create that cannot finish
-# takes its directory with it, and its hold if one started. h stays empty
-# until there is a hold, because kill 0 would signal the process group. The
-# handler exits: without that, a signal caught between the pid write and
+# takes its directory with it, and its hold if one started. pidHold stays
+# empty until there is a hold, because kill 0 would signal the process group.
+# The handler exits: without that, a signal caught between the pid write and
 # the disarm would clean up and let create print the path it just deleted.
-h=
-trap '[ -n "$h" ] && kill "$h" 2>/dev/null || :; rm -rf "$d"; exit 1' \
+pidHold=
+trap '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :; rm -rf "$pDir"; exit 1' \
   EXIT INT TERM
-fds=; l=0
-while [ "$l" -lt "$n" ]; do
-  mkfifo "$d/$l"
-  fds="$fds $((l + 3))<>'$d/$l'"
-  l=$((l + 1))
+osRedirs=; iLane=0
+while [ "$iLane" -lt "$nLanes" ]; do
+  mkfifo "$pDir/$iLane"
+  osRedirs="$osRedirs $((iLane + 3))<>'$pDir/$iLane'"
+  iLane=$((iLane + 1))
 done
 # Open the lanes here, where a failure is this shell's own and stops it. The
 # hold is started after and inherits them: opening them in the background
 # instead made create report success whatever became of the opens, so a pipe
 # whose hold never opened a lane was printed, and blocked on first write.
-eval "exec $fds"
+eval "exec $osRedirs"
 sleep infinity </dev/null >/dev/null 2>&1 &
-h=$!
-echo "$h" > "$d/pid"
+pidHold=$!
+echo "$pidHold" > "$pDir/pid"
 trap - EXIT INT TERM
-echo "$d"
+echo "$pDir"

@@ -10,12 +10,12 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+pDir=${1:?usage: out DIR SIDE}; eSide=${2:?usage: out DIR SIDE}
 set -eu
-d=${1:?usage: out DIR SIDE}; s=${2:?usage: out DIR SIDE}
-top=$(cd "$(dirname "$0")/../../../.." && pwd)
-F=$(cd "$top/.claude/skills/icc-frames/scripts" && pwd)
-p=$(mktemp)
-trap 'rm -f "$p"' EXIT
-trap 'trap - EXIT INT TERM HUP; rm -f "$p"; exit 1' INT TERM HUP
-"$F/read" "$d" "$s" > "$p"
-base64 "$p"
+pTop=$(cd "$(dirname "$0")/../../../.." && pwd)
+pIccFrames=$(cd "$pTop/.claude/skills/icc-frames/scripts" && pwd)
+pTemp=$(mktemp)
+trap 'rm -f "$pTemp"' EXIT
+trap 'trap - EXIT INT TERM HUP; rm -f "$pTemp"; exit 1' INT TERM HUP
+"$pIccFrames/read" "$pDir" "$eSide" > "$pTemp"
+base64 "$pTemp"

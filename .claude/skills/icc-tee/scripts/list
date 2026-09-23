@@ -6,18 +6,18 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
-for d in /tmp/icc-tee-*/; do
-  [ -d "$d" ] || continue
-  d=${d%/}
+for pDir in /tmp/icc-tee-*/; do
+  [ -d "$pDir" ] || continue
+  pDir=${pDir%/}
   # A directory matching the glob with no DIR/tee in it was not made here, or
   # was not finished. Announcing it printed a line with no SRC, SIDE or DST
   # in it and three errors on stderr.
-  [ -f "$d/tee" ] || continue
-  src=$(sed -n 1p "$d/tee"); l=$(sed -n 2p "$d/tee")
-  s=up
-  for p in $(cat "$d/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$p/fd/0" 2>/dev/null)" = "$src/$l" ] || s=down
-    l=$((l + 2))
+  [ -f "$pDir/tee" ] || continue
+  pSrc=$(sed -n 1p "$pDir/tee"); iLane=$(sed -n 2p "$pDir/tee")
+  eState=up
+  for pidCopier in $(cat "$pDir/pid" 2>/dev/null); do
+    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "$pSrc/$iLane" ] || eState=down
+    iLane=$((iLane + 2))
   done
-  echo "$d $s $(paste -sd ' ' < "$d/tee")"
+  echo "$pDir $eState $(paste -sd ' ' < "$pDir/tee")"
 done

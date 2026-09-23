@@ -6,29 +6,29 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
-for d in /tmp/icc-merge-*/; do
-  d=${d%/}
+for pDir in /tmp/icc-merge-*/; do
+  pDir=${pDir%/}
   # A directory of the right name is not a merge. An unfinished create and a
   # stray mkdir both look like one from here, and neither is.
-  [ -f "$d/merge" ] || continue
-  side=$(sed -n 2p "$d/merge")
-  mapfile -t srcs < <(sed -n '3,$p' "$d/merge")
+  [ -f "$pDir/merge" ] || continue
+  eSide=$(sed -n 2p "$pDir/merge")
+  mapfile -t aSrcs < <(sed -n '3,$p' "$pDir/merge")
   # A merge file with no SRC line is not one either, and saying so by dividing
   # by zero would take the whole listing with it: the glob is sorted, so one
   # such directory named early hides every merge after it from every caller.
-  [ "${#srcs[@]}" -ge 1 ] || continue
-  m=${#srcs[@]}
+  [ "${#aSrcs[@]}" -ge 1 ] || continue
+  nSrcs=${#aSrcs[@]}
   # Down until every copier answers, the way Pipes reads a hold: a merge with
   # no copiers yet, or none left, is not up, and only a positive check says
   # otherwise. The mark is the inlet lane on fd 0, where dd puts if=,
   # canonically spelled; the outlet lane would not do, since two merges onto
   # one outlet share it.
-  s=down; i=0; ok=0
-  for p in $(cat "$d/pid" 2>/dev/null); do
-    [ "$(readlink "/proc/$p/fd/0" 2>/dev/null)" = "${srcs[i % m]}/$((side + 2 * (i / m)))" ] &&
-      ok=$((ok + 1))
-    i=$((i + 1))
+  eState=down; iCopier=0; nUp=0
+  for pidCopier in $(cat "$pDir/pid" 2>/dev/null); do
+    [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = "${aSrcs[iCopier % nSrcs]}/$((eSide + 2 * (iCopier / nSrcs)))" ] &&
+      nUp=$((nUp + 1))
+    iCopier=$((iCopier + 1))
   done
-  [ "$i" -gt 0 ] && [ "$ok" -eq "$i" ] && s=up
-  echo "$d $s $(paste -sd ' ' < "$d/merge")"
+  [ "$iCopier" -gt 0 ] && [ "$nUp" -eq "$iCopier" ] && eState=up
+  echo "$pDir $eState $(paste -sd ' ' < "$pDir/merge")"
 done

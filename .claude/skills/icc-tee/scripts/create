@@ -8,52 +8,53 @@
 # AI contributor: Claude (Anthropic)
 #
 # MIT License text omitted for brevity, See LICENCE.TXT
+pSrc=$1; eSide=$2
 set -eu
 [ $# -ge 3 ] || { echo "usage: create SRC SIDE DST..." >&2; exit 1; }
-src=$1; side=$2; shift 2
-[ "$side" = 0 ] || [ "$side" = 1 ] || { echo "side is 0 or 1" >&2; exit 1; }
-for p in "$src" "$@"; do
-  [ -p "$p/0" ] || { echo "not a pipe: $p" >&2; exit 1; }
+shift 2
+[ "$eSide" = 0 ] || [ "$eSide" = 1 ] || { echo "side is 0 or 1" >&2; exit 1; }
+for pPipe in "$pSrc" "$@"; do
+  [ -p "$pPipe/0" ] || { echo "not a pipe: $pPipe" >&2; exit 1; }
 done
 # Canonicalise before anything compares or is written: one pipe has many
 # spellings, the checks below are comparisons, and the outlets go in the
 # copiers' argv, which SKILL.md tells the caller pkill finds and list prints.
-src=$(readlink -f -- "$src")
-dsts=()
-for p; do
-  q=$(readlink -f -- "$p")
+pSrc=$(readlink -f -- "$pSrc")
+aDsts=()
+for pPipe; do
+  pDst=$(readlink -f -- "$pPipe")
   # SRC as its own DST copies a lane back into itself and spins on one byte
   # forever. The same DST twice writes every byte to that lane twice, count
   # line and all, so a Frames read there yields something nobody sent.
-  [ "$q" != "$src" ] || { echo "DST is SRC: $p" >&2; exit 1; }
-  for o in "${dsts[@]}"; do
-    [ "$q" != "$o" ] || { echo "DST twice: $p" >&2; exit 1; }
+  [ "$pDst" != "$pSrc" ] || { echo "DST is SRC: $pPipe" >&2; exit 1; }
+  for pSeen in "${aDsts[@]}"; do
+    [ "$pDst" != "$pSeen" ] || { echo "DST twice: $pPipe" >&2; exit 1; }
   done
-  dsts+=("$q")
+  aDsts+=("$pDst")
 done
-n=$(ls "$src" | grep -c '^[0-9][0-9]*$')
-for p in "${dsts[@]}"; do
-  [ "$(ls "$p" | grep -c '^[0-9][0-9]*$')" -eq "$n" ] ||
-    { echo "lanes differ: $p" >&2; exit 1; }
+nLanes=$(ls "$pSrc" | grep -c '^[0-9][0-9]*$')
+for pDst in "${aDsts[@]}"; do
+  [ "$(ls "$pDst" | grep -c '^[0-9][0-9]*$')" -eq "$nLanes" ] ||
+    { echo "lanes differ: $pDst" >&2; exit 1; }
 done
-d=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
 # Until the tee is whole it is not a tee: a create that cannot finish takes
-# its directory with it, and the copiers it started. pids stays empty until
+# its directory with it, and the copiers it started. aPids stays empty until
 # there is one, because kill with no pid is not this shell's to send. The
 # handler takes the two files create writes and rmdirs, never rm -rf, so a
 # directory that holds anything else is left where it is and says so. It
 # exits: without that, a signal caught between the last copier and the
 # disarm would clean up and let create print the path it just deleted.
-pids=()
+aPids=()
 trap 'trap - EXIT INT TERM HUP
-      [ ${#pids[@]} -eq 0 ] || kill "${pids[@]}" 2>/dev/null || :
-      rm -f "$d/tee" "$d/pid"
-      rmdir "$d" 2>/dev/null || [ ! -d "$d" ] || echo "left in place: $d" >&2
+      [ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+      rm -f "$pDir/tee" "$pDir/pid"
+      rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] || echo "left in place: $pDir" >&2
       exit 1' EXIT INT TERM HUP
-{ printf '%s\n' "$src" "$side"; printf '%s\n' "${dsts[@]}"; } > "$d/tee"
-l=$side
-while [ "$l" -lt "$n" ]; do
-  outs=(); for p in "${dsts[@]}"; do outs+=("$p/$l"); done
+{ printf '%s\n' "$pSrc" "$eSide"; printf '%s\n' "${aDsts[@]}"; } > "$pDir/tee"
+iLane=$eSide
+while [ "$iLane" -lt "$nLanes" ]; do
+  aOuts=(); for pDst in "${aDsts[@]}"; do aOuts+=("$pDst/$iLane"); done
   # A copier is this shell's child until it execs, so it inherits the traps
   # above: killing one from the handler ran the handler again, in it, racing
   # the shell that sent the signal. Clear them and exec, so a copier is
@@ -64,10 +65,10 @@ while [ "$l" -lt "$n" ]; do
   # output goes nowhere either way; only the order matters.
   ( trap - EXIT INT TERM HUP
     exec >/dev/null 2>&1
-    exec tee -a -- "${outs[@]}" < "$src/$l" ) &
-  pids+=($!)
-  echo $! >> "$d/pid"
-  l=$((l + 2))
+    exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane" ) &
+  aPids+=($!)
+  echo $! >> "$pDir/pid"
+  iLane=$((iLane + 2))
 done
 trap - EXIT INT TERM HUP
-echo "$d"
+echo "$pDir"

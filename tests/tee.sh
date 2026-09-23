@@ -27,18 +27,18 @@ no "$T/create" "$a" 0 /tmp
 no "$T/create" "$a" 0 "$a"        # SRC as its own DST
 no "$T/create" "$a" 0 "$b" "$b"   # the same DST twice
 no "$T/create" "$a" 0 "$b" "$b/"  # the same DST spelled two ways
-t=$("$T/create" "$a" 0 "$b" "$c")
-trap '"$T/remove" "$t" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
+e=$("$T/create" "$a" 0 "$b" "$c")
+trap '"$T/remove" "$e" 2>/dev/null || :; for p in $a $b $c $x; do "$P/remove" "$p" 2>/dev/null || :; done
       cd /; rm -rf "$t"' EXIT
-"$T/list" | grep -qx "$t up $a 0 $b $c"
+"$T/list" | grep -qx "$e up $a 0 $b $c"
 head -c 150000 /dev/urandom > in
 "$F/write" "$a" 0 < in
 timeout 5 "$F/read" "$b" 1 > out; cmp in out
 timeout 5 "$F/read" "$c" 1 > out; cmp in out
 printf 'plain' > "$a/2"
 [ "$(timeout 1 cat "$b/2")" = plain ] && [ "$(timeout 1 cat "$c/2")" = plain ]
-"$T/remove" "$t"
-[ ! -d "$t" ]
+"$T/remove" "$e"
+[ ! -d "$e" ]
 # remove signals a copier, not whatever pid sits in the file, and takes the
 # two files it made, not the directory. A look-alike holding a stranger's pid
 # loses its own two files and nothing else; one with a file beside them is

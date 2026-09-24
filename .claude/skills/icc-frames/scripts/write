@@ -75,7 +75,11 @@ vRelease() {
   # The hold's directory outlives a signal that lands before its lanes are
   # unlinked, and that window is the documented `timeout N` usage, so it is
   # named out here where vRelease can reach it rather than kept in vHold().
-  [ -n "$pHoldDir" ] && rm -rf -- "$pHoldDir" 2>/dev/null || :
+  # Its two fifos by name and then rmdir, never rm -rf.
+  [ -n "$pHoldDir" ] && {
+    rm -f -- "$pHoldDir/i" "$pHoldDir/o"
+    rmdir -- "$pHoldDir"
+  } 2>/dev/null || :
   [ -n "$pidChainGroup" ] && kill -- -"$pidChainGroup" 2>/dev/null || :
   # The counting pair is not in the chain's group: bash gives a process
   # substitution the caller's group whatever job control says, so it has to

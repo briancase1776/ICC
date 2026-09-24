@@ -35,10 +35,18 @@ nLanes=$(nLanesGiven "$nLanes")
 # takes its directory with it, and its hold if one started, and exits 1.
 # Armed before anything is made, as icc-lib's vArm says. pidHold stays empty
 # until there is a hold, because kill 0 would signal the process group.
+# The handler takes the fifos and the pid file create makes and rmdirs, as
+# remove does, never rm -rf, so a directory that holds anything else is left
+# where it is and says so.
 pDir=
 pidHold=
 vArm '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
-      [ -n "$pDir" ] && rm -rf "$pDir" || :
+      if [ -n "$pDir" ]; then
+        find "$pDir" -maxdepth 1 -type p -exec rm -f {} + 2>/dev/null || :
+        rm -f "$pDir/pid"
+        rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
+          echo "left in place: $pDir" >&2
+      fi
       exit 1'
 pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
 osRedirs=

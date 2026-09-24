@@ -78,10 +78,16 @@ done
 # not from the pid file, because the file can be gone by then -- a remove can
 # take this directory while the open below is still waiting, and a copier
 # forked after that would answer to nothing.
+# The handler takes the two files create writes and rmdirs, never rm -rf, so
+# a directory that holds anything else is left where it is and says so.
 pDir=
 aPids=()
 vArm '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
-      [ -n "$pDir" ] && rm -rf "$pDir" || :
+      if [ -n "$pDir" ]; then
+        rm -f "$pDir/merge" "$pDir/pid"
+        rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
+          echo "left in place: $pDir" >&2
+      fi
       exit 1'
 pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
 {

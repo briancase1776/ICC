@@ -240,7 +240,9 @@ vServe() {
 #          misses. The stand-in takes itself away first, so any later
 #          mktemp in the command is the real one.
 # @param $1... aCommand - the command and its arguments
-# @stderr "cut off, not taken" and the command, when it failed
+# @stderr "cut off, not taken" and the command, when it failed, and "left
+#         in place" and what it made, when that is more than a file or an
+#         empty directory
 # @return 0 the command exited 1 and what its mktemp made is gone; it exits
 #         1 instead when not
 ##
@@ -265,10 +267,15 @@ vCutOff() {
   kill -TERM "$pidCommand"
   kill "$pidStub"
   wait "$pidCommand" || nStatus=$?
-  rm -rf "$pBin"
+  # What was made is taken by name and rmdir, never rm -rf: the stand-in and
+  # its note here, and what the command left, only while it is a file or an
+  # empty directory. Anything more is left where it is and named.
+  rm -f "$pBin/mktemp" "$pBin/stalled"
+  rmdir "$pBin"
   [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
     echo "cut off, not taken: ${aCommand[*]}" >&2
-    rm -rf "$pMade"
+    rmdir "$pMade" 2>/dev/null || rm -f "$pMade" 2>/dev/null || :
+    [ ! -e "$pMade" ] || echo "left in place: $pMade" >&2
     exit 1
   }
 }

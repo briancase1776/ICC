@@ -67,9 +67,14 @@ pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
 # everything, by remove. Armed before anything is made, as icc-lib's vArm
 # says, and armed again for remove once there is something for it to read.
 # vPiece swaps the signal traps for its own while a piece is made, and puts
-# them back.
+# them back. The first handler takes the two files and rmdirs, never rm -rf,
+# so a directory that holds anything else is left where it is and says so.
 pDir=
-vArm '[ -n "$pDir" ] && rm -rf "$pDir" || :
+vArm 'if [ -n "$pDir" ]; then
+        rm -f "$pDir/patch" "$pDir/made"
+        rmdir "$pDir" 2>/dev/null || [ ! -d "$pDir" ] ||
+          echo "left in place: $pDir" >&2
+      fi
       exit 1'
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
 echo "$eShape $nSeats $nLanes" > "$pDir/patch"

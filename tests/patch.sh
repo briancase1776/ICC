@@ -8,9 +8,9 @@
 #          every one, plain bytes back the other way, see a hold go when
 #          the patch does, see a piece that will not go named and tried
 #          again, remove it, see nothing left. Make a mesh-p and a ring-p
-#          with every cable through a fitting in series, see the map name
-#          every pipe, a write bigger than single pipes hold go on with
-#          nobody reading and come out whole. Sit a moot on ring-p 3,
+#          with every cable a seat reads in series, see the map name every
+#          pipe, a write bigger than single pipes hold go on with nobody
+#          reading and come out whole. Sit a moot on ring-p 3,
 #          three seats and a chair blowing raspberries at once through
 #          every tee and merge, and check every one and every seat's
 #          spittle count. A create cut off by a signal leaves nothing
@@ -356,14 +356,13 @@ printf 'hi' > "$pWriteEnd/0"
 pReadEnd=$(pAt 0 1 p)
 [ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
 "$pIccPatch/remove" "$pDir"
-# DEPTH: every cable through a fitting is that many pipes in series, and the
-# map names every one of them. Three deep, a seat's cable to the merge and
-# the tee's to every seat hold more than a pipe each, so a write bigger than
-# a mesh of single pipes holds goes on with nobody reading, and comes out
-# whole at every seat, the writer's too. The seats read at once: each seat's
-# cable holds less than the write, and the tee waits on the fullest.
-vMake mesh-p 3 2 3
-"$pIccPatch/list" | grep -qx "$pDir up mesh-p 3 2 3"
+# DEPTH: every cable a seat reads through a fitting is that many pipes in
+# series, and the map names every one of them. Five deep, the tee's cable to
+# each seat holds more than a mesh of single pipes does, so a write bigger
+# than that goes on with nobody reading, waits whole in every seat's cable,
+# and comes out whole at each, the writer's too, one seat after another.
+vMake mesh-p 3 2 5
+"$pIccPatch/list" | grep -qx "$pDir up mesh-p 3 2 5"
 vMade icc-pipes 25
 vMade icc-tee 17
 vMade icc-merge 1
@@ -372,25 +371,21 @@ vEnds 25
 "$pIccRaspberry/raspberry" 300000 > "$pWork/deep"
 pWriteEnd=$(pAt 1 0 p)
 timeout 10 dd if="$pWork/deep" of="$pWriteEnd/0" bs=4096 2>/dev/null
-aReaders=()
 for osSeat in 0 1 2 p; do
   pReadEnd=$(pAt $osSeat 1 1)
-  timeout 10 head -c 300000 "$pReadEnd/0" > "$pWork/deep.$osSeat" &
-  aReaders+=($!)
+  timeout 5 head -c 300000 "$pReadEnd/0" | cmp - "$pWork/deep"
 done
-for pidReader in "${aReaders[@]}"; do wait "$pidReader"; done
-for osSeat in 0 1 2 p; do cmp "$pWork/deep" "$pWork/deep.$osSeat"; done
 osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pIccPatch/remove" "$pDir"
 [ ! -d "$pDir" ]
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
-# ring-p, two deep: every one-way cable in series, a Frames payload through
-# a seat's hop and through p's merge
+# ring-p, two deep: every cable a seat reads in series, a Frames payload
+# through a seat's hop and through p's merge
 vMake ring-p 2 6 2
-vMade icc-pipes 20
-vMade icc-tee 13
+vMade icc-pipes 15
+vMade icc-tee 8
 vMade icc-merge 1
-vEnds 20
+vEnds 15
 pWriteEnd=$(pAt 0 0 1)
 "$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
 pReadEnd=$(pAt 1 1 0)

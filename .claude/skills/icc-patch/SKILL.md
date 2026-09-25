@@ -23,9 +23,10 @@ a cable runs to. The parent, when it is in on it, is seat p.
     scripts/create SHAPE N [LANES [DEPTH]]
                                     make the pipes and fittings SHAPE needs
                                     over N seats, LANES lanes each (even,
-                                    default 2), every cable through a
-                                    fitting DEPTH pipes in series (default
-                                    1), print the patch's directory
+                                    default 2), every cable a seat reads
+                                    through a fitting DEPTH pipes in
+                                    series (default 1), print the patch's
+                                    directory
     scripts/list                    one line per patch: DIR up|down SHAPE N
                                     LANES DEPTH
     scripts/remove DIR              remove the fittings, then the pipes,
@@ -73,16 +74,18 @@ no second seat: seat 0 holds both sides, and what it writes on one it
 reads on the other. On the rest a seat's own words do not come back to
 it, since there is no tee to hand them round.
 
-DEPTH is how many pipes in series a cable through a fitting is: a seat's
-cable into a merge or a hop tee, a tee's to a seat or to a merge, p's to
-a tee and a merge's to p. Each pipe after the first is a one-outlet tee
-from the one before it, lane for lane, so the cable carries one way:
-what goes into the first pipe comes out of the last. The seat holds its
-own end of it, the writer the first pipe and the reader the last, and
-the map names that pipe, as it would the one pipe at DEPTH 1. A pipe two
-seats share, the one that is the whole of a star's cable, a ring's, a
-mesh 2 or a mesh-p 1, is one pipe whatever DEPTH is: it carries both
-ways, and a tee carries one.
+DEPTH is how many pipes in series a cable a seat reads through a
+fitting is: a tee's to a seat, and on a ring-p a merge's to p and, on a
+ring-p 1, the hop tee's to p. Each pipe after the first is a one-outlet
+tee from the one before it, lane for lane, so the cable carries one way:
+what goes into the first pipe comes out of the last, where the seat
+holds it, and the map names that pipe, as it would the one pipe at
+DEPTH 1. Depth is room for what waits on a seat that has not read yet.
+A cable a fitting reads, a seat's into a merge or a hop tee, p's into a
+tee, keeps moving, and is one pipe. So is a pipe two seats share, the
+one that is the whole of a star's cable, a ring's, a mesh 2 or a
+mesh-p 1, whatever DEPTH is: it carries both ways, and a tee carries
+one.
 
 ## The map
 
@@ -156,9 +159,10 @@ those pipes with the rest.
   that is, is how many pipes lie between a write end and a read end,
   which only the bay knows: a star or a ring one, a ring-p hop two, a
   mesh of three or more three, and a shape that collapsed to one pipe
-  one, each cable through a fitting counting DEPTH. What one pipe holds
-  is Pipes' fact, and Tee's and Merge's SKILL.md say what a fitting
-  adds; each joint in a cable is a tee, and holds what one does. It is
+  one, each cable a seat reads through a fitting counting DEPTH. What one
+  pipe holds is Pipes' fact, and Tee's and Merge's SKILL.md say what a
+  fitting adds; each joint in a cable is a tee, and holds what one does.
+  It is
   not one number: measured on a mesh, 208K, 224K and 256K each went both
   ways on different runs. A tee waits on its fullest outlet, so for no
   writer to wait on a seat that has not read yet, that seat's cable from

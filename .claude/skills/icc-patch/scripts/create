@@ -6,9 +6,10 @@
 #          ring-p or mesh-p. N is how many seats there are besides p, 1 or
 #          more. LANES is how many lanes every pipe has, even and more than
 #          zero, and 2 when not given. DEPTH is how many pipes in series
-#          every cable through a fitting is, joined by one-outlet tees, 1
-#          or more, and 1 when not given; a pipe two seats share is one
-#          pipe whatever it is. The numbers are read in base ten, and none
+#          every cable a seat reads through a fitting is, joined by
+#          one-outlet tees, 1 or more, and 1 when not given; a cable a
+#          fitting reads is one pipe, and so is a pipe two seats share,
+#          whatever it is. The numbers are read in base ten, and none
 #          may run past 18 significant digits. The pieces come from
 #          icc-pipes, icc-tee and icc-merge, beside this skill in the
 #          same skills directory; the bay makes nothing but the map.
@@ -195,17 +196,22 @@ vCable() {
 
 ##
 # @fn vSeries()
-# @brief One cable through a fitting: nDepth pipes in series, one way.
+# @brief One cable through a fitting, one way: nDepth pipes in series if
+#        a seat reads it, and one pipe if not.
 # @details What side 0 writes into the head comes out of the tail: each
 #          pipe after the first is a one-outlet tee from the one before
 #          it, lane for lane, as Tee makes them. A tee carries one way,
 #          which is why a pipe two seats share, that each writes and
-#          reads, is never one of these. With nDepth 1 the head is the
-#          tail and there is no tee. Every pipe in it that no seat holds
-#          joins two fittings and nothing else, and goes into the map as
-#          such, so the map names every pipe the shape made.
+#          reads, is never one of these. Depth is room for what waits on
+#          a seat that has not read yet, so only a cable whose tail a
+#          seat holds is deep; one a fitting reads keeps moving, and a
+#          writer that fills one waits for the fitting and nothing else.
+#          With one pipe the head is the tail and there is no tee. Every
+#          pipe in it that no seat holds joins two fittings and nothing
+#          else, and goes into the map as such, so the map names every
+#          pipe the shape made.
 # @param $1 eHeld - which end a seat holds: head, tail, both or none
-# @global nDepth - read, how many pipes in series
+# @global nDepth - read, how many pipes in series a cable a seat reads is
 # @global pPipe - read, what vPipe has just made
 # @global pHead - set, the first pipe, which side 0 writes
 # @global pTail - set, the last, which side 1 reads
@@ -213,18 +219,24 @@ vCable() {
 ##
 vSeries() {
   local eHeld=$1
+  local nPipes=1
   local aChain
   local iPipe
   local pLink
+  case $eHeld in
+    tail|both)
+      nPipes=$nDepth
+      ;;
+  esac
   vPipe
   aChain=("$pPipe")
-  for ((iPipe = 1; iPipe < nDepth; iPipe++)); do
+  for ((iPipe = 1; iPipe < nPipes; iPipe++)); do
     vPipe
     vTee "${aChain[iPipe - 1]}" 0 "$pPipe"
     aChain+=("$pPipe")
   done
   pHead=${aChain[0]}
-  pTail=${aChain[nDepth - 1]}
+  pTail=${aChain[nPipes - 1]}
   for pLink in "${aChain[@]}"; do
     case $eHeld in
       head|both)

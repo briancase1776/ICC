@@ -7,7 +7,10 @@
 #          lane holds from a seat to its peers and read it back whole at
 #          every one, plain bytes back the other way, see a hold go when
 #          the patch does, see a piece that will not go named and tried
-#          again, remove it, see nothing left. Sit a moot on ring-p 3,
+#          again, remove it, see nothing left. Make a mesh-p and a ring-p
+#          with every cable through a fitting in series, see the map name
+#          every pipe, a write bigger than single pipes hold go on with
+#          nobody reading and come out whole. Sit a moot on ring-p 3,
 #          three seats and a chair blowing raspberries at once through
 #          every tee and merge, and check every one and every seat's
 #          spittle count. A create cut off by a signal leaves nothing
@@ -158,6 +161,9 @@ done
 # past 64 bits, where a count wrapped: this one was a ring of 2
 "$pIccPatch/create" ring 18446744073709551618 2>/dev/null && exit 1
 "$pIccPatch/create" star 1 99999999999999999998 2>/dev/null && exit 1
+# DEPTH is a count, 1 or more
+"$pIccPatch/create" mesh 3 2 0 2>/dev/null && exit 1
+"$pIccPatch/create" mesh 3 2 x 2>/dev/null && exit 1
 # Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
 # whatever is named, so a check that fails leaves nothing of the harness's
 # own behind.
@@ -184,7 +190,7 @@ mkdir "$pWork/fake"
 "$pIccPatch/remove" "$pWork/fake" 2>/dev/null && exit 1
 [ -f "$pWork/fake/precious" ]
 vMake star 3 6
-"$pIccPatch/list" | grep -qx "$pDir up star 3 6"
+"$pIccPatch/list" | grep -qx "$pDir up star 3 6 1"
 vMade icc-pipes 3
 vMade icc-tee 0
 vMade icc-merge 0
@@ -213,7 +219,7 @@ vMade icc-pipes 1
 vEnds 2
 "$pIccPatch/remove" "$pDir"
 vMake ring 3 6
-"$pIccPatch/list" | grep -qx "$pDir up ring 3 6"
+"$pIccPatch/list" | grep -qx "$pDir up ring 3 6 1"
 vMade icc-pipes 3
 vMade icc-tee 0
 vMade icc-merge 0
@@ -244,7 +250,7 @@ pReadEnd=$(pAt 0 1 0)
 [ "$(timeout 1 cat "$pReadEnd/0")" = me ]
 "$pIccPatch/remove" "$pDir"
 vMake mesh 4 6
-"$pIccPatch/list" | grep -qx "$pDir up mesh 4 6"
+"$pIccPatch/list" | grep -qx "$pDir up mesh 4 6 1"
 vMade icc-pipes 9
 vMade icc-tee 1
 vMade icc-merge 1
@@ -279,7 +285,7 @@ vMade icc-pipes 1
 vMade icc-tee 0
 vEnds 2
 mv "$pDir/made" "$pDir/gone"
-"$pIccPatch/list" | grep -qx "$pDir down mesh 2 2"
+"$pIccPatch/list" | grep -qx "$pDir down mesh 2 2 1"
 mv "$pDir/gone" "$pDir/made"
 "$pIccPatch/remove" "$pDir"
 vMake mesh 1
@@ -349,6 +355,56 @@ pWriteEnd=$(pAt p 0 0)
 printf 'hi' > "$pWriteEnd/0"
 pReadEnd=$(pAt 0 1 p)
 [ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
+"$pIccPatch/remove" "$pDir"
+# DEPTH: every cable through a fitting is that many pipes in series, and the
+# map names every one of them. Three deep, a seat's cable to the merge and
+# the tee's to every seat hold more than a pipe each, so a write bigger than
+# a mesh of single pipes holds goes on with nobody reading, and comes out
+# whole at every seat, the writer's too. The seats read at once: each seat's
+# cable holds less than the write, and the tee waits on the fullest.
+vMake mesh-p 3 2 3
+"$pIccPatch/list" | grep -qx "$pDir up mesh-p 3 2 3"
+vMade icc-pipes 25
+vMade icc-tee 17
+vMade icc-merge 1
+vEnds 25
+[ "$(grep -c '^- ' "$pDir/patch")" -eq 17 ]
+"$pIccRaspberry/raspberry" 300000 > "$pWork/deep"
+pWriteEnd=$(pAt 1 0 p)
+timeout 10 dd if="$pWork/deep" of="$pWriteEnd/0" bs=4096 2>/dev/null
+aReaders=()
+for osSeat in 0 1 2 p; do
+  pReadEnd=$(pAt $osSeat 1 1)
+  timeout 10 head -c 300000 "$pReadEnd/0" > "$pWork/deep.$osSeat" &
+  aReaders+=($!)
+done
+for pidReader in "${aReaders[@]}"; do wait "$pidReader"; done
+for osSeat in 0 1 2 p; do cmp "$pWork/deep" "$pWork/deep.$osSeat"; done
+osPieces=$(cut -d' ' -f1 "$pDir/made")
+"$pIccPatch/remove" "$pDir"
+[ ! -d "$pDir" ]
+for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
+# ring-p, two deep: every one-way cable in series, a Frames payload through
+# a seat's hop and through p's merge
+vMake ring-p 2 6 2
+vMade icc-pipes 20
+vMade icc-tee 13
+vMade icc-merge 1
+vEnds 20
+pWriteEnd=$(pAt 0 0 1)
+"$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
+pReadEnd=$(pAt 1 1 0)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
+cmp "$pIn" "$pOut"
+pReadEnd=$(pAt p 1 0)
+timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
+cmp "$pIn" "$pOut"
+pWriteEnd=$(pAt p 0 1)
+printf 'all' > "$pWriteEnd/2"
+for osSeat in 0 1; do
+  pReadEnd=$(pAt $osSeat 1 p)
+  [ "$(timeout 1 cat "$pReadEnd/2")" = all ]
+done
 "$pIccPatch/remove" "$pDir"
 # The moot: three seats and a chair on ring-p 3, all at once, through every
 # fitting the shape has. Four rounds, Opening, two Rotations and the Final;
@@ -478,7 +534,7 @@ cp -r .claude/skills "$pWork/with space/"
 pSpaced="$pWork/with space/skills/icc-patch/scripts"
 pDir=$("$pSpaced/create" star 1)
 osMine="$osMine $pDir"
-"$pSpaced/list" | grep -qx "$pDir up star 1 2"
+"$pSpaced/list" | grep -qx "$pDir up star 1 2 1"
 osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pSpaced/remove" "$pDir"
 [ ! -d "$pDir" ]
@@ -490,7 +546,7 @@ vCutOff "$pIccPatch/list"
 pDir=$("$pIccPatch/create" star 1)
 osMine="$osMine $pDir"
 vCutOff "$pIccPatch/remove" "$pDir"
-"$pIccPatch/list" | grep -qx "$pDir up star 1 2"
+"$pIccPatch/list" | grep -qx "$pDir up star 1 2 1"
 "$pIccPatch/remove" "$pDir"
 # A signal between pieces is a create that cannot finish: it takes what it
 # made and exits 1, as one inside a piece does. This tr stalls the first line

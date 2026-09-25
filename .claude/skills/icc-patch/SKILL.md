@@ -15,15 +15,19 @@ that icc-merge made, plugged into a shape over N seats, and a map. A seat
 is a number. Who holds it is agreed outside this skill, like whose desk
 a cable runs to. The parent, when it is in on it, is seat p.
 
-    /tmp/icc-patch-XXXXXXXX/patch    SHAPE N LANES, then one line per end
+    /tmp/icc-patch-XXXXXXXX/patch    SHAPE N LANES DEPTH, then one line per end
     /tmp/icc-patch-XXXXXXXX/made     DIR SCRIPTS per pipe and fitting, in order
 
 ## Operations
 
-    scripts/create SHAPE N [LANES]  make the pipes and fittings SHAPE needs
+    scripts/create SHAPE N [LANES [DEPTH]]
+                                    make the pipes and fittings SHAPE needs
                                     over N seats, LANES lanes each (even,
-                                    default 2), print the patch's directory
-    scripts/list                    one line per patch: DIR up|down SHAPE N LANES
+                                    default 2), every cable through a
+                                    fitting DEPTH pipes in series (default
+                                    1), print the patch's directory
+    scripts/list                    one line per patch: DIR up|down SHAPE N
+                                    LANES DEPTH
     scripts/remove DIR              remove the fittings, then the pipes,
                                     then DIR
 
@@ -69,6 +73,17 @@ no second seat: seat 0 holds both sides, and what it writes on one it
 reads on the other. On the rest a seat's own words do not come back to
 it, since there is no tee to hand them round.
 
+DEPTH is how many pipes in series a cable through a fitting is: a seat's
+cable into a merge or a hop tee, a tee's to a seat or to a merge, p's to
+a tee and a merge's to p. Each pipe after the first is a one-outlet tee
+from the one before it, lane for lane, so the cable carries one way:
+what goes into the first pipe comes out of the last. The seat holds its
+own end of it, the writer the first pipe and the reader the last, and
+the map names that pipe, as it would the one pipe at DEPTH 1. A pipe two
+seats share, the one that is the whole of a star's cable, a ring's, a
+mesh 2 or a mesh-p 1, is one pipe whatever DEPTH is: it carries both
+ways, and a tee carries one.
+
 ## The map
 
 After the first line, one line per end a seat holds, and one for every
@@ -82,7 +97,8 @@ other side, comma separated. Pipes says what a side writes and reads.
 SEAT and PEERS are both `-` on a pipe that joins two fittings and
 nothing else. Nobody holds either side of it, and SIDE names the free
 one. A mesh of three or more has one, between its merge and its tee; a
-ring-p has one per seat, between that seat's hop tee and p's merge.
+ring-p has one per seat, between that seat's hop tee and p's merge. At a
+DEPTH past 1, every pipe of a cable but the one a seat holds is one too.
 There is nothing to hold and nothing to do with such a line. It is
 there so the map names every pipe the shape made, and remove takes
 those pipes with the rest.
@@ -122,9 +138,10 @@ those pipes with the rest.
   came from, and two writing at once interleave, as Pipes, Tee and Merge
   say. Whose turn it is, is agreed above this skill.
 - Where writes meet is the merge: the one in the middle of a mesh, the
-  one seat p reads on a ring-p. Two seats writing at once interleave
-  there, as Merge says, and nowhere else do two writers share a pipe. A
-  star and a ring have no fittings and nothing to meet at.
+  one seat p reads on a ring-p. Merge says when two seats writing at once
+  come out each whole there and when they interleave, and nowhere else
+  do two writers share a pipe. A star and a ring have no fittings and
+  nothing to meet at.
 - On a mesh the tee hands a writer its own words back, so a seat can see
   its own go past the merge: the tee puts each chunk on every outlet
   before it reads the next, as Tee says, so nothing written after them
@@ -139,9 +156,16 @@ those pipes with the rest.
   that is, is how many pipes lie between a write end and a read end,
   which only the bay knows: a star or a ring one, a ring-p hop two, a
   mesh of three or more three, and a shape that collapsed to one pipe
-  one. What one pipe holds is Pipes' fact, and Tee's and Merge's
-  SKILL.md say what a fitting adds. It is not one number: measured on a
-  mesh, 208K, 224K and 256K each went both ways on different runs.
+  one, each cable through a fitting counting DEPTH. What one pipe holds
+  is Pipes' fact, and Tee's and Merge's SKILL.md say what a fitting
+  adds; each joint in a cable is a tee, and holds what one does. It is
+  not one number: measured on a mesh, 208K, 224K and 256K each went both
+  ways on different runs. A tee waits on its fullest outlet, so for no
+  writer to wait on a seat that has not read yet, that seat's cable from
+  the tee has to hold all that is written to it in the meantime. A lane
+  is 16 pages deep, and a pipe in series adds 16 more and the tee
+  between them one: measured, 16, 33, 50 and 67 blocks of 4096 went
+  into one lane of 1, 2, 3 and 4 pipes in series before the next waited.
 - A seat may sit in more than one patch. A ring and a mesh over the same
   seats is two patches.
 - list says up when every pipe and fitting says up. If one is down, the

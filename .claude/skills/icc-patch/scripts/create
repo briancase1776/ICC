@@ -2,15 +2,18 @@
 ##
 # @file create
 # @brief Patch pipes, tees and merges into SHAPE over N seats; print it.
-# @details create SHAPE N [LANES]. SHAPE is star, ring, mesh, ring-p or
-#          mesh-p. N is how many seats there are besides p, 1 or more.
-#          LANES is how many lanes every pipe has, even and more than
-#          zero, and 2 when not given. Both numbers are read in base ten,
-#          and neither may run past 18 significant digits. The pieces come
-#          from icc-pipes, icc-tee and icc-merge, beside this skill in the
+# @details create SHAPE N [LANES [DEPTH]]. SHAPE is star, ring, mesh,
+#          ring-p or mesh-p. N is how many seats there are besides p, 1 or
+#          more. LANES is how many lanes every pipe has, even and more than
+#          zero, and 2 when not given. DEPTH is how many pipes in series
+#          every cable through a fitting is, joined by one-outlet tees, 1
+#          or more, and 1 when not given; a pipe two seats share is one
+#          pipe whatever it is. The numbers are read in base ten, and none
+#          may run past 18 significant digits. The pieces come from
+#          icc-pipes, icc-tee and icc-merge, beside this skill in the
 #          same skills directory; the bay makes nothing but the map.
 #          The patch's directory holds two files: patch, the line SHAPE
-#          N LANES and then one line per end, SEAT SIDE DIR PEERS; and
+#          N LANES DEPTH and then one line per end, SEAT SIDE DIR PEERS; and
 #          made, one line per piece in the order it was made, its
 #          directory and the scripts that made it. bBuilt is empty until
 #          a shape's arm has run to its end, and y after.
@@ -34,10 +37,11 @@
 eShape=$1
 nSeats=$2
 nLanes=${3:-2}
+nDepth=${4:-1}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
 [ $# -ge 2 ] || {
-  echo "usage: create SHAPE N [LANES]" >&2
+  echo "usage: create SHAPE N [LANES [DEPTH]]" >&2
   exit 1
 }
 case $eShape in
@@ -59,6 +63,12 @@ nSeats=$(nCount seats "$nSeats")
   exit 1
 }
 nLanes=$(nLanesGiven "$nLanes")
+# DEPTH is a count as seats are, and the loop in vSeries reads it.
+nDepth=$(nCount depth "$nDepth")
+[ "$nDepth" -ge 1 ] || {
+  echo "depth must be 1 or more" >&2
+  exit 1
+}
 pIccPipes=$(cd "$(dirname "$0")/../../icc-pipes/scripts" && pwd)
 pIccTee=$(cd "$(dirname "$0")/../../icc-tee/scripts" && pwd)
 pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
@@ -72,7 +82,7 @@ pDir=
 vArm '[ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
 pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
-echo "$eShape $nSeats $nLanes" > "$pDir/patch"
+echo "$eShape $nSeats $nLanes $nDepth" > "$pDir/patch"
 : > "$pDir/made"
 vArm '"$(dirname "$0")/remove" "$pDir"
       exit 1'
@@ -183,6 +193,51 @@ vCable() {
   vEnd "$osSeatB" 1 "$pPipe" "$osSeatA"
 }
 
+##
+# @fn vSeries()
+# @brief One cable through a fitting: nDepth pipes in series, one way.
+# @details What side 0 writes into the head comes out of the tail: each
+#          pipe after the first is a one-outlet tee from the one before
+#          it, lane for lane, as Tee makes them. A tee carries one way,
+#          which is why a pipe two seats share, that each writes and
+#          reads, is never one of these. With nDepth 1 the head is the
+#          tail and there is no tee. Every pipe in it that no seat holds
+#          joins two fittings and nothing else, and goes into the map as
+#          such, so the map names every pipe the shape made.
+# @param $1 eHeld - which end a seat holds: head, tail, both or none
+# @global nDepth - read, how many pipes in series
+# @global pPipe - read, what vPipe has just made
+# @global pHead - set, the first pipe, which side 0 writes
+# @global pTail - set, the last, which side 1 reads
+# @return 0; it exits 1 as vPiece does
+##
+vSeries() {
+  local eHeld=$1
+  local aChain
+  local iPipe
+  local pLink
+  vPipe
+  aChain=("$pPipe")
+  for ((iPipe = 1; iPipe < nDepth; iPipe++)); do
+    vPipe
+    vTee "${aChain[iPipe - 1]}" 0 "$pPipe"
+    aChain+=("$pPipe")
+  done
+  pHead=${aChain[0]}
+  pTail=${aChain[nDepth - 1]}
+  for pLink in "${aChain[@]}"; do
+    case $eHeld in
+      head|both)
+        [ "$pLink" != "$pHead" ] || continue
+        ;;&
+      tail|both)
+        [ "$pLink" != "$pTail" ] || continue
+        ;;
+    esac
+    vEnd - 1 "$pLink" -
+  done
+}
+
 osSeats=0
 iSeat=1
 while [ "$iSeat" -lt "$nSeats" ]; do
@@ -225,12 +280,15 @@ case $eShape in
         osInlets=
         osOutlets=
         for osSeat in "${aSeats[@]}"; do
-          vPipe
-          pInlet=$pPipe
-          vPipe
-          pOutlet=$pPipe
-          osInlets="$osInlets $pInlet"
-          osOutlets="$osOutlets $pOutlet"
+          # The seat writes the head of its inlet and the merge reads the
+          # tail; the tee writes the head of its outlet and the seat reads
+          # the tail.
+          vSeries head
+          pInlet=$pHead
+          osInlets="$osInlets $pTail"
+          vSeries tail
+          pOutlet=$pTail
+          osOutlets="$osOutlets $pHead"
           vEnd "$osSeat" 0 "$pInlet" "${aSeats[*]}"
           vEnd "$osSeat" 1 "$pOutlet" "${aSeats[*]}"
         done
@@ -242,35 +300,47 @@ case $eShape in
     bBuilt=y
     ;;
   ring-p)
+    # On a ring-p 1 p holds the far end of the one seat's cable to it and
+    # the near end of its own cable to that seat; on more, a merge and a tee
+    # stand between, and those ends are theirs.
+    eToParent=none
+    eFromParent=tail
+    [ "$nSeats" -ne 1 ] || {
+      eToParent=tail
+      eFromParent=both
+    }
     osToParent=
     osFromParent=
     for iSeat in $osSeats; do
       iNext=$(( (iSeat + 1) % nSeats ))
-      vPipe
-      pSend=$pPipe
-      vPipe
-      pRecv=$pPipe
-      vPipe
-      pToParent=$pPipe
-      vPipe
-      pFromParent=$pPipe
+      vSeries head
+      pSend=$pHead
+      pSendTail=$pTail
+      vSeries tail
+      pRecvHead=$pHead
+      pRecv=$pTail
+      vSeries "$eToParent"
+      pToParentHead=$pHead
+      pToParent=$pTail
+      vSeries "$eFromParent"
+      pFromParent=$pHead
+      pFromParentTail=$pTail
       osToParent="$osToParent $pToParent"
       osFromParent="$osFromParent $pFromParent"
       vEnd "$iSeat" 0 "$pSend" "$iNext p"
       vEnd "$iNext" 1 "$pRecv" "$iSeat"
-      vEnd "$iSeat" 1 "$pFromParent" p
-      vTee "$pSend" 0 "$pRecv" "$pToParent"
+      vEnd "$iSeat" 1 "$pFromParentTail" p
+      vTee "$pSendTail" 0 "$pRecvHead" "$pToParentHead"
     done
     pParentRead=$pToParent
     pParentWrite=$pFromParent
     [ "$nSeats" -eq 1 ] || {
-      vPipe
-      pParentRead=$pPipe
-      vMerge "$pParentRead" 0 $osToParent
-      vPipe
-      pParentWrite=$pPipe
-      vTee "$pParentWrite" 0 $osFromParent
-      for pCoupler in $osToParent; do vEnd - 1 "$pCoupler" -; done
+      vSeries tail
+      pParentRead=$pTail
+      vMerge "$pHead" 0 $osToParent
+      vSeries head
+      pParentWrite=$pHead
+      vTee "$pTail" 0 $osFromParent
     }
     vEnd p 1 "$pParentRead" "$osSeats"
     vEnd p 0 "$pParentWrite" "$osSeats"
@@ -281,7 +351,7 @@ esac
 # bash abandons the case and lands here. Without this line, "here" is where
 # cleanup is disarmed and a directory with no cables in it is reported as one.
 [ "${bBuilt:-}" = y ] || {
-  echo "made nothing: $eShape $nSeats $nLanes" >&2
+  echo "made nothing: $eShape $nSeats $nLanes $nDepth" >&2
   exit 1
 }
 vDisarm

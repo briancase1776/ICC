@@ -5,20 +5,22 @@
 # @details create DST SIDE SRC... DST and every SRC are pipes Pipes made,
 #          every lane of them a fifo, all with the same even lane count.
 #          SIDE is 0 or 1, the side whose writes are copied. No SRC is DST
-#          and none is given twice, in any spelling. For each lane SIDE
-#          writes, of each SRC, a copier, dd(1) at bs=4096, takes that
-#          lane of that SRC and writes it to that lane of DST, byte for
-#          byte, in order per inlet, until removed; a copier ignores a
-#          hangup, as a server does. create opens each lane of DST itself,
-#          so a DST whose hold is dead blocks create, where the caller's
-#          bound reaches it. The merge's directory holds two files: merge,
-#          naming DST, SIDE and each SRC a line, and pid, one copier a
-#          line in lane order, SRC order within a lane. The merge makes
-#          nothing but itself.
-#          A create that cannot finish takes its copiers and its
-#          directory with it. Once the merge is whole that is no longer
-#          armed, so a create that then fails to print leaves a whole
-#          merge nobody was told of, which list shows and remove takes.
+#          and none is given twice, in any spelling. One copier, a shell of
+#          its own, goes round the SRCs in the order given and drains each
+#          in turn: while any lane SIDE writes of that SRC has bytes, it
+#          takes a dd(1) block at bs=4096 off each such lane and writes it
+#          to the same lane of DST, and only when none has any does it go
+#          on to the next SRC. Byte for byte, in order per inlet, until
+#          removed; the copier ignores a hangup, as a server does. create
+#          opens every lane the copier uses itself, so a pipe whose hold is
+#          dead blocks create, where the caller's bound reaches it. The
+#          merge's directory holds two files: merge, naming DST, SIDE and
+#          each SRC a line, and pid, the copier's. The merge makes nothing
+#          but itself.
+#          A create that cannot finish takes its copier and its directory
+#          with it. Once the merge is whole that is no longer armed, so a
+#          create that then fails to print leaves a whole merge nobody was
+#          told of, which list shows and remove takes.
 # @stdin nothing
 # @stdout the merge's directory, one line
 # @stderr the reason, on refusal
@@ -44,21 +46,20 @@ shift 2
 vSide "$eSide"
 # DST and every SRC are checked as icc-lib's nLanesOf checks them, which is
 # how Tee's create and Frames' read and write check theirs. A numeric entry
-# that is not a lane would count toward the count and then kill its copier
-# on open, where nothing can say so: a copier's stderr goes nowhere and list
-# only ever says down.
+# that is not a lane would count toward the count and then fail the open
+# below, or be copied from as if it were one.
 nLanes=$(nLanesOf "$pDst" "$@")
-# One pipe, one spelling. The checks below, the merge file and the copiers'
-# argv all get the canonical path, so the path list prints is the path that
-# finds the copiers.
+# One pipe, one spelling. The checks below, the merge file and the copier's
+# mark all get the canonical path, so the path list prints is the path that
+# finds the copier.
 pDst=$(readlink -f -- "$pDst")
 aSrcs=()
 for pPipe; do
   pSrc=$(readlink -f -- "$pPipe")
   # A SRC that is DST copies a lane back into itself. The same SRC twice is
-  # two copiers on one inlet lane, two readers of it, and the order it went
-  # in on that inlet is the one thing a merge promises. Checked as Tee's
-  # create checks its DSTs, and said in the caller's spelling.
+  # two readers of one inlet lane, and the order it went in on that inlet
+  # is the one thing a merge promises. Checked as Tee's create checks its
+  # DSTs, and said in the caller's spelling.
   [ "$pSrc" != "$pDst" ] || {
     echo "SRC is DST: $pPipe" >&2
     exit 1
@@ -72,15 +73,14 @@ for pPipe; do
   aSrcs+=("$pSrc")
 done
 # Until the merge is whole it is not a merge: a create that cannot finish
-# takes its copiers and its directory with it, and exits 1. Armed before
-# anything is made, as icc-lib's vArm says. aPids stays empty until there is
-# a copier, as in Tee's create. The copiers are killed from this list and
-# not from the pid file, because the file can be gone by then -- a remove can
-# take this directory while the open below is still waiting, and a copier
-# forked after that would answer to nothing.
+# takes its copier and its directory with it, and exits 1. Armed before
+# anything is made, as icc-lib's vArm says. pidCopier stays empty until
+# there is a copier. It is killed from here and not from the pid file,
+# because the file can be gone by then: a remove can take this directory
+# while an open below is still waiting.
 pDir=
-aPids=()
-vArm '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
+pidCopier=
+vArm '[ -z "$pidCopier" ] || kill "$pidCopier" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
 pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
@@ -89,39 +89,82 @@ pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
   printf '%s\n' "${aSrcs[@]}"
 } > "$pDir/merge"
 # Both files from here on, so a merge is the same shape to list and to remove
-# before the first copier is forked as after. The open below can wait forever.
+# before the copier is forked as after. The opens below can wait forever.
 : > "$pDir/pid"
-iLane=$eSide
-while [ "$iLane" -lt "$nLanes" ]; do
-  # Open the outlet lane here, where a wait or a failure is this shell's own
-  # and the caller's bound reaches it. Opened in the copier instead, an
-  # outlet whose hold is dead blocks a forked shell that still holds this
-  # one's stdout, and $(create) never returns though create has.
-  exec 3> "$pDst/$iLane"
-  for pSrc in "${aSrcs[@]}"; do
-    # The copier inherits the open lane as its stdout and never opens it, and
-    # fd 3 is closed because it has that lane already. It is dd at bs=4096,
-    # which is PIPE_BUF, so each chunk it writes lands whole against the other
-    # inlets' copiers on this lane; Pipes says why it is not cat. Its stderr
-    # goes nowhere -- the outlet carries what the inlets wrote, and a
-    # diagnostic on it would be bytes no inlet ever wrote -- so dd's summary
-    # needs no status=none. dd opens if= onto its stdin, which is /dev/null
-    # until it has, and that fd is what list and remove know a copier by.
-    # It is a server, started as icc-lib's vServe says.
-    (
-      vServe
-      exec >&3 2>/dev/null 3>&-
-      exec dd if="$pSrc/$iLane" bs=4096 < /dev/null
-    ) &
-    aPids+=($!)
-    echo $! >> "$pDir/pid"
+# Every lane the copier moves is opened here, where a wait or a failure is
+# this shell's own and the caller's bound reaches it. Opened in the copier
+# instead, a lane whose hold is dead blocks a forked shell that still holds
+# this one's stdout, and $(create) never returns though create has. The
+# outlet lanes are opened for writing, one fd each in lane order; the inlet
+# lanes for reading, as dd's if= was, so an inlet whose hold is gone reads
+# as the end of it. aIns holds them SRC by SRC, lanes in order within a SRC.
+aOuts=()
+aIns=()
+for ((iLane = eSide; iLane < nLanes; iLane += 2)); do
+  exec {fdLane}> "$pDst/$iLane"
+  aOuts+=("$fdLane")
+done
+for pSrc in "${aSrcs[@]}"; do
+  for ((iLane = eSide; iLane < nLanes; iLane += 2)); do
+    exec {fdLane}< "$pSrc/$iLane"
+    aIns+=("$fdLane")
   done
-  exec 3>&-
-  iLane=$((iLane + 2))
+done
+nPerSrc=${#aOuts[@]}
+(
+  # A server, started as icc-lib's vServe says. Its fd 0 is the first SRC's
+  # first lane it copies, which is what list and remove know it by, the way
+  # Pipes finds a holder. Its stdout and stderr go nowhere: the outlet
+  # carries what the inlets wrote and nothing else. dd's summary is kept for
+  # the one line that says the end of an inlet was reached, 0+0 records in,
+  # so it must be dd's own words and not a translation of them.
+  vServe
+  exec 0<&"${aIns[0]}" >/dev/null 2>&1
+  export LC_ALL=C
+  # A pipe this shell holds both ends of: nothing is ever written to it, so
+  # a timed read on it waits out its time and returns, a pause with no
+  # process forked for it.
+  exec {fdIdle}<> <(:)
+  while :; do
+    bIdle=1
+    for ((iSrc = 0; iSrc < ${#aSrcs[@]}; iSrc++)); do
+      # Drain this SRC before the next: another inlet's bytes cannot land
+      # between two blocks of this one while this one still has any waiting.
+      bMore=1
+      while [ "$bMore" -eq 1 ]; do
+        bMore=0
+        for ((iPer = 0; iPer < nPerSrc; iPer++)); do
+          fdIn=${aIns[iSrc * nPerSrc + iPer]}
+          read -t 0 -u "$fdIn" || continue
+          # One block, at most PIPE_BUF, so it lands whole on the outlet. A
+          # dd that fails could not write the outlet, and one that read
+          # nothing met the end of its inlet: either way the merge is over.
+          # exec, so the dd is the copier's own child and not a subshell's:
+          # with a trap set bash forks the substitution and forks again for
+          # dd, and remove, which kills the copier's children, would miss it.
+          osStats=$(exec dd bs=4096 count=1 <&"$fdIn" 2>&1 \
+            >&"${aOuts[iPer]}") || exit 0
+          case $osStats in
+            0+0\ *)
+              exit 0
+              ;;
+          esac
+          bMore=1
+          bIdle=0
+        done
+      done
+    done
+    [ "$bIdle" -eq 0 ] || read -t 0.05 -u "$fdIdle" || :
+  done
+) < /dev/null &
+pidCopier=$!
+echo "$pidCopier" > "$pDir/pid"
+for fdLane in "${aOuts[@]}" "${aIns[@]}"; do
+  exec {fdLane}>&-
 done
 # Still ours? A remove that ran while an open above waited took the directory,
-# and these copiers are now merging into a merge that no longer exists, which
-# nothing can list and nothing can stop. They are this shell's to end.
+# and this copier is now merging into a merge that no longer exists, which
+# nothing can list and nothing can stop. It is this shell's to end.
 [ -d "$pDir" ] && [ -f "$pDir/merge" ] && [ -f "$pDir/pid" ] || {
   echo "removed while starting: $pDir" >&2
   exit 1

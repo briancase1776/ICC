@@ -5,8 +5,12 @@
 # @details Prove the merge: get three pipes, merge side 0 of two into the
 #          third, push a Frames payload bigger than one lane holds through
 #          each inlet in turn, read it back whole from the outlet each
-#          time, then plain bytes on one lane from both inlets, remove it.
-#          The pipes stay up. An inlet that is the outlet, one given
+#          time, then plain bytes on one lane from both inlets, then two
+#          raspberries bigger than a lane, each put on by one dd from its
+#          inlet at once, and see each come out whole, one inlet after the
+#          other, remove it. The pipes stay up. A merge whose outlet is
+#          full and unread is removed with nothing of it left running. An
+#          inlet that is the outlet, one given
 #          twice, a lane that is not a lane, and an odd lane count are
 #          refused; remove takes what create made and not a path out of it
 #          or a look-alike; list answers for every merge whatever else
@@ -29,6 +33,7 @@ source .claude/skills/icc-lib/scripts/lib
 pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
 pIccFrames=$(cd .claude/skills/icc-frames/scripts && pwd)
 pIccMerge=$(cd .claude/skills/icc-merge/scripts && pwd)
+pIccRaspberry=$(cd .claude/skills/icc-raspberry/scripts && pwd)
 # Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
 # whatever is named, so a check that fails leaves nothing of the harness's
 # own behind.
@@ -167,11 +172,45 @@ case $(timeout 1 dd if="$pPipeC/2" bs=4096 status=none) in
     exit 1
     ;;
 esac
+# Inlets that write at once, with more than a lane each: the copier drains
+# one inlet before it goes to the next, so what one writer puts on without a
+# pause comes out whole, and then the other's. A raspberry checks itself.
+for iRound in $(seq 5); do
+  "$pIccRaspberry/raspberry" $((150000 + 2 * RANDOM)) > inA
+  "$pIccRaspberry/raspberry" $((150000 + 2 * RANDOM)) > inB
+  nBoth=$(($(wc -c < inA) + $(wc -c < inB)))
+  timeout 10 head -c "$nBoth" "$pPipeC/0" > out &
+  pidOut=$!
+  dd if=inA of="$pPipeA/0" bs=4096 2>/dev/null &
+  pidA=$!
+  dd if=inB of="$pPipeB/0" bs=4096 2>/dev/null &
+  pidB=$!
+  wait "$pidA" "$pidB" "$pidOut"
+  cat inA inB | cmp -s - out || cat inB inA | cmp - out
+done
 "$pIccMerge/remove" "$pMergeDir"
 [ ! -d "$pMergeDir" ]
 for pPipe in $pPipeA $pPipeB $pPipeC; do
   "$pIccPipes/list" | grep -qx "$pPipe up"
 done
+# A merge whose outlet is full and unread has a dd waiting on it, the block
+# it took off the inlet in hand. remove takes that dd with the copier, and
+# nothing of the merge is left running.
+pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA")
+pidCopier=$(cat "$pMergeDir/pid")
+head -c 300000 /dev/zero |
+  timeout 2 dd of="$pPipeA/0" bs=4096 2>/dev/null && exit 1
+[ -n "$(pgrep -P "$pidCopier")" ]
+"$pIccMerge/remove" "$pMergeDir"
+sleep 1
+[ -z "$(pgrep -P "$pidCopier")" ]
+case $(ps -o stat= -p "$pidCopier" 2>/dev/null) in
+  ''|Z*)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
 "$pIccPipes/remove" "$pNarrow"
 "$pIccPipes/remove" "$pPipeC"
 "$pIccPipes/remove" "$pPipeB"

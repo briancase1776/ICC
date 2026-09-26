@@ -335,13 +335,14 @@ case $(timeout 1 cat "$pReadEnd/0") in
     ;;
 esac
 "$pIccPatch/remove" "$pDir"
+# p's cable from the merge is three deep, one pipe for each seat in it
 vMake ring-p 3 6
-vMade icc-pipes 14
-vMade icc-tee 4
+vMade icc-pipes 16
+vMade icc-tee 6
 vMade icc-merge 1
-vEnds 14
-# one coupler per seat
-[ "$(grep -c '^- ' "$pDir/patch")" -eq 3 ]
+vEnds 16
+# one coupler per seat, and two pipes of p's cable no seat holds
+[ "$(grep -c '^- ' "$pDir/patch")" -eq 5 ]
 [ "$(pEnd 1 1 0)" != "$(pEnd 1 1 p)" ]
 pWriteEnd=$(pAt 1 0 2)
 "$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
@@ -398,13 +399,13 @@ osPieces=$(cut -d' ' -f1 "$pDir/made")
 "$pIccPatch/remove" "$pDir"
 [ ! -d "$pDir" ]
 for pPiece in $osPieces; do [ ! -e "$pPiece" ]; done
-# ring-p, two deep: every cable a seat reads in series, a Frames payload
-# through a seat's hop and through p's merge
+# ring-p, two deep: every cable a seat reads in series, p's from the merge
+# twice that, a Frames payload through a seat's hop and through p's merge
 vMake ring-p 2 6 2
-vMade icc-pipes 15
-vMade icc-tee 8
+vMade icc-pipes 17
+vMade icc-tee 10
 vMade icc-merge 1
-vEnds 15
+vEnds 17
 pWriteEnd=$(pAt 0 0 1)
 "$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
 pReadEnd=$(pAt 1 1 0)

@@ -8,8 +8,8 @@
 #          zero, and 2 when not given. DEPTH is how many pipes in series
 #          every cable a seat reads through a fitting is, joined by
 #          one-outlet tees, 1 or more, and 1 when not given, but for p's
-#          from a mesh-p's merge, which N seats write into, and which is N
-#          times that; a cable a fitting reads is one pipe, and so is a
+#          from a merge, which N seats write into, and which is N times
+#          that; a cable a fitting reads is one pipe, and so is a
 #          pipe two seats share, whatever it is. The numbers are read in
 #          base ten, and none may run past 18 significant digits. The
 #          pieces come from icc-pipes, icc-tee and icc-merge, beside this
@@ -364,7 +364,7 @@ case $eShape in
     pParentRead=$pToParent
     pParentWrite=$pFromParent
     [ "$nSeats" -eq 1 ] || {
-      vSeries tail
+      vSeries tail $((nDepth * nSeats))
       pParentRead=$pTail
       vMerge "$pHead" 0 $osToParent
       vSeries head

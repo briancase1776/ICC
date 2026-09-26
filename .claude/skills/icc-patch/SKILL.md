@@ -78,18 +78,18 @@ reads on the other. On the rest a seat's own words do not come back to
 it, since there is no tee to hand them round.
 
 DEPTH is how many pipes in series a cable a seat reads through a
-fitting is: a tee's to a seat, and on a ring-p a merge's to p and, on a
-ring-p 1, the hop tee's to p. Each pipe after the first is a one-outlet
+fitting is: a tee's to a seat, a merge's to p N times over, and on a
+ring-p 1 the hop tee's to p. Each pipe after the first is a one-outlet
 tee from the one before it, lane for lane, so the cable carries one way:
 what goes into the first pipe comes out of the last, where the seat
 holds it, and the map names that pipe, as it would the one pipe at
 DEPTH 1. Depth is room for what waits on a seat that has not read yet.
-p's cable from a mesh-p's merge carries what all N seats write, so it
-is N times DEPTH. A cable a fitting reads, a seat's into a tee and a
-tee's into a merge, keeps moving, and is one pipe. So is a pipe two
-seats share, the one that is the whole of a star's cable, a ring's, a
-mesh 2 or a mesh-p 1, whatever DEPTH is: it carries both ways, and a
-tee carries one.
+p's cable from a merge, on a mesh-p or a ring-p, carries what all N
+seats write, so it is N times DEPTH, as Merge says of its outlet. A
+cable a fitting reads, a seat's into a tee and a tee's into a merge,
+keeps moving, and is one pipe. So is a pipe two seats share, the one
+that is the whole of a star's cable, a ring's, a mesh 2 or a mesh-p 1,
+whatever DEPTH is: it carries both ways, and a tee carries one.
 
 ## The map
 
@@ -166,7 +166,7 @@ those pipes with the rest.
   which only the bay knows: a star or a ring one, a ring-p hop two, a
   mesh of three or more two and three to p on a mesh-p, and a shape
   that collapsed to one pipe one, each cable a seat reads through a
-  fitting counting DEPTH, and p's from a mesh-p's merge N times that.
+  fitting counting DEPTH, and p's from a merge N times that.
   What one pipe holds is Pipes' fact, and Tee's and Merge's SKILL.md say
   what a fitting adds; each joint in a cable is a tee, and holds what
   one does. It is not one number: measured on a mesh 3, 132K went every

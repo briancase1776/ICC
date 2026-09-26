@@ -89,6 +89,11 @@ them.
 - What a write into an inlet can leave on the wire and walk away from is
   that inlet's lanes plus, while the copier can move, the outlet's lanes,
   which every inlet shares. Pipes' SKILL.md has the numbers.
+- The outlet carries every inlet, so a reader that falls behind on it
+  falls behind on all of them. For no writer to wait on that reader,
+  the outlet and whatever lies past it have to hold all that every
+  inlet writes in the meantime: N inlets that each write as much, N
+  times what one does.
 - create opens every lane the copier uses itself, and the copier
   inherits them. A pipe whose hold is dead blocks that open, so it blocks
   create, where the caller's bound reaches it; Pipes says what a dead

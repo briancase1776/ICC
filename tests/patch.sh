@@ -251,32 +251,31 @@ pReadEnd=$(pAt 0 1 0)
 "$pIccPatch/remove" "$pDir"
 vMake mesh 4 6
 "$pIccPatch/list" | grep -qx "$pDir up mesh 4 6 1"
-vMade icc-pipes 9
-vMade icc-tee 1
-vMade icc-merge 1
-vEnds 9
-# the hub, named, held by nobody
-[ "$(grep -c '^- ' "$pDir/patch")" -eq 1 ]
-[ "$(grep -c '^3 ' "$pDir/patch")" -eq 2 ]
+vMade icc-pipes 16
+vMade icc-tee 4
+vMade icc-merge 0
+vEnds 16
+# every pipe is a seat's: a write end and a read end from each other seat
+[ -z "$(grep '^- ' "$pDir/patch")" ]
+[ "$(grep -c '^3 ' "$pDir/patch")" -eq 4 ]
 pWriteEnd=$(pAt 1 0 3)
 "$pIccFrames/write" "$pWriteEnd" 0 < "$pIn"
-for osSeat in 0 1 2 3; do
+for osSeat in 0 2 3; do
   pReadEnd=$(pAt $osSeat 1 1)
   timeout 5 "$pIccFrames/read" "$pReadEnd" 1 > "$pOut"
   cmp "$pIn" "$pOut"
 done
+# nothing comes back to the writer
+[ -z "$(pEnd 1 1 1)" ]
+# two writing at once each reach seat 3 on a read end of their own
 pWriteEnd=$(pAt 0 0 2)
 printf 'a' > "$pWriteEnd/2"
 pWriteEnd=$(pAt 2 0 0)
 printf 'b' > "$pWriteEnd/2"
 pReadEnd=$(pAt 3 1 0)
-case $(timeout 1 cat "$pReadEnd/2") in
-  ab|ba)
-    ;;
-  *)
-    exit 1
-    ;;
-esac
+[ "$(timeout 1 cat "$pReadEnd/2")" = a ]
+pReadEnd=$(pAt 3 1 2)
+[ "$(timeout 1 cat "$pReadEnd/2")" = b ]
 mkdir "$pDir/lock"
 "$pIccPatch/remove" "$pDir"
 [ ! -d "$pDir" ]
@@ -305,17 +304,36 @@ printf 'yo' > "$pWriteEnd/1"
 pReadEnd=$(pAt 0 0 p)
 [ "$(timeout 1 cat "$pReadEnd/1")" = yo ]
 "$pIccPatch/remove" "$pDir"
+# mesh-p 2: the seats' mesh, and a merge of both for p alone, twice as deep;
+# p writes nothing, and nothing comes back to a writer
 vMake mesh-p 2
-vMade icc-pipes 7
-vMade icc-tee 1
+vMade icc-pipes 8
+vMade icc-tee 3
 vMade icc-merge 1
-vEnds 7
-pWriteEnd=$(pAt p 0 1)
+vEnds 8
+[ "$(grep -c '^p ' "$pDir/patch")" -eq 1 ]
+[ -z "$(pEnd p 0 0)" ]
+[ "$(pEnd p 1 0)" = "$(pEnd p 1 1)" ]
+pWriteEnd=$(pAt 0 0 1)
 printf 'all' > "$pWriteEnd/0"
-for osSeat in 0 1 p; do
-  pReadEnd=$(pAt $osSeat 1 p)
-  [ "$(timeout 1 cat "$pReadEnd/0")" = all ]
-done
+pReadEnd=$(pAt 1 1 0)
+[ "$(timeout 1 cat "$pReadEnd/0")" = all ]
+pReadEnd=$(pAt p 1 0)
+[ "$(timeout 1 cat "$pReadEnd/0")" = all ]
+[ -z "$(pEnd 0 1 0)" ]
+# where the seats meet is p's merge: two writing at once come out whole
+pWriteEnd=$(pAt 0 0 p)
+printf 'a' > "$pWriteEnd/0"
+pWriteEnd=$(pAt 1 0 p)
+printf 'b' > "$pWriteEnd/0"
+pReadEnd=$(pAt p 1 0)
+case $(timeout 1 cat "$pReadEnd/0") in
+  ab|ba)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
 "$pIccPatch/remove" "$pDir"
 vMake ring-p 3 6
 vMade icc-pipes 14
@@ -357,21 +375,22 @@ pReadEnd=$(pAt 0 1 p)
 [ "$(timeout 1 cat "$pReadEnd/0")" = hi ]
 "$pIccPatch/remove" "$pDir"
 # DEPTH: every cable a seat reads through a fitting is that many pipes in
-# series, and the map names every one of them. Five deep, the tee's cable to
-# each seat holds more than a mesh of single pipes does, so a write bigger
-# than that goes on with nobody reading, waits whole in every seat's cable,
-# and comes out whole at each, the writer's too, one seat after another.
+# series, and the map names every one of them, and p's from the merge is
+# three times that. Five deep, a tee's cable to each seat holds more than a
+# mesh of single pipes does, so a write bigger than that goes on with nobody
+# reading, waits whole in every other seat's cable from the writer and in
+# p's, and comes out whole at each, one after another.
 vMake mesh-p 3 2 5
 "$pIccPatch/list" | grep -qx "$pDir up mesh-p 3 2 5"
-vMade icc-pipes 25
-vMade icc-tee 17
+vMade icc-pipes 51
+vMade icc-tee 41
 vMade icc-merge 1
-vEnds 25
-[ "$(grep -c '^- ' "$pDir/patch")" -eq 17 ]
+vEnds 51
+[ "$(grep -c '^- ' "$pDir/patch")" -eq 41 ]
 "$pIccRaspberry/raspberry" 300000 > "$pWork/deep"
 pWriteEnd=$(pAt 1 0 p)
 timeout 10 dd if="$pWork/deep" of="$pWriteEnd/0" bs=4096 2>/dev/null
-for osSeat in 0 1 2 p; do
+for osSeat in 0 2 p; do
   pReadEnd=$(pAt $osSeat 1 1)
   timeout 5 head -c 300000 "$pReadEnd/0" | cmp - "$pWork/deep"
 done

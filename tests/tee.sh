@@ -21,9 +21,6 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
-# What is in /tmp is counted from globs, never from ls, and a glob that
-# matches nothing is no paths at all, not the pattern itself.
-shopt -s nullglob
 cd "$(dirname "$0")/.."
 source .claude/skills/icc-lib/scripts/lib
 pIccPipes=$(cd .claude/skills/icc-pipes/scripts && pwd)
@@ -142,27 +139,23 @@ printf 'plain' > "$pPipeA/2"
 vCutOff "$pIccTee/create" "$pPipeA" 0 "$pPipeB"
 # The trap: a create cut off inside its lane loop takes its directory and the
 # copiers it started with it. A wide pipe makes that loop long enough to
-# signal into, and the signal waits for the new tee's pid file, which create
-# writes once its trap is armed and just before its first copier. Cutting a
-# create off before that proves nothing about the trap; waiting only for the
-# directory worked while each look took an ls, and lost the race to the trap
-# once it took a glob.
+# signal into. create prints its directory the moment it makes it, and the
+# signal waits for that directory's pid file, which create writes once its
+# trap is armed and just before its first copier: cutting a create off before
+# that proves nothing about the trap.
 pWideSrc=$("$pIccPipes/create" 200)
 pWideDst=$("$pIccPipes/create" 200)
-aTees=(/tmp/icc-tee-*/)
-nTees=${#aTees[@]}
-aStarted=(/tmp/icc-tee-*/pid)
-nStarted=${#aStarted[@]}
-"$pIccTee/create" "$pWideSrc" 0 "$pWideDst" >/dev/null 2>&1 &
+: > printed
+"$pIccTee/create" "$pWideSrc" 0 "$pWideDst" >> printed 2>/dev/null &
 pidCreate=$!
-while [ "${#aStarted[@]}" -le "$nStarted" ]; do
+pMade=
+while [ ! -e "$pMade/pid" ]; do
   kill -0 $pidCreate 2>/dev/null || break
-  aStarted=(/tmp/icc-tee-*/pid)
+  read -r pMade < printed || :
 done
 kill -TERM $pidCreate 2>/dev/null || :
 wait $pidCreate 2>/dev/null || :
-aTees=(/tmp/icc-tee-*/)
-[ "${#aTees[@]}" -eq "$nTees" ]
+[ -n "$pMade" ] && [ ! -e "$pMade" ]
 "$pIccPipes/remove" "$pWideDst"
 "$pIccPipes/remove" "$pWideSrc"
 

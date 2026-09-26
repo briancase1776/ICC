@@ -8,8 +8,9 @@
 #              source "$(dirname "$0")/../../icc-lib/scripts/lib"
 #          What is here is what more than one piece does, so they all do
 #          it one way: counts checked, pipes checked, cleanup armed before
-#          anything is made, servers started deaf to a hangup, and the
-#          harnesses' cut-off check. Sourcing turns on extglob, which the
+#          anything is made, a piece's directory made and printed at once,
+#          servers started deaf to a hangup, and the harnesses' cut-off
+#          checks. Sourcing turns on extglob, which the
 #          lane glob needs when this file is read.
 #          A function that refuses says why on stderr and exits 1. Called
 #          in $( ), that exit ends only the substitution, and bash does
@@ -213,6 +214,29 @@ vDisarm() {
 }
 
 ##
+# @fn pMakeDir()
+# @brief Make a piece's directory under /tmp, and print it at once.
+# @details Called, not captured: it sets pDir and prints it on the caller's
+#          stdout the moment it is made, before anything goes in it. So a
+#          caller that is cut off or fails after has already said what it
+#          made, and whoever ran it looks for that and nothing else; and a
+#          print that fails, fails while the cleanup is armed, which takes
+#          the directory. A mktemp that fails made nothing and prints
+#          nothing, and under set -e it ends the caller. Arm the cleanup
+#          first, as vArm says: the signal waits for the assignment, so
+#          the cleanup always knows pDir.
+# @param $1 osKind - what the directory is named for: icc-pipes, moot
+# @stdout the directory, one line
+# @global pDir - set, the directory made
+# @return 0; under set -e a mktemp or a print that fails ends the caller
+##
+pMakeDir() {
+  local osKind=$1
+  pDir=$(mktemp -d "/tmp/$osKind-XXXXXXXX")
+  echo "$pDir"
+}
+
+##
 # @fn vServe()
 # @brief Make this subshell a server: none of the traps, deaf to HUP.
 # @details The first thing a hold or a copier does, before it execs. It is
@@ -231,44 +255,70 @@ vServe() {
 }
 
 ##
+# @fn vCutOffAt()
+# @brief For the harnesses: cut a command off while it waits in one it
+#        runs, and check it goes and takes what it made with it.
+# @details A stand-in for osStub, first on PATH, waits in its place, so the
+#          signal lands while the command is partway through. The stand-in
+#          takes itself away first, so any later call is the real one. What
+#          the command made is what it printed first, as pMakeDir prints a
+#          directory the moment it is made; or, standing in for mktemp,
+#          what the stand-in made: it makes what the real one would and
+#          prints it before it waits, so the signal lands once the thing
+#          exists and before the command has its name, the moment a
+#          cleanup armed after mktemp misses.
+# @param $1 osSignal - the signal to send, as kill takes it: TERM, HUP
+# @param $2 osStub - the command to stand in for: mktemp, tr, mkfifo
+# @param $3... aCommand - the command and its arguments
+# @stderr "cut off, not taken" and the command, when it failed
+# @return 0 the command exited 1, had made something, and it is gone; it
+#         exits 1 instead when not
+##
+vCutOffAt() {
+  local osSignal=$1
+  local osStub=$2
+  shift 2
+  local aCommand=("$@")
+  local pBin
+  local osMake=
+  local pidCommand
+  local pidStub
+  local pMade
+  local nStatus=0
+  pBin=$(mktemp -d)
+  [ "$osStub" != mktemp ] ||
+    osMake='pMade=$(command -p mktemp "$@"); echo "$pMade"'
+  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' 'pMade=' "$osMake" \
+    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/$osStub"
+  chmod +x "$pBin/$osStub"
+  PATH=$pBin:$PATH "${aCommand[@]}" > "$pBin/printed" 2>/dev/null &
+  pidCommand=$!
+  while [ ! -s "$pBin/stalled" ]; do
+    kill -0 "$pidCommand" 2>/dev/null || break
+  done
+  read -r pidStub pMade < "$pBin/stalled"
+  kill "-$osSignal" "$pidCommand"
+  kill "$pidStub"
+  wait "$pidCommand" || nStatus=$?
+  [ -n "$pMade" ] || read -r pMade < "$pBin/printed" || :
+  rm -rf "$pBin"
+  [ "$nStatus" -eq 1 ] && [ -n "$pMade" ] && [ ! -e "$pMade" ] || {
+    echo "cut off, not taken: ${aCommand[*]}" >&2
+    [ -z "$pMade" ] || rm -rf "$pMade"
+    exit 1
+  }
+}
+
+##
 # @fn vCutOff()
 # @brief For the harnesses: cut a command off just after its first
 #        mktemp, and check it goes and takes what that made with it.
-# @details A stand-in mktemp makes what the real one would, prints it and
-#          waits, so the signal lands once the thing exists and before the
-#          command has its name: the moment a cleanup armed after mktemp
-#          misses. The stand-in takes itself away first, so any later
-#          mktemp in the command is the real one.
+# @details vCutOffAt, with TERM, standing in for mktemp.
 # @param $1... aCommand - the command and its arguments
 # @stderr "cut off, not taken" and the command, when it failed
 # @return 0 the command exited 1 and what its mktemp made is gone; it exits
 #         1 instead when not
 ##
 vCutOff() {
-  local aCommand=("$@")
-  local pBin
-  local pidCommand
-  local pidStub
-  local pMade
-  local nStatus=0
-  pBin=$(mktemp -d)
-  printf '%s\n' '#!/bin/bash' 'rm -- "$0"' \
-    'pMade=$(command -p mktemp "$@")' 'echo "$pMade"' \
-    'echo "$$ $pMade" > "${0%/*}/stalled"' 'exec sleep 30' > "$pBin/mktemp"
-  chmod +x "$pBin/mktemp"
-  PATH=$pBin:$PATH "${aCommand[@]}" >/dev/null 2>&1 &
-  pidCommand=$!
-  while [ ! -s "$pBin/stalled" ]; do
-    kill -0 "$pidCommand" 2>/dev/null || break
-  done
-  read -r pidStub pMade < "$pBin/stalled"
-  kill -TERM "$pidCommand"
-  kill "$pidStub"
-  wait "$pidCommand" || nStatus=$?
-  rm -rf "$pBin"
-  [ "$nStatus" -eq 1 ] && [ ! -e "$pMade" ] || {
-    echo "cut off, not taken: ${aCommand[*]}" >&2
-    rm -rf "$pMade"
-    exit 1
-  }
+  vCutOffAt TERM mktemp "$@"
 }

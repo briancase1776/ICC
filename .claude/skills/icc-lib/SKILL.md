@@ -2,9 +2,10 @@
 name: icc-lib
 description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
-  cleanup armed before anything is made, servers deaf to a hangup, and
-  the harnesses' cut-off check. Not for a session to call; the other ICC
-  skills need it beside them, in the same skills directory.
+  cleanup armed before anything is made, a piece's directory made and
+  printed at once, servers deaf to a hangup, and the harnesses' cut-off
+  checks. Not for a session to call; the other ICC skills need it beside
+  them, in the same skills directory.
 ---
 
 # icc-lib
@@ -33,11 +34,17 @@ directory.
     vStopOnSignal         INT, TERM and HUP exit 1 again, after a handler
                           swapped them
     vDisarm               clear it all: what was made is whole
+    pMakeDir KIND         make /tmp/KIND-XXXXXXXX, set pDir to it, and
+                          print it at once, before anything goes in it
     vServe                first thing in a hold or a copier: no traps,
                           and deaf to HUP, as a server under nohup is
-    vCutOff COMMAND...    for the harnesses: signal COMMAND just after
-                          its first mktemp, and check it exits 1 and
-                          leaves nothing
+    vCutOffAt SIGNAL STUB COMMAND...
+                          for the harnesses: send SIGNAL to COMMAND
+                          while it waits in STUB, and check it exits 1
+                          and what it made is gone: what it printed
+                          first, or what a stand-in mktemp made
+    vCutOff COMMAND...    vCutOffAt TERM mktemp COMMAND: just after its
+                          first mktemp
 
 A function that refuses says why on stderr and exits 1. Called in
 `$( )`, as the n functions are, that ends only the substitution, and

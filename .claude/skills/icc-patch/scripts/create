@@ -20,17 +20,16 @@
 #          made, one line per piece in the order it was made, its
 #          directory and the scripts that made it. bBuilt is empty until
 #          a shape's arm has run to its end, and y after.
-#          A create that cannot finish hands what it made to its own
-#          remove. Once the patch is whole that is no longer armed, so a
-#          create that then fails to print leaves a whole patch nobody
-#          was told of, which list shows and remove takes.
+#          The directory is printed the moment it is made, as icc-lib's
+#          pMakeDir does it, so a create that fails after has already
+#          said what it made. A create that cannot finish hands what it
+#          made to its own remove.
 # @stdin nothing
-# @stdout the patch's directory, one line
+# @stdout the patch's directory, one line, as soon as it is made
 # @stderr the reason, on refusal, and whatever a piece's scripts say
-# @exit 0 the patch is made and printed; 1 the arguments are refused, a
-#       piece could not be made, a signal came, or the shape made
-#       nothing, and what was made is removed, or it could not be printed
-#       and all of it is left
+# @exit 0 the patch is made; 1 the arguments are refused, a piece could
+#       not be made, a signal came, or the shape made nothing, and what
+#       was made is removed
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -84,7 +83,7 @@ pIccMerge=$(cd "$(dirname "$0")/../../icc-merge/scripts" && pwd)
 pDir=
 vArm '[ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-pDir=$(mktemp -d /tmp/icc-patch-XXXXXXXX)
+pMakeDir icc-patch
 echo "$eShape $nSeats $nLanes $nDepth" > "$pDir/patch"
 : > "$pDir/made"
 vArm '"$(dirname "$0")/remove" "$pDir"
@@ -384,4 +383,3 @@ esac
   exit 1
 }
 vDisarm
-echo "$pDir"

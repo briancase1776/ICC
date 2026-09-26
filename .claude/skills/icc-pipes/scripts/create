@@ -9,16 +9,15 @@
 #          keeps every lane open, so nothing blocks on open, and ignores a
 #          hangup, as a server does. Even lanes go one way, odd lanes the
 #          other.
-#          A create that cannot finish takes its directory and its hold
-#          with it. Once the pipe is whole that is no longer armed, so a
-#          create that then fails to print leaves a whole pipe nobody
-#          was told of, which list shows and remove takes.
+#          The directory is printed the moment it is made, as icc-lib's
+#          pMakeDir does it, so a create that fails after has already
+#          said what it made. A create that cannot finish takes its
+#          directory and its hold with it.
 # @stdin nothing
-# @stdout the pipe's directory, one line
+# @stdout the pipe's directory, one line, as soon as it is made
 # @stderr the reason, on refusal
-# @exit 0 the pipe is made and printed; 1 N is refused, or the pipe
-#       could not be finished and none of it is left, or it could not
-#       be printed and all of it is
+# @exit 0 the pipe is made; 1 N is refused, or the pipe could not be
+#       finished and none of it is left
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -40,7 +39,7 @@ pidHold=
 vArm '[ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
+pMakeDir icc-pipes
 osRedirs=
 iLane=0
 while [ "$iLane" -lt "$nLanes" ]; do
@@ -61,4 +60,3 @@ eval "exec $osRedirs"
 pidHold=$!
 echo "$pidHold" > "$pDir/pid"
 vDisarm
-echo "$pDir"

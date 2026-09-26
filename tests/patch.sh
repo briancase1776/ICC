@@ -28,9 +28,6 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
-# What is in /tmp is counted from globs, never from ls, and a glob that
-# matches nothing is no paths at all, not the pattern itself.
-shopt -s nullglob
 cd "$(dirname "$0")/.."
 source .claude/skills/icc-lib/scripts/lib
 pIccPipes=.claude/skills/icc-pipes/scripts
@@ -563,31 +560,11 @@ osMine="$osMine $pDir"
 vCutOff "$pIccPatch/remove" "$pDir"
 "$pIccPatch/list" | grep -qx "$pDir up star 1 2 1"
 "$pIccPatch/remove" "$pDir"
-# A signal between pieces is a create that cannot finish: it takes what it
-# made and exits 1, as one inside a piece does. This tr stalls the first line
-# of the map, and takes itself away so that the next tr is the real one.
-mkdir "$pWork/bin"
-printf '%s\n' '#!/bin/bash' 'rm -- "$0"' 'echo $$ > "${0%/*}/stalled"' \
-  'exec sleep 30' > "$pWork/bin/tr"
-chmod +x "$pWork/bin/tr"
-aPatches=(/tmp/icc-patch-*/)
-aPipes=(/tmp/icc-pipes-*/)
-nPatches=${#aPatches[@]}
-nPipes=${#aPipes[@]}
-PATH=$pWork/bin:$PATH "$pIccPatch/create" star 1 >/dev/null 2>&1 &
-pidCreate=$!
-while [ ! -s "$pWork/bin/stalled" ]; do
-  kill -0 $pidCreate 2>/dev/null || break
-done
-kill -TERM $pidCreate
-kill "$(cat "$pWork/bin/stalled")"
-nStatus=0
-wait $pidCreate || nStatus=$?
-[ "$nStatus" -eq 1 ]
-aPatches=(/tmp/icc-patch-*/)
-aPipes=(/tmp/icc-pipes-*/)
-[ "${#aPatches[@]}" -eq "$nPatches" ]
-[ "${#aPipes[@]}" -eq "$nPipes" ]
+# A signal between pieces is a create that cannot finish: it exits 1 and
+# hands what it made to its remove, which takes the directory it printed
+# last, once every piece is gone. Stalled in the tr that writes the first
+# line of the map, after its first pipe.
+vCutOffAt TERM tr "$pIccPatch/create" star 1
 for pMine in $osMine; do [ ! -d "$pMine" ]; done
 rm -rf "$pWork"
 vDisarm

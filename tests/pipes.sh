@@ -7,9 +7,9 @@
 #          remove it. A create that cannot finish is made to fail four
 #          times: before its first fifo, after its last, on a hangup while
 #          it waits on its first, and on a signal just after it makes its
-#          directory. What is left in /tmp is checked only for new
-#          directories that are empty, since one with lanes in it may be
-#          anyone's pipe, so a leak from the second failure would pass.
+#          directory. Each has printed its directory the moment it made
+#          it, and that one is checked gone; nothing else in /tmp is
+#          looked at.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -22,9 +22,6 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
-# What is in /tmp is counted from globs, never from ls, and a glob that
-# matches nothing is no paths at all, not the pattern itself.
-shopt -s nullglob
 cd "$(dirname "$0")/../.claude/skills/icc-pipes"
 source ../icc-lib/scripts/lib
 # Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
@@ -44,40 +41,25 @@ mkfifo "$pFake/0"
 scripts/remove "$pFake" 2>/dev/null && exit 1
 [ -p "$pFake/0" ]
 rm -rf "$pFake"
-# a create that cannot finish leaves nothing behind. Checked against what
-# was there before, not by emptying /tmp: other pipes may be up beside this
-# one, which is also why a new directory with lanes in it is let pass.
+# A create that cannot finish leaves nothing behind: the directory it printed
+# the moment it made it is gone. Before its first fifo, and after its last,
+# with too few descriptors to hold them.
 pFakeBin=$(mktemp -d)
 printf '#!/bin/bash\nexit 1\n' > "$pFakeBin/mkfifo"
 chmod +x "$pFakeBin/mkfifo"
-aBefore=(/tmp/icc-pipes-*/)
-PATH=$pFakeBin:$PATH scripts/create 2 2>/dev/null && exit 1
-(
+pMade=$(PATH=$pFakeBin:$PATH scripts/create 2 2>/dev/null) && exit 1
+[ -n "$pMade" ] && [ ! -e "$pMade" ]
+pMade=$(
   ulimit -n 30
   scripts/create 40 2>/dev/null
 ) && exit 1
-# A hangup is a create that cannot finish too, and exits 1 as a TERM does.
-# This mkfifo stalls until it is killed, so the signal lands while create
-# waits on it, with its directory made.
-printf '#!/bin/bash\necho $$ > "${0%%/*}/stalled"\nexec sleep 30\n' \
-  > "$pFakeBin/mkfifo"
-PATH=$pFakeBin:$PATH scripts/create 2 >/dev/null 2>&1 &
-pidCreate=$!
-while [ ! -s "$pFakeBin/stalled" ]; do
-  kill -0 $pidCreate 2>/dev/null || break
-done
-kill -HUP $pidCreate
-kill "$(cat "$pFakeBin/stalled")"
-nStatus=0
-wait $pidCreate || nStatus=$?
-[ "$nStatus" -eq 1 ]
+[ -n "$pMade" ] && [ ! -e "$pMade" ]
+rm -rf "$pFakeBin"
+# A hangup is a create that cannot finish too, and exits 1 as a TERM does:
+# stalled in mkfifo, with its directory made.
+vCutOffAt HUP mkfifo scripts/create 2
 # Cut off just after its directory is made, a create takes it with it.
 vCutOff scripts/create 2
-for pPipe in /tmp/icc-pipes-*/; do
-  printf '%s\n' "${aBefore[@]}" | grep -qxF "$pPipe" ||
-    [ -n "$(find "$pPipe" -mindepth 1 -print -quit)" ]
-done
-rm -rf "$pFakeBin"
 pDir=$(scripts/create 4)
 scripts/list | grep -qx "$pDir up"
 # The hold is a server, and a hangup is not its business: it is still up

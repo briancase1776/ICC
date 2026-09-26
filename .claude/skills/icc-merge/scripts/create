@@ -17,17 +17,16 @@
 #          merge's directory holds two files: merge, naming DST, SIDE and
 #          each SRC a line, and pid, the copier's. The merge makes nothing
 #          but itself.
-#          A create that cannot finish takes its copier and its directory
-#          with it. Once the merge is whole that is no longer armed, so a
-#          create that then fails to print leaves a whole merge nobody was
-#          told of, which list shows and remove takes.
+#          The directory is printed the moment it is made, as icc-lib's
+#          pMakeDir does it, so a create that fails after has already
+#          said what it made. A create that cannot finish takes its
+#          copier and its directory with it.
 # @stdin nothing
-# @stdout the merge's directory, one line
+# @stdout the merge's directory, one line, as soon as it is made
 # @stderr the reason, on refusal
-# @exit 0 the merge is made and printed; 1 the arguments are refused,
-#       or the merge could not be finished or was removed while it
-#       started, and none of it is left, or it could not be printed and
-#       all of it is
+# @exit 0 the merge is made; 1 the arguments are refused, or the merge
+#       could not be finished or was removed while it started, and none
+#       of it is left
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -83,7 +82,7 @@ pidCopier=
 vArm '[ -z "$pidCopier" ] || kill "$pidCopier" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-pDir=$(mktemp -d /tmp/icc-merge-XXXXXXXX)
+pMakeDir icc-merge
 {
   printf '%s\n' "$pDst" "$eSide"
   printf '%s\n' "${aSrcs[@]}"
@@ -170,4 +169,3 @@ done
   exit 1
 }
 vDisarm
-echo "$pDir"

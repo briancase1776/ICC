@@ -15,17 +15,16 @@
 #          itself.
 #          A create that cannot finish, or whose directory is removed
 #          while it starts, takes its copiers and its two files with it,
-#          and its directory unless something else is in it. Once the
-#          tee is whole that is no longer armed, so a create that then
-#          fails to print leaves a whole tee nobody was told of, which
-#          list shows and remove takes.
+#          and its directory unless something else is in it. The
+#          directory is printed the moment it is made, as icc-lib's
+#          pMakeDir does it, so a create that fails after has already
+#          said what it made.
 # @stdin nothing
-# @stdout the tee's directory, one line
+# @stdout the tee's directory, one line, as soon as it is made
 # @stderr the reason, on refusal
-# @exit 0 the tee is made and printed; 1 the arguments are refused, or
-#       the tee could not be finished or was removed while it started,
-#       and none of it is left, or it could not be printed and all of it
-#       is
+# @exit 0 the tee is made; 1 the arguments are refused, or the tee could
+#       not be finished or was removed while it started, and none of it
+#       is left
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -85,7 +84,7 @@ vArm '[ ${#aPids[@]} -eq 0 ] || kill "${aPids[@]}" 2>/dev/null || :
           echo "left in place: $pDir" >&2
       fi
       exit 1'
-pDir=$(mktemp -d /tmp/icc-tee-XXXXXXXX)
+pMakeDir icc-tee
 {
   printf '%s\n' "$pSrc" "$eSide"
   printf '%s\n' "${aDsts[@]}"
@@ -127,4 +126,3 @@ done
   exit 1
 }
 vDisarm
-echo "$pDir"

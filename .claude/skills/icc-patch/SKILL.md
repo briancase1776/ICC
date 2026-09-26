@@ -104,8 +104,10 @@ other side, comma separated. Pipes says what a side writes and reads.
 SEAT and PEERS are both `-` on a pipe that joins two fittings and
 nothing else. Nobody holds either side of it, and SIDE names the free
 one. A mesh-p and a ring-p have one per seat, between that seat's tee
-and p's merge. At a DEPTH past 1, every pipe of a cable but the one a
-seat holds is one too.
+and p's merge, and one for every pipe of p's cable from the merge but
+the last, which p holds: that cable is N times DEPTH, so there are N-1
+of those even at DEPTH 1. At a DEPTH past 1, every pipe of a seat's
+cable but the one it holds is one too.
 There is nothing to hold and nothing to do with such a line. It is
 there so the map names every pipe the shape made, and remove takes
 those pipes with the rest.
@@ -125,8 +127,9 @@ those pipes with the rest.
   receives from PEERS and sends nowhere. Tee's and Merge's SKILL.md say
   why. No pipe a seat holds has two writers on it, in any shape, so such a
   line is the whole of it: two names, both ways; one name, one way. A
-  merge's outlet does have two, one per inlet, and no seat holds it, so
-  its line names none.
+  merge's outlet carries every inlet, all through its one copier, and
+  no seat holds it, so its line names none: it is the first pipe of p's
+  cable from the merge, and p holds the last.
 
     grep '^3 ' "$pPatchDir/patch"                  every end seat 3 holds
 

@@ -9,7 +9,8 @@
 #          is gone is down: nothing can say its pieces are up, and its
 #          pieces cannot be reached to remove.
 # @stdin nothing
-# @stdout "DIR up|down SHAPE N LANES", one line per patch, in glob order
+# @stdout "DIR up|down SHAPE N LANES DEPTH", one line per patch, in glob
+#         order
 # @stderr whatever a piece's own list says
 # @exit 0, with patches or without; 1 cut off by a signal
 #

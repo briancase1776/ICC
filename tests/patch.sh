@@ -115,7 +115,7 @@ vEnds() {
 ##
 # @fn vMake()
 # @brief Make a patch, and remember it for the EXIT trap.
-# @param $1... - SHAPE N [LANES], as Patch's create takes them
+# @param $1... - SHAPE N [LANES [DEPTH]], as Patch's create takes them
 # @global pIccPatch - read, where Patch's scripts are
 # @global pDir - set, the patch it made
 # @global osMine - read and set, every patch made so far

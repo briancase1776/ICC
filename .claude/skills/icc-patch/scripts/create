@@ -287,26 +287,26 @@ case $eShape in
         vCable "${aSeats[0]}" "${aSeats[1]}"
         ;;
       *)
-        # A tee per seat: the seat writes one pipe, and its tee hands that
-        # to a cable of its own at every other seat, whose tail that seat
-        # reads. Nothing goes back to the writer, and no read end has two
-        # writers on it.
+        vPipe
+        pBus=$pPipe
+        osInlets=
+        osOutlets=
         for osSeat in "${aSeats[@]}"; do
-          aOthers=()
-          for osPeer in "${aSeats[@]}"; do
-            [ "$osPeer" = "$osSeat" ] || aOthers+=("$osPeer")
-          done
-          vPipe
-          pWrite=$pPipe
-          vEnd "$osSeat" 0 "$pWrite" "${aOthers[*]}"
-          osOutlets=
-          for osPeer in "${aOthers[@]}"; do
-            vSeries tail
-            osOutlets="$osOutlets $pHead"
-            vEnd "$osPeer" 1 "$pTail" "$osSeat"
-          done
-          vTee "$pWrite" 0 $osOutlets
+          # The seat writes the head of its inlet and the merge reads the
+          # tail; the tee writes the head of its outlet and the seat reads
+          # the tail.
+          vSeries head
+          pInlet=$pHead
+          osInlets="$osInlets $pTail"
+          vSeries tail
+          pOutlet=$pTail
+          osOutlets="$osOutlets $pHead"
+          vEnd "$osSeat" 0 "$pInlet" "${aSeats[*]}"
+          vEnd "$osSeat" 1 "$pOutlet" "${aSeats[*]}"
         done
+        vMerge "$pBus" 0 $osInlets
+        vTee "$pBus" 0 $osOutlets
+        vEnd - 1 "$pBus" -
         ;;
     esac
     bBuilt=y

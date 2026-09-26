@@ -48,10 +48,11 @@ to be installed with it.
              Nothing joins the seats to each other
     ring     seat i shares a pipe with seat i+1, i on side 0, i+1 on
              side 1, around the end back to 0
-    mesh     a merge and a tee in the middle. Every seat writes one end
-             into the merge; the tee hands what comes out to every
-             seat's read end, the writer's too. Where there is a tee:
-             mesh 2 collapses to one pipe and has none
+    mesh     a tee per seat. Every seat writes one end into its own tee,
+             and the tee hands it to a read end of its own at every
+             other seat, so a seat holds its write end and one read end
+             per other seat, and nothing comes back to the writer. mesh
+             2 collapses to one pipe and has no tee
     ring-p   ring, and each hop is a tee: one outlet to the next seat,
              one to a merge that seat p reads. p writes one end, and a
              tee hands it to a read end of its own at every seat, so a
@@ -81,7 +82,7 @@ tee from the one before it, lane for lane, so the cable carries one way:
 what goes into the first pipe comes out of the last, where the seat
 holds it, and the map names that pipe, as it would the one pipe at
 DEPTH 1. Depth is room for what waits on a seat that has not read yet.
-A cable a fitting reads, a seat's into a merge or a hop tee, p's into a
+A cable a fitting reads, a seat's into its tee or a hop tee, p's into a
 tee, keeps moving, and is one pipe. So is a pipe two seats share, the
 one that is the whole of a star's cable, a ring's, a mesh 2 or a
 mesh-p 1, whatever DEPTH is: it carries both ways, and a tee carries
@@ -99,9 +100,9 @@ other side, comma separated. Pipes says what a side writes and reads.
 
 SEAT and PEERS are both `-` on a pipe that joins two fittings and
 nothing else. Nobody holds either side of it, and SIDE names the free
-one. A mesh of three or more has one, between its merge and its tee; a
-ring-p has one per seat, between that seat's hop tee and p's merge. At a
-DEPTH past 1, every pipe of a cable but the one a seat holds is one too.
+one. A ring-p has one per seat, between that seat's hop tee and p's
+merge. At a DEPTH past 1, every pipe of a cable but the one a seat holds
+is one too.
 There is nothing to hold and nothing to do with such a line. It is
 there so the map names every pipe the shape made, and remove takes
 those pipes with the rest.
@@ -111,9 +112,10 @@ those pipes with the rest.
   both ways. On a star every end is one of these, so p holds one end per
   seat and knows which seat it is talking to. ring 1 is the one shape
   where both lines are the same seat's: seat 0 holds both sides.
-- A seat is in its own PEERS on a mesh of three or more, because the
-  merge and the tee reach every seat, the writer included. Filtering
-  PEERS for the others means taking your own number out.
+- On a mesh of three or more a seat holds one read end per other seat,
+  with that seat alone in its PEERS, so what it reads there came from
+  that seat and no other. A seat is in its own PEERS only on a ring 1
+  and a ring-p 1, the two shapes where its own words come back.
 - A DIR on one line only is through a fitting, and goes one way. A write
   end, side 0, sends to PEERS and reads nothing. A read end, side 1,
   receives from PEERS and sends nowhere. Tee's and Merge's SKILL.md say
@@ -128,8 +130,9 @@ those pipes with the rest.
     # seat 0's write end
     pWriteEnd=$(awk '$1==0 && $2==0 {print $3}' "$pPatchDir/patch")
     .../icc-frames/scripts/write "$pWriteEnd" 0 < photo.jpg
-    # seat 2's read end
-    pReadEnd=$(awk '$1==2 && $2==1 {print $3}' "$pPatchDir/patch")
+    # seat 2's read end from seat 0
+    pReadEnd=$(awk '$1==2 && $2==1 && $4=="0" {print $3}' \
+      "$pPatchDir/patch")
     timeout 5 .../icc-frames/scripts/read "$pReadEnd" 1 > photo.jpg
 
 ## Facts
@@ -140,31 +143,30 @@ those pipes with the rest.
 - On a read end with more than one PEER, nothing says which one a byte
   came from, and two writing at once interleave, as Pipes, Tee and Merge
   say. Whose turn it is, is agreed above this skill.
-- Where writes meet is the merge: the one in the middle of a mesh, the
-  one seat p reads on a ring-p. Merge says when two seats writing at once
-  come out each whole there and when they interleave, and nowhere else
-  do two writers share a pipe. A star and a ring have no fittings and
-  nothing to meet at.
-- On a mesh the tee hands a writer its own words back, so a seat can see
-  its own go past the merge: the tee puts each chunk on every outlet
-  before it reads the next, as Tee says, so nothing written after them
-  can come before them at any seat. On a ring-p nothing a seat writes
-  comes back to that seat, and nothing p writes comes back to p, so
-  there is no such moment — except on a ring-p 1, where the hop tee goes
-  round to the one seat there is, and its own words do come back.
+- Where writes meet is the merge seat p reads on a ring-p. Merge says
+  when two seats writing at once come out each whole there and when
+  they interleave, and nowhere else do two writers share a pipe. A star
+  and a ring have no fittings, and a mesh no merge: every read end on a
+  mesh has one writer, so nothing meets.
+- Nothing a seat writes comes back to it through a fitting, and nothing
+  p writes comes back to p, except on a ring-p 1, where the hop tee goes
+  round to the one seat there is. On a mesh each read end carries one
+  writer's words in the order that writer wrote them. Which of two
+  writers reaches a seat first, and whether two seats see them in the
+  same order, nothing says.
 - Whose turn it is, and whatever the seats leave in DIR to agree it, is
   theirs; remove takes DIR whole.
 - Through fittings, a seat that never reads stalls every writer once its
   end fills. Read every end, or keep the payload inside one. How much
   that is, is how many pipes lie between a write end and a read end,
   which only the bay knows: a star or a ring one, a ring-p hop two, a
-  mesh of three or more three, and a shape that collapsed to one pipe
+  mesh of three or more two, and a shape that collapsed to one pipe
   one, each cable a seat reads through a fitting counting DEPTH. What one
   pipe holds is Pipes' fact, and Tee's and Merge's SKILL.md say what a
   fitting adds; each joint in a cable is a tee, and holds what one does.
-  It is
-  not one number: measured on a mesh, 208K, 224K and 256K each went both
-  ways on different runs. A tee waits on its fullest outlet, so for no
+  It is not one number: measured on a mesh 3, 132K went every time,
+  136K went both ways on different runs, and 140K waited every time,
+  with nobody reading. A tee waits on its fullest outlet, so for no
   writer to wait on a seat that has not read yet, that seat's cable from
   the tee has to hold all that is written to it in the meantime. A lane
   is 16 pages deep, and a pipe in series adds 16 more and the tee

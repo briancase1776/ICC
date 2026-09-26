@@ -14,10 +14,10 @@ historical reasons and only one piece still means it.
     pWriteEnd=$(awk '$1==0 && $2==0 {print $3}' "$pPatchDir/patch")
     .claude/skills/icc-frames/scripts/write "$pWriteEnd" 0 < photo.jpg
 
-    # every seat reads it whole, the sender included -- and every seat
-    # must read, because the one that does not stalls the rest
-    for osSeat in 0 1 2 3; do
-      pReadEnd=$(awk -v s="$osSeat" '$1==s && $2==1 {print $3}' \
+    # every other seat reads it whole on its read end from seat 0 -- and
+    # every one must read, because the one that does not stalls the rest
+    for osSeat in 1 2 3; do
+      pReadEnd=$(awk -v s="$osSeat" '$1==s && $2==1 && $4=="0" {print $3}' \
         "$pPatchDir/patch")
       timeout 5 .claude/skills/icc-frames/scripts/read "$pReadEnd" 1 \
         > "seat$osSeat.jpg"

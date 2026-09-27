@@ -3,10 +3,10 @@ name: icc-lock
 description: >-
   Lock a path, and everything under it, so that one holder at a time
   has it, across the tool calls, agents and processes that share /tmp.
-  Take it, waiting while someone else has it; hold it for SECONDS at
-  most; give it back. Advisory: it keeps out only those who take it
-  too. What the path is, and what holding it is for, is the caller's
-  business.
+  Take it, or be told at once who has it, or wait in line if you ask
+  to; hold it for SECONDS at most; give it back. Advisory: it keeps
+  out only those who take it too. What the path is, and what holding
+  it is for, is the caller's business.
 ---
 
 # icc-lock
@@ -30,9 +30,12 @@ however the hold goes.
 
 ## Operations
 
-    scripts/create PATH SECONDS   wait until nobody holds PATH, hold it
-                                  for SECONDS at most, print the hold's
-                                  directory
+    scripts/create PATH SECONDS [WAIT]
+                                  take PATH and hold it for SECONDS at
+                                  most, print the hold's directory; or,
+                                  when someone else has it, say who and
+                                  exit 2. WAIT is how long to stand in
+                                  line first, 0 when not given
     scripts/list                  one line per hold: DIR up|down PATH
     scripts/remove DIR            give the lock back, delete DIR
 
@@ -40,14 +43,21 @@ PATH is any path, there or not: a file can be locked before it is
 written. It is taken as `readlink -m` spells it, so `src/a.c`,
 `./src/a.c` and the same file through a symlink are one lock.
 
-    pLock=$(timeout 60 scripts/create src/a.c 600)   # one tool call
+    pLock=$(scripts/create src/a.c 600)   # one tool call
     # ... edit src/a.c, over as many tool calls as it takes ...
-    scripts/remove "$pLock"                          # another
+    scripts/remove "$pLock"               # another
 
-A directory is locked the same way, and its lock is on all of it. A
-process takes one the same way, and gives it back on its way out:
+When someone else has it, create says so at once, on stderr, a line per
+hold in the way, and exits 2 with nothing made:
 
-    pLock=$(timeout 60 scripts/create "$pRepo" 120)   # the whole tree
+    held by /tmp/icc-lock-Xq3kR9aa: /home/me/proj/src/a.c
+
+Then do something else and come back, or ask again with a WAIT. A
+directory is locked the same way, and its lock is on all of it. A
+process that would rather wait says how long, and gives the lock back
+on its way out:
+
+    pLock=$(scripts/create "$pRepo" 120 300)   # the whole tree
     trap 'scripts/remove "$pLock"' EXIT
     git -C "$pRepo" commit ...
 
@@ -57,16 +67,20 @@ A lock on a directory covers everything under it, at any depth, there
 or not. Underneath, every create takes its PATH exclusively and every
 directory above PATH shared, top down, from / to PATH:
 
-- A file and the directory it is in wait for each other. A file and a
+- A file and the directory it is in keep each other out. A file and a
   file beside it do not; neither do two directories side by side.
-- The files and directories under a held one wait until it is given
-  back, and a directory waits until nothing under it is held.
+- The files and directories under a held one are held until it is
+  given back, and a directory is held until nothing under it is.
 - Every path has a gate. A create passes each gate above PATH on its
   way to the shared lock there, and holds PATH's own gate while it
   waits for PATH. So a directory waiting for what is under it to be
   given back goes ahead of anything that comes for under it after:
   a lock on a whole tree waits for the holders it found, not for
-  every one that comes along later.
+  every one that comes along later. Only a create with a WAIT stands
+  in line; one without never does, and a whole tree asked for that way
+  is had only at a moment when nothing in it is held.
+- What comes after a directory waiting is told `held by a create
+  waiting ahead`, since the directory has no hold yet to name.
 - Every wait is for something further down than anything the waiter
   holds, so no two creates can each wait on the other.
 
@@ -89,17 +103,18 @@ nothing to them.
   called create. Every party that touches PATH agrees, outside this
   skill, to take the lock first.
 - One holder. Of two creates that ask at once, one gets PATH and the
-  other waits. Of several waiting for one PATH when it is given back,
-  one gets it, and nothing says which: there is no queue.
-- create waits as long as it takes. Bound it with `timeout`, as Pipes
-  says to bound a read. `timeout 60 scripts/create PATH 600` exits 124
-  when someone held PATH all 60 seconds, and then it has made nothing,
-  printed nothing, and left nothing waiting. Unlike a read, a create
-  does not spend its whole bound: it returns the moment PATH is free.
+  other is told it is held. Of several waiting for one PATH when it is
+  given back, one gets it, and nothing says which: there is no queue.
+- create waits only as long as WAIT says, in whole seconds, and returns
+  the moment PATH is free. Held after that, it says what holds PATH and
+  exits 2, having made nothing and left nothing waiting. Cut off while
+  it waits, by `timeout` or by TERM, it exits 1 the same way.
+- `held by` names the holds that were up when create looked. One may
+  have gone since; ask again.
 - Not re-entrant, and not widened. A create for a PATH you already
-  hold, or for a directory above something you hold, waits for your own
-  hold, like anyone else's. Give back what you hold, then take the
-  directory.
+  hold, or for a directory above something you hold, is held by your own
+  hold, like anyone else's, and says so. Give back what you hold, then
+  take the directory.
 - SECONDS is a lease, and it runs out whether you are done or not. Then
   the lock is free, and the next create gets PATH while you may still be
   working on it. remove tells you after the fact: it says `lapsed` and
@@ -117,7 +132,8 @@ nothing to them.
   outlives the terminal or shell it was taken from. TERM, which remove
   sends, ends it.
 - remove sends TERM and returns. The lock goes as the hold does, a
-  moment later, and a create waiting on it gets it then.
+  moment later, and a create waiting on it gets it then; one that asks
+  in that moment without a WAIT may still be told it is held.
 - A hold that has gone, by its lease or by a kill, says down in list,
   and its directory stays until someone removes it. remove takes a down
   hold's directory like any other, and kills nothing.
@@ -151,9 +167,9 @@ Seats that work on one set of files work in one tree. A seat in a
 `git worktree` or a clone of its own has copies of its own, and locks
 of its own.
 
-A create that waits in the foreground hangs the tool call until the
-harness times it out. Bound it, and when it says 124, do something else
-and come back.
+Ask without a WAIT, and a tool call never hangs on a lock: it has the
+lock or it is told who has it, at once. A WAIT holds the tool call for
+up to that long; keep it well inside the call's own time limit.
 
 Everything that shares /tmp shares the locks: every subagent of a
 session, and every session run on one machine. Sessions in separate

@@ -4,9 +4,10 @@
 # @brief Prove the lock: one holder per path, across processes, for a while.
 # @details Prove the lock: bad arguments refused; a path taken, recorded
 #          and listed; another path taken beside it, and the directory above
-#          it waiting; every spelling of the held path waiting, and a wait
-#          cut off by timeout or by TERM leaving nothing behind, not even
-#          something still waiting; a hold that a hangup leaves standing; a
+#          it held; every spelling of the held path held, told at once and
+#          told by what, or after WAIT; a wait cut off by timeout or by TERM
+#          leaving nothing behind, not even something still waiting; a hold
+#          that a hangup leaves standing; a
 #          create getting the path the moment the holder gives it back, or
 #          the hold is killed, or its lease runs out, and remove saying a
 #          lock lapsed; a create cut off once it has the lock taking its
@@ -135,47 +136,51 @@ vWaiting() {
 }
 
 ##
-# @fn vWaits()
-# @brief Check a path is held: a create for it waits until timeout cuts it
-#        off, with 124, having printed nothing.
+# @fn vBusy()
+# @brief Check a path is held: a create for it that does not wait says so
+#        at once, with 2, having printed nothing on stdout.
 # @param $1 osPath - the path, as create takes it
-# @stderr "not waiting" and the path, when it did not wait
-# @return 0 it waited; it exits 1 instead when it did not, having given
+# @stderr "not held" and the path, when it was not
+# @global osSaid - set, what the create said on stderr
+# @return 0 it was held; it exits 1 instead when it was not, having given
 #         back what it took
 ##
-vWaits() {
+vBusy() {
   local osPath=$1
   local pOut
   local nStatus=0
-  pOut=$(timeout 0.5 "$pIccLock/create" "$osPath" 30) || nStatus=$?
-  [ "$nStatus" -eq 124 ] && [ -z "$pOut" ] || {
+  pOut=$("$pIccLock/create" "$osPath" 30 2> said) || nStatus=$?
+  osSaid=$(cat said)
+  [ "$nStatus" -eq 2 ] && [ -z "$pOut" ] || {
     [ -z "$pOut" ] || "$pIccLock/remove" "$pOut" 2>/dev/null || :
-    echo "not waiting: $osPath" >&2
+    echo "not held: $osPath" >&2
     exit 1
   }
 }
 
 ##
 # @fn vTake()
-# @brief Take a path at once, or stop here, and note its locked files.
-# @details Bound by timeout, so a lock that is wrongly held stops the
-#          harness instead of hanging it. Called, not captured: every file
-#          its record names, and each one's gate, goes on aLocks for the
-#          cleanup, but for the directories above the harness's own, and
-#          the hold goes on pTaken.
+# @brief Take a path within five seconds, or stop here, and note its
+#        locked files.
+# @details Five seconds, so that a hold just killed or run out is gone by
+#          then, and a lock that is wrongly held stops the harness instead
+#          of hanging it. Called, not captured: every file its record
+#          names, and each one's gate, goes on aLocks for the cleanup, but
+#          for the directories above the harness's own, and the hold goes
+#          on pTaken.
 # @param $1 osPath - the path, as create takes it
 # @param $2 nSeconds - the lease
 # @global pTaken - set, the hold's directory
 # @global aLocks - read and set, every file the harness's paths have made
 # @global hShared - read, the files of the directories above its own
-# @return 0; under set -e a create that does not return at once ends the
+# @return 0; under set -e a create that does not get the path ends the
 #         harness
 ##
 vTake() {
   local osPath=$1
   local nSeconds=$2
   local pFile
-  pTaken=$(timeout 5 "$pIccLock/create" "$osPath" "$nSeconds")
+  pTaken=$("$pIccLock/create" "$osPath" "$nSeconds" 5)
   while read -r pFile; do
     [ -z "${hShared[$pFile]-}" ] || continue
     aLocks+=("$pFile" "$pFile.gate")
@@ -194,11 +199,14 @@ done
 for pPrefix in "${aAbove[@]:0:${#aAbove[@]}-1}"; do
   hShared[$(pLockOf "$pPrefix")]=1
 done
-# Refused, in the words the pieces use: no SECONDS, SECONDS not a count or
-# none, a newline anywhere in PATH, even the one $( ) would drop.
+# Refused, in the words the pieces use: no SECONDS, SECONDS or WAIT not a
+# count, SECONDS none, a newline anywhere in PATH, even the one $( ) would
+# drop.
 vRefused "$pIccLock/create" file
 vRefused "$pIccLock/create" file x
 vRefused "$pIccLock/create" file -1
+vRefused "$pIccLock/create" file 30 x
+vRefused "$pIccLock/create" file 30 -1
 vRefused "$pIccLock/create" $'fi\nle' 30
 vRefused "$pIccLock/create" $'file\n' 30
 [ "$("$pIccLock/create" file 0 2>&1)" = "SECONDS must be more than zero" ]
@@ -218,19 +226,32 @@ done > above
 [ "$(sed -n '3,$p' "$pHeld/lock")" = "$(cat above)" ]
 "$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
 [ "$(nOpeners "$pLock")" -eq 1 ]
-# Another path is a lock of its own, and the directory above a held path
-# waits for it.
+# Another path is a lock of its own, and the directory above a held path is
+# held by it, and says so.
 vTake other 30
 "$pIccLock/remove" "$pTaken"
-vWaits "$pWork"
-# Held, every spelling of it waits, and timeout cuts the wait off with 124,
-# having printed nothing. Nothing is left waiting behind: the hold is still
-# the only one with the file open, and nobody has its gate.
+vBusy "$pWork"
+[ "$osSaid" = "held by $pHeld: $pWork/file" ]
+# Held, every spelling of it is held, told at once and by what; with a WAIT,
+# told once WAIT is spent and not before; and cut off by timeout while it
+# waits, it has printed nothing. Nothing is left waiting behind: the hold is
+# still the only one with the file open, and nobody has its gate.
 mkdir sub
 ln -s "$pWork" link
 for osSpelling in file ./file sub/../file "$pWork//file" link/file; do
-  vWaits "$osSpelling"
+  vBusy "$osSpelling"
+  [ "$osSaid" = "held by $pHeld: $pWork/file" ]
 done
+nStart=$SECONDS
+nStatus=0
+"$pIccLock/create" file 30 2 2>/dev/null || nStatus=$?
+[ "$nStatus" -eq 2 ]
+[ $((SECONDS - nStart)) -ge 1 ]
+[ $((SECONDS - nStart)) -lt 5 ]
+nStatus=0
+pOut=$(timeout 0.5 "$pIccLock/create" file 30 60) || nStatus=$?
+[ "$nStatus" -eq 124 ]
+[ -z "$pOut" ]
 [ "$(nOpeners "$pLock")" -eq 1 ]
 [ "$(nOpeners "$pLock.gate")" -eq 0 ]
 # The hold is a server, and a hangup is not its business: it still holds the
@@ -242,7 +263,7 @@ sleep 1
 # at once with 1, and it takes its flock with it. At once is well inside the
 # holder's lease, which is still running after: a create that ran its trap
 # only when its flock returned would end, but not until then.
-"$pIccLock/create" file 30 > waited &
+"$pIccLock/create" file 30 60 > waited &
 pidWaiter=$!
 vWaiting "$pLock" "$pidWaiter"
 nStart=$SECONDS
@@ -257,7 +278,7 @@ pidWaiter=
 [ "$(nOpeners "$pLock.gate")" -eq 0 ]
 "$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
 # A create waiting gets the path the moment the holder gives it back.
-timeout 5 "$pIccLock/create" file 30 > waited &
+"$pIccLock/create" file 30 5 > waited &
 pidWaiter=$!
 vWaiting "$pLock" "$pidWaiter"
 "$pIccLock/remove" "$pHeld"
@@ -303,7 +324,7 @@ vTake cut 30
 for iWorker in 1 2 3 4; do
   (
     for iTurn in 1 2 3; do
-      pTurn=$(timeout 30 "$pIccLock/create" turns 10)
+      pTurn=$("$pIccLock/create" turns 10 30)
       echo "in $iWorker" >> turns
       sleep 0.05
       echo "out $iWorker" >> turns
@@ -328,24 +349,27 @@ awk '
 # and a directory beside it, do not.
 vTake tree/f 30
 pHeld=$pTaken
-vWaits tree
+vBusy tree
+[ "$osSaid" = "held by $pHeld: $pWork/tree/f" ]
 vTake tree/g 30
 "$pIccLock/remove" "$pTaken"
 vTake treetop 30
 "$pIccLock/remove" "$pTaken"
 # A directory waiting goes ahead of whatever comes for under it after, which
-# waits behind it, free as it is, until the directory has had its turn.
-timeout 5 "$pIccLock/create" tree 30 > waited &
+# is held behind it, free as it is, until the directory has had its turn,
+# and is told what it is behind.
+"$pIccLock/create" tree 30 5 > waited &
 pidWaiter=$!
 vWaiting "$(pLockOf "$pWork/tree")" "$pidWaiter"
-vWaits tree/h
+vBusy tree/h
+[ "$osSaid" = "held by a create waiting ahead: $pWork/tree/h" ]
 "$pIccLock/remove" "$pHeld"
 wait "$pidWaiter"
 pidWaiter=
 pHeld=$(cat waited)
 "$pIccLock/list" | grep -qxF "$pHeld up $pWork/tree"
-vWaits tree/h
-vWaits tree/sub/deeper
+vBusy tree/h
+vBusy tree/sub/deeper
 "$pIccLock/remove" "$pHeld"
 pHeld=
 vTake tree/h 30

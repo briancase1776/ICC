@@ -2,10 +2,11 @@
 name: icc-lib
 description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
-  cleanup armed before anything is made, a piece's directory made and
-  printed at once, servers deaf to a hangup, and the harnesses' cut-off
-  checks. Not for a session to call; the other ICC skills need it beside
-  them, in the same skills directory.
+  a seat's lanes read off Patch's map, cleanup armed before anything is
+  made, a piece's directory made and printed at once, servers deaf to a
+  hangup, and the harnesses' cut-off checks. Not for a session to call;
+  the other ICC skills need it beside them, in the same skills
+  directory.
 ---
 
 # icc-lib
@@ -20,6 +21,10 @@ A session has no reason to call it. It is a skill so that it travels
 with the others: install the ICC skills together, into one skills
 directory.
 
+oLanes is the one no piece calls. It is for a script that sits at a
+seat and wants its lanes, and it is here because the map is Patch's and
+the lanes are Pipes', so reading one into the other is ICC's to write.
+
 ## The functions
 
     nCount WHAT VALUE     VALUE as a count: digits, at most 18 significant,
@@ -29,6 +34,9 @@ directory.
     vSide SIDE            SIDE is 0 or 1
     nLanesOf PIPE...      the lane count the pipes share: each a pipe,
                           the count even, the same, every lane a fifo
+    oLanes PATCH SEAT w|r the lanes SEAT writes, one per line; or those
+                          it reads, each with the seats that write into
+                          it: off Patch's map, as Pipes and Patch say
     vArm CLEANUP          arm CLEANUP on EXIT, and INT, TERM and HUP to
                           exit 1, before anything is made
     vStopOnSignal         INT, TERM and HUP exit 1 again, after a handler

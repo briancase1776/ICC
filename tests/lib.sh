@@ -6,7 +6,9 @@
 #          use, osWho in front when set; SIDE refused and never worked
 #          out; lanes counted from pipes made of bare fifos, which no
 #          piece has to make, and refused when a pipe is not one, is odd,
-#          differs, or has a file for a lane; a cleanup armed that INT,
+#          differs, or has a file for a lane; a seat's lanes read off a
+#          map, a fitting's one way and a shared pipe's both, at every
+#          lane, and no seat by another spelling; a cleanup armed that INT,
 #          TERM and HUP each run and exit 1, and that vDisarm clears; a
 #          server that a hangup leaves standing and TERM ends; a piece's
 #          directory made and printed at once; the cut-off check passing a
@@ -74,6 +76,25 @@ mkfifo stray/0 stray/1
 [ "$(nLanesOf odd 2>&1)" = "lanes must be even: odd" ]
 [ "$(nLanesOf filed 2>&1)" = "not a pipe: filed" ]
 [ "$(osWho=read; nLanesOf odd 2>&1)" = "read: lanes must be even: odd" ]
+# A seat's lanes off maps written by hand, as Patch's create writes them:
+# through a fitting one way, side 0's lanes; a shared pipe both ways, at
+# every lane of six; and no seat found by another spelling of one.
+mkdir meshp star
+printf '%s\n' 'mesh-p 2 2 1' '1 1 in10 0' '- 1 c1 -' '0 0 out0 1,p' \
+  '0 1 in01 1' '- 1 c0 -' '1 0 out1 0,p' '- 1 m -' 'p 1 inp 0,1' \
+  > meshp/patch
+[ "$(oLanes meshp 0 w)" = out0/0 ]
+[ "$(oLanes meshp 0 r)" = "in01/0 1" ]
+[ -z "$(oLanes meshp p w)" ]
+[ "$(oLanes meshp p r)" = "inp/0 0,1" ]
+for osSeat in 2 00 '\060' -; do
+  [ -z "$(oLanes meshp "$osSeat" w)$(oLanes meshp "$osSeat" r)" ]
+done
+printf '%s\n' 'star 1 6 1' '0 0 s p' 'p 1 s 0' > star/patch
+[ "$(oLanes star 0 w)" = "$(printf 's/%s\n' 0 2 4)" ]
+[ "$(oLanes star 0 r)" = "$(printf 's/%s p\n' 1 3 5)" ]
+[ "$(oLanes star p w)" = "$(printf 's/%s\n' 1 3 5)" ]
+[ "$(oLanes star p r)" = "$(printf 's/%s 0\n' 0 2 4)" ]
 # A cleanup armed runs on every signal it names, and the exit is 1.
 for osSignal in INT TERM HUP; do
   nStatus=0

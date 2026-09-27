@@ -7,11 +7,12 @@
 #          reach each other:
 #              source "$(dirname "$0")/../../icc-lib/scripts/lib"
 #          What is here is what more than one piece does, so they all do
-#          it one way: counts checked, pipes checked, cleanup armed before
-#          anything is made, a piece's directory made and printed at once,
-#          servers started deaf to a hangup, and the harnesses' cut-off
-#          checks. Sourcing turns on extglob, which the
-#          lane glob needs when this file is read.
+#          it one way: counts checked, pipes checked, a seat's lanes read
+#          off Patch's map, cleanup armed before anything is made, a
+#          piece's directory made and printed at once, servers started
+#          deaf to a hangup, and the harnesses' cut-off checks. Sourcing
+#          turns on extglob, which the lane glob needs when this file is
+#          read.
 #          A function that refuses says why on stderr and exits 1. Called
 #          in $( ), that exit ends only the substitution, and bash does
 #          not carry set -e into one: the caller assigns the result, and
@@ -172,6 +173,59 @@ nLanesOf() {
     done
   done
   echo "$nLanes"
+}
+
+##
+# @fn oLanes()
+# @brief Print the lanes a seat writes, or the lanes it reads, off
+#        Patch's map.
+# @details A pipe two seats share is on two lines of the map, and there
+#          the seat writes its own side's lanes and reads the other's. A
+#          pipe through a fitting is on one, and goes one way: side 0
+#          writes side 0's lanes, and side 1 reads them. Which lanes a side
+#          writes is Pipes': side 0 the even ones and side 1 the odd, of
+#          the LANES on the map's first line. The seat is matched as a
+#          string, handed to awk through the environment, where no escape
+#          in it is read, so no spelling of a seat but the map's finds a
+#          lane; and "-", the map's nobody, is no seat. A seat the map
+#          does not name gets nothing either way, and p on a mesh-p gets
+#          nothing to write; telling the two apart is the caller's.
+# @param $1 pPatch - the patch, as Patch's create printed it
+# @param $2 osSeat - the seat, as the map spells it
+# @param $3 eWay - w for the lanes it writes, r for those it reads
+# @stdout for w, one "LANE" per lane; for r, one "LANE PEERS" per lane,
+#         PEERS the seats that write into it, comma separated; each LANE
+#         a path, in the map's order, or nothing
+# @stderr awk's, when the map cannot be read
+# @return awk's status: 0 unless the map could not be read
+##
+oLanes() {
+  local pPatch=$1
+  local osSeat=$2
+  local eWay=$3
+  SEAT=$osSeat awk -v k="$eWay" '
+    NR == 1 {
+      nLanes = $3
+      next
+    }
+    {
+      n[$3]++
+      a[NR] = $0
+    }
+    END {
+      for (i = 2; i <= NR; i++) {
+        split(a[i], f, " ")
+        if (f[1] == "-" || f[1] "" != ENVIRON["SEAT"] "")
+          continue
+        b = n[f[3]] == 2
+        if (k == "w" && (f[2] == 0 || b))
+          for (j = f[2]; j < nLanes; j += 2)
+            print f[3] "/" j
+        if (k == "r" && (f[2] == 1 || b))
+          for (j = 1 - f[2]; j < nLanes; j += 2)
+            print f[3] "/" j, f[4]
+      }
+    }' "$pPatch/patch"
 }
 
 ##

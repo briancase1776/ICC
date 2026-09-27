@@ -6,14 +6,27 @@
 #          readlink -m spells it, so every spelling of one path is one
 #          lock; a newline in it is refused. SECONDS is the most the lock
 #          is held, a count more than zero, read as icc-lib's nCount reads
-#          one. The lock is flock(2), exclusive, on /tmp/icc-lock/KEY, KEY
-#          the sha256 of PATH. create opens that file and waits for the
-#          lock as long as it takes. Only then does it make the hold's
-#          directory, print it, and start the hold: a sleep of SECONDS
-#          that inherits the locked file, so the lock is held until the
-#          hold ends, however it ends. The hold ignores a hangup, as a
-#          server does. The directory holds two files: lock, naming PATH
-#          and the locked file a line each, and pid, the hold's.
+#          one.
+#          A path has a name, and so does every directory above it. In a
+#          git work tree the name is the repository's common git directory
+#          and where the path sits in the tree, so one file in every work
+#          tree of a repository has one name; a path inside .git, or in no
+#          work tree, is named by itself. Each name has a file under
+#          /tmp/icc-lock/, KEY the sha256 of the name, and a gate beside it,
+#          KEY.gate. The lock is flock(2): shared on the file of every
+#          directory above PATH, top down, and exclusive on PATH's own, so a
+#          lock covers everything under it, and waits for anything above it
+#          or under it that is held. Every name is reached through its gate:
+#          passed on the way to a shared lock, and held while waiting for an
+#          exclusive one, so a directory waiting goes ahead of anything that
+#          comes for what is under it after.
+#          Only once PATH is held does create make the hold's directory,
+#          print it, and start the hold: a sleep of SECONDS that inherits
+#          every locked file, so the lock is held until the hold ends,
+#          however it ends. The hold ignores a hangup, as a server does. The
+#          directory holds two files: lock, naming PATH, then PATH's file,
+#          then the file of every directory above it, top down, a line
+#          each; and pid, the hold's.
 #          A create cut off while it waits has made nothing and printed
 #          nothing, and leaves nothing waiting behind it. One that cannot
 #          finish once it has the lock takes its directory and its hold
@@ -34,6 +47,29 @@ osPath=${1:?usage: create PATH SECONDS}
 nSeconds=${2:?usage: create PATH SECONDS}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
+
+##
+# @fn vFlock()
+# @brief Take a lock on a descriptor, waiting as long as it takes.
+# @details flock waits in the background: a shell waiting on a foreground
+#          child runs a signal's trap only once the child is done, and this
+#          one may never be. The lock belongs to the open file, not to a
+#          process, so what flock takes on this shell's descriptor is this
+#          shell's, and the hold's once it inherits it.
+# @param $1 eMode - -s for shared, -x for exclusive
+# @param $2 fdLock - the descriptor
+# @global pidWait - set, flock's pid while it waits, and empty after
+# @return 0; under set -e a flock that fails ends the caller
+##
+vFlock() {
+  local eMode=$1
+  local fdLock=$2
+  flock "$eMode" "$fdLock" &
+  pidWait=$!
+  wait "$pidWait"
+  pidWait=
+}
+
 nSeconds=$(nCount SECONDS "$nSeconds")
 [ "$nSeconds" -gt 0 ] || {
   echo "SECONDS must be more than zero" >&2
@@ -51,14 +87,50 @@ case $osPath/$pPath in
     exit 1
     ;;
 esac
-osKey=$(printf '%s' "$pPath" | sha256sum)
-pLock=/tmp/icc-lock/${osKey%% *}
+# The work tree PATH is in, if any, asked of git from the nearest directory
+# that is there. A caller inside a git hook has GIT_DIR set, relative, which
+# would answer for the hook's repository wherever git was asked.
+unset GIT_DIR GIT_WORK_TREE
+pNear=$pPath
+while [ ! -d "$pNear" ]; do
+  pNear=${pNear%/*}
+  pNear=${pNear:-/}
+done
+mapfile -t aRepo < <(git -C "$pNear" rev-parse --path-format=absolute \
+  --show-toplevel --git-common-dir 2>/dev/null || :)
+pTop=${aRepo[0]-}
+pCommon=${aRepo[1]-}
+[ -n "$pCommon" ] || pTop=
+[ -z "$pTop" ] || pCommon=$(readlink -f -- "$pCommon")
+# One file per name, top down from / to PATH.
+IFS=/ read -r -a aParts <<< "${pPath#/}"
+aPrefixes=(/)
+pPrefix=
+for osPart in "${aParts[@]}"; do
+  pPrefix=$pPrefix/$osPart
+  aPrefixes+=("$pPrefix")
+done
+aLocks=()
+for pPrefix in "${aPrefixes[@]}"; do
+  osName=$pPrefix
+  if [ -n "$pTop" ]; then
+    case $pPrefix in
+      "$pTop"|"$pTop"/*)
+        osName=git$'\n'$pCommon$'\n'${pPrefix#"$pTop"}
+        ;;
+    esac
+  fi
+  osKey=$(printf '%s' "$osName" | sha256sum)
+  aLocks+=("/tmp/icc-lock/${osKey%% *}")
+done
+nLocks=${#aLocks[@]}
 mkdir -p /tmp/icc-lock
 # Armed before anything is made, as icc-lib's vArm says. Each pid stays empty
 # until there is one, because kill 0 would signal the process group, and the
 # waiter's is emptied once it is done, because a pid is soon someone else's.
 # The waiter is waited for once it is killed, so a create cut off leaves
-# nothing waiting to take the lock after it has gone.
+# nothing waiting to take the lock after it has gone. Every lock and gate it
+# has goes with its descriptors when it exits.
 pDir=
 pidWait=
 pidHold=
@@ -69,19 +141,30 @@ vArm 'if [ -n "$pidWait" ]; then
       [ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-# The lock belongs to the open file, not to a process, so what flock takes on
-# this shell's fd 3 is this shell's, and the hold's once it inherits it. flock
-# waits in the background: a shell waiting on a foreground child runs a
-# signal's trap only once the child is done, and this one may never be.
-exec 3<> "$pLock"
-flock 3 &
-pidWait=$!
-wait "$pidWait"
-pidWait=
+# Top down, each name's gate first. Above PATH the gate is only passed, and
+# the lock is shared; at PATH the gate is held until the lock is, and the lock
+# is exclusive, on fd 3, where list and remove look for it. Every wait is for
+# something further down than anything this create holds, so no two creates
+# can each wait on the other.
+iLock=0
+for pLock in "${aLocks[@]}"; do
+  exec {fdGate}<> "$pLock.gate"
+  vFlock -x "$fdGate"
+  iLock=$((iLock + 1))
+  if [ "$iLock" -lt "$nLocks" ]; then
+    exec {fdGate}<&-
+    exec {fdLock}<> "$pLock"
+    vFlock -s "$fdLock"
+  else
+    exec 3<> "$pLock"
+    vFlock -x 3
+    exec {fdGate}<&-
+  fi
+done
 pMakeDir icc-lock
-printf '%s\n' "$pPath" "$pLock" > "$pDir/lock"
+printf '%s\n' "$pPath" "$pLock" "${aLocks[@]:0:nLocks-1}" > "$pDir/lock"
 # The hold is a server, started as icc-lib's vServe says, and then sleep and
-# nothing else, with the lock on fd 3, where list and remove look for it.
+# nothing else, holding every lock this shell took.
 (
   vServe
   exec sleep "$nSeconds"

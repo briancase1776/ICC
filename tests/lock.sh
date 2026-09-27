@@ -2,19 +2,23 @@
 ##
 # @file lock.sh
 # @brief Prove the lock: one holder per path, across processes, for a while.
-# @details Prove the lock: bad arguments refused; a path taken and listed;
-#          another path taken beside it; every spelling of the held path
-#          waiting, and a wait cut off by timeout or by TERM leaving
-#          nothing behind, not even something still waiting; a hold that a
-#          hangup leaves standing; a create getting the path the moment
-#          the holder gives it back, or the hold is killed, or its lease
-#          runs out, and remove saying a lock lapsed; a
-#          create cut off once it has the lock taking its directory and the
-#          lock with it; four processes taking turns on one path and never
-#          overlapping; and remove and list leaving alone what create did
-#          not make. Locks paths in a directory of its own, and takes the
-#          files under /tmp/icc-lock/ that those paths made, since nothing
-#          else can be waiting on them.
+# @details Prove the lock: bad arguments refused; a path taken, recorded
+#          and listed; another path taken beside it, and the directory above
+#          it waiting; every spelling of the held path waiting, and a wait
+#          cut off by timeout or by TERM leaving nothing behind, not even
+#          something still waiting; a hold that a hangup leaves standing; a
+#          create getting the path the moment the holder gives it back, or
+#          the hold is killed, or its lease runs out, and remove saying a
+#          lock lapsed; a create cut off once it has the lock taking its
+#          directory and the lock with it; four processes taking turns on
+#          one path and never overlapping; a lock covering what is under it,
+#          and a directory waiting going ahead of what comes after for under
+#          it; one file in two work trees of a repository one lock, and a
+#          clone a repository of its own; and remove and list leaving alone
+#          what create did not make. Locks paths in a directory of its own,
+#          and takes the files under /tmp/icc-lock/ that names in there
+#          made, since nothing else can be waiting on them; the files of the
+#          directories above it are everyone's, and stay.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -42,6 +46,7 @@ pidSleep=
 pidWaiter=
 aWorkers=()
 aLocks=()
+declare -A hShared
 vArm '[ -n "$pidWaiter" ] && kill "$pidWaiter" 2>/dev/null || :
       [ -n "$pidSleep" ] && kill "$pidSleep" 2>/dev/null || :
       [ ${#aWorkers[@]} -eq 0 ] || kill "${aWorkers[@]}" 2>/dev/null || :
@@ -73,6 +78,24 @@ vRefused() {
     echo "not refused: ${aCommand[*]}" >&2
     exit 1
   fi
+}
+
+##
+# @fn pLockOf()
+# @brief Print the file under /tmp/icc-lock/ that a name is locked by.
+# @details Written out apart from create, as what create is held to: the
+#          sha256 of the name. A name is a path, or, in a git work tree,
+#          git, the common git directory and the path in the tree, a line
+#          each.
+# @param $1 osName - the name
+# @stdout the file
+# @return 0
+##
+pLockOf() {
+  local osName=$1
+  local osKey
+  osKey=$(printf '%s' "$osName" | sha256sum)
+  echo "/tmp/icc-lock/${osKey%% *}"
 }
 
 ##
@@ -115,25 +138,65 @@ vWaiting() {
 }
 
 ##
+# @fn vWaits()
+# @brief Check a path is held: a create for it waits until timeout cuts it
+#        off, with 124, having printed nothing.
+# @param $1 osPath - the path, as create takes it
+# @stderr "not waiting" and the path, when it did not wait
+# @return 0 it waited; it exits 1 instead when it did not, having given
+#         back what it took
+##
+vWaits() {
+  local osPath=$1
+  local pOut
+  local nStatus=0
+  pOut=$(timeout 0.5 "$pIccLock/create" "$osPath" 30) || nStatus=$?
+  [ "$nStatus" -eq 124 ] && [ -z "$pOut" ] || {
+    [ -z "$pOut" ] || "$pIccLock/remove" "$pOut" 2>/dev/null || :
+    echo "not waiting: $osPath" >&2
+    exit 1
+  }
+}
+
+##
 # @fn vTake()
-# @brief Take a path at once, or stop here, and note its locked file.
+# @brief Take a path at once, or stop here, and note its locked files.
 # @details Bound by timeout, so a lock that is wrongly held stops the
-#          harness instead of hanging it. Called, not captured: the locked
-#          file goes on aLocks for the cleanup, and the hold on pTaken.
+#          harness instead of hanging it. Called, not captured: every file
+#          its record names, and each one's gate, goes on aLocks for the
+#          cleanup, but for the directories above the harness's own, and
+#          the hold goes on pTaken.
 # @param $1 osPath - the path, as create takes it
 # @param $2 nSeconds - the lease
 # @global pTaken - set, the hold's directory
-# @global aLocks - read and set, every locked file the harness has made
+# @global aLocks - read and set, every file the harness's names have made
+# @global hShared - read, the files of the directories above its own
 # @return 0; under set -e a create that does not return at once ends the
 #         harness
 ##
 vTake() {
   local osPath=$1
   local nSeconds=$2
+  local pFile
   pTaken=$(timeout 5 "$pIccLock/create" "$osPath" "$nSeconds")
-  aLocks+=("$(sed -n 2p "$pTaken/lock")")
+  while read -r pFile; do
+    [ -z "${hShared[$pFile]-}" ] || continue
+    aLocks+=("$pFile" "$pFile.gate")
+  done < <(sed -n '2,$p' "$pTaken/lock")
 }
 
+# The directories from / to the harness's own, top down. Their files are
+# everyone's but the last, and the cleanup leaves them.
+aAbove=(/)
+IFS=/ read -r -a aParts <<< "${pWork#/}"
+pPrefix=
+for osPart in "${aParts[@]}"; do
+  pPrefix=$pPrefix/$osPart
+  aAbove+=("$pPrefix")
+done
+for pPrefix in "${aAbove[@]:0:${#aAbove[@]}-1}"; do
+  hShared[$(pLockOf "$pPrefix")]=1
+done
 # Refused, in the words the pieces use: no SECONDS, SECONDS not a count or
 # none, a newline anywhere in PATH, even the one $( ) would drop.
 vRefused "$pIccLock/create" file
@@ -144,36 +207,35 @@ vRefused "$pIccLock/create" $'file\n' 30
 [ "$("$pIccLock/create" file 0 2>&1)" = "SECONDS must be more than zero" ]
 [ "$("$pIccLock/create" file 99999999999999999999 2>&1)" = \
   "SECONDS too big: 99999999999999999999" ]
-# Taken: the record names the path as readlink -m spells it, and the file
-# under /tmp/icc-lock/ its sha256 names; list says up.
+# Taken: the record names the path as readlink -m spells it, then the file
+# its name's sha256 names, then the file of every directory above it, top
+# down; list says up.
 vTake file 30
 pHeld=$pTaken
-pLock=${aLocks[0]}
+pLock=$(sed -n 2p "$pHeld/lock")
 [ "$(sed -n 1p "$pHeld/lock")" = "$pWork/file" ]
-osKey=$(printf '%s' "$pWork/file" | sha256sum)
-[ "$pLock" = "/tmp/icc-lock/${osKey%% *}" ]
+[ "$pLock" = "$(pLockOf "$pWork/file")" ]
+for pPrefix in "${aAbove[@]}"; do
+  pLockOf "$pPrefix"
+done > above
+[ "$(sed -n '3,$p' "$pHeld/lock")" = "$(cat above)" ]
 "$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
 [ "$(nOpeners "$pLock")" -eq 1 ]
-# Another path is a lock of its own, and a lock on a directory is on that
-# name alone, not on what is under it.
-vTake "$pWork" 30
-pBeside=$pTaken
-vTake sub/file 30
+# Another path is a lock of its own, and the directory above a held path
+# waits for it.
+vTake other 30
 "$pIccLock/remove" "$pTaken"
-"$pIccLock/remove" "$pBeside"
-pBeside=
+vWaits "$pWork"
 # Held, every spelling of it waits, and timeout cuts the wait off with 124,
 # having printed nothing. Nothing is left waiting behind: the hold is still
-# the only one with the file open.
+# the only one with the file open, and nobody has its gate.
 mkdir sub
 ln -s "$pWork" link
 for osSpelling in file ./file sub/../file "$pWork//file" link/file; do
-  nStatus=0
-  pOut=$(timeout 0.5 "$pIccLock/create" "$osSpelling" 30) || nStatus=$?
-  [ "$nStatus" -eq 124 ]
-  [ -z "$pOut" ]
+  vWaits "$osSpelling"
 done
 [ "$(nOpeners "$pLock")" -eq 1 ]
+[ "$(nOpeners "$pLock.gate")" -eq 0 ]
 # The hold is a server, and a hangup is not its business: it still holds the
 # lock after one.
 kill -HUP "$(cat "$pHeld/pid")"
@@ -195,6 +257,7 @@ pidWaiter=
 [ $((SECONDS - nStart)) -lt 5 ]
 [ ! -s waited ]
 [ "$(nOpeners "$pLock")" -eq 1 ]
+[ "$(nOpeners "$pLock.gate")" -eq 0 ]
 "$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
 # A create waiting gets the path the moment the holder gives it back.
 timeout 5 "$pIccLock/create" file 30 > waited &
@@ -263,6 +326,63 @@ awk '
   NR % 2 == 1 && $1 != "in" { exit 1 }
   NR % 2 == 0 && ($1 != "out" || $2 != nWorker) { exit 1 }
   { nWorker = $2 }' turns
+# A lock covers what is under it: a directory waits while a file in it is
+# held, and a file waits while the directory is; a file beside the held one,
+# and a directory beside it, do not.
+vTake tree/f 30
+pHeld=$pTaken
+vWaits tree
+vTake tree/g 30
+"$pIccLock/remove" "$pTaken"
+vTake treetop 30
+"$pIccLock/remove" "$pTaken"
+# A directory waiting goes ahead of whatever comes for under it after, which
+# waits behind it, free as it is, until the directory has had its turn.
+timeout 5 "$pIccLock/create" tree 30 > waited &
+pidWaiter=$!
+vWaiting "$(pLockOf "$pWork/tree")" "$pidWaiter"
+vWaits tree/h
+"$pIccLock/remove" "$pHeld"
+wait "$pidWaiter"
+pidWaiter=
+pHeld=$(cat waited)
+"$pIccLock/list" | grep -qxF "$pHeld up $pWork/tree"
+vWaits tree/h
+vWaits tree/sub/deeper
+"$pIccLock/remove" "$pHeld"
+pHeld=
+vTake tree/h 30
+"$pIccLock/remove" "$pTaken"
+vTake tree/sub/deeper 30
+"$pIccLock/remove" "$pTaken"
+# In a git work tree a path is named by its repository: one file in two work
+# trees is one lock, whether it is there or not, and the top of either one
+# covers both. A clone is a repository of its own, and its files are not.
+git -c init.defaultBranch=main init -q repo
+mkdir repo/src
+echo a > repo/src/a.c
+git -C repo add src
+git -C repo -c user.name=icc -c user.email=icc@localhost \
+  -c commit.gpgsign=false commit -qm a
+git -C repo worktree add -q ../worktree
+git clone -q repo clone
+vTake repo/src/a.c 30
+pHeld=$pTaken
+vWaits worktree/src/a.c
+vWaits worktree
+vTake worktree/src/b.c 30
+"$pIccLock/remove" "$pTaken"
+vTake clone/src/a.c 30
+"$pIccLock/remove" "$pTaken"
+"$pIccLock/remove" "$pHeld"
+vTake worktree 30
+pHeld=$pTaken
+vWaits repo/src/b.c
+vWaits repo
+"$pIccLock/remove" "$pHeld"
+pHeld=
+vTake repo 30
+"$pIccLock/remove" "$pTaken"
 # remove refuses what is not a hold, and a look-alike keeps whatever create
 # did not make, its stranger's pid included; list skips one with no record.
 vRefused "$pIccLock/remove" "$pWork"

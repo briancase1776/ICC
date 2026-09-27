@@ -3,11 +3,10 @@ name: icc-lock
 description: >-
   Lock a path, and everything under it, so that one holder at a time
   has it, across the tool calls, agents and processes that share /tmp.
-  In a git work tree a path is locked as a file of its repository, in
-  every work tree of it at once. Take it, waiting while someone else
-  has it; hold it for SECONDS at most; give it back. Advisory: it keeps
-  out only those who take it too. What the path is, and what holding it
-  is for, is the caller's business.
+  Take it, waiting while someone else has it; hold it for SECONDS at
+  most; give it back. Advisory: it keeps out only those who take it
+  too. What the path is, and what holding it is for, is the caller's
+  business.
 ---
 
 # icc-lock
@@ -22,7 +21,7 @@ it, held open by the hold, so the lock goes the moment the hold does,
 however the hold goes.
 
     /tmp/icc-lock/KEY                 the file the kernel locks for a
-                                      name, KEY the sha256 of the name
+                                      path, KEY the sha256 of the path
     /tmp/icc-lock/KEY.gate            its gate; see below
     /tmp/icc-lock-XXXXXXXX/lock       PATH, then PATH's file, then the
                                       file of each directory above it,
@@ -62,7 +61,7 @@ directory above PATH shared, top down, from / to PATH:
   file beside it do not; neither do two directories side by side.
 - The files and directories under a held one wait until it is given
   back, and a directory waits until nothing under it is held.
-- Every name has a gate. A create passes each gate above PATH on its
+- Every path has a gate. A create passes each gate above PATH on its
   way to the shared lock there, and holds PATH's own gate while it
   waits for PATH. So a directory waiting for what is under it to be
   given back goes ahead of anything that comes for under it after:
@@ -71,27 +70,10 @@ directory above PATH shared, top down, from / to PATH:
 - Every wait is for something further down than anything the waiter
   holds, so no two creates can each wait on the other.
 
-## Code in git
-
-A path is locked by its name. Outside git the name is the path. In a
-git work tree the name is the repository, its common git directory, and
-where the path sits in the tree, so:
-
-- One file in every work tree of a repository is one lock, whichever
-  tree it is locked from, and whether it is there or not: `git worktree
-  add` gives a second tree, and `src/a.c` in either is the same lock.
-- The top of a work tree is the whole repository, in every work tree of
-  it. A tree's top is what to lock for a commit, a pull, a checkout, or
-  anything else that touches more than a file.
-- A clone is a repository of its own, with a git directory of its own,
-  and its files are other files. Two clones of one repository share no
-  locks; two work trees of one repository share all of them.
-- A path inside `.git` is named by its path. A lock on a tree's top does
-  not cover it.
-- A directory above a work tree is named by its path, as it always was,
-  and still covers that work tree, and only that one.
-- A path that is in no work tree is named by its path, whether a
-  repository is meant for it later or not.
+A lock is on a path on this machine, and on nothing else: not on a
+repository, not on a copy of the file somewhere else. Two copies of one
+file, in two clones or two work trees, are two paths and two locks.
+Whoever means to share files works in one tree and locks there.
 
 The scripts source icc-lib's shared functions from beside this skill,
 `../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
@@ -142,11 +124,7 @@ nothing to them.
 - The files in /tmp/icc-lock/ are never removed. Removing one that a
   create has open and is waiting on would hand PATH to two holders at
   once: the waiter on the old file and the next create on a new one.
-  They are empty, two per name ever locked.
-- The work tree is git's to say: `git rev-parse`, asked from the
-  nearest directory of PATH that is there, with GIT_DIR and
-  GIT_WORK_TREE unset. Where git is not there, or says PATH is in no
-  work tree, the name is the path.
+  They are empty, two per path ever locked.
 - The hold is `sleep SECONDS`. PATH is not in its argv, so `pkill -f`
   on PATH finds nothing. Find a hold under /proc/PID/fd, as list does,
   or by its directory.
@@ -169,9 +147,9 @@ Read, Edit and Write know nothing of the lock. Agents that build side by
 side take it before they touch PATH, because they agreed to, and for no
 other reason.
 
-Subagents that each work in a `git worktree` of one repository share
-its locks, as seats in one tree do. Subagents that each clone it do
-not.
+Seats that work on one set of files work in one tree. A seat in a
+`git worktree` or a clone of its own has copies of its own, and locks
+of its own.
 
 A create that waits in the foreground hangs the tool call until the
 harness times it out. Bound it, and when it says 124, do something else

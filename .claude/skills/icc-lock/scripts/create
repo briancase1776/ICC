@@ -7,16 +7,12 @@
 #          lock; a newline in it is refused. SECONDS is the most the lock
 #          is held, a count more than zero, read as icc-lib's nCount reads
 #          one.
-#          A path has a name, and so does every directory above it. In a
-#          git work tree the name is the repository's common git directory
-#          and where the path sits in the tree, so one file in every work
-#          tree of a repository has one name; a path inside .git, or in no
-#          work tree, is named by itself. Each name has a file under
-#          /tmp/icc-lock/, KEY the sha256 of the name, and a gate beside it,
+#          PATH, and every directory above it, has a file under
+#          /tmp/icc-lock/, KEY the sha256 of the path, and a gate beside it,
 #          KEY.gate. The lock is flock(2): shared on the file of every
 #          directory above PATH, top down, and exclusive on PATH's own, so a
 #          lock covers everything under it, and waits for anything above it
-#          or under it that is held. Every name is reached through its gate:
+#          or under it that is held. Every path is reached through its gate:
 #          passed on the way to a shared lock, and held while waiting for an
 #          exclusive one, so a directory waiting goes ahead of anything that
 #          comes for what is under it after.
@@ -87,22 +83,7 @@ case $osPath/$pPath in
     exit 1
     ;;
 esac
-# The work tree PATH is in, if any, asked of git from the nearest directory
-# that is there. A caller inside a git hook has GIT_DIR set, relative, which
-# would answer for the hook's repository wherever git was asked.
-unset GIT_DIR GIT_WORK_TREE
-pNear=$pPath
-while [ ! -d "$pNear" ]; do
-  pNear=${pNear%/*}
-  pNear=${pNear:-/}
-done
-mapfile -t aRepo < <(git -C "$pNear" rev-parse --path-format=absolute \
-  --show-toplevel --git-common-dir 2>/dev/null || :)
-pTop=${aRepo[0]-}
-pCommon=${aRepo[1]-}
-[ -n "$pCommon" ] || pTop=
-[ -z "$pTop" ] || pCommon=$(readlink -f -- "$pCommon")
-# One file per name, top down from / to PATH.
+# One file per path, top down from / to PATH.
 IFS=/ read -r -a aParts <<< "${pPath#/}"
 aPrefixes=(/)
 pPrefix=
@@ -112,15 +93,7 @@ for osPart in "${aParts[@]}"; do
 done
 aLocks=()
 for pPrefix in "${aPrefixes[@]}"; do
-  osName=$pPrefix
-  if [ -n "$pTop" ]; then
-    case $pPrefix in
-      "$pTop"|"$pTop"/*)
-        osName=git$'\n'$pCommon$'\n'${pPrefix#"$pTop"}
-        ;;
-    esac
-  fi
-  osKey=$(printf '%s' "$osName" | sha256sum)
+  osKey=$(printf '%s' "$pPrefix" | sha256sum)
   aLocks+=("/tmp/icc-lock/${osKey%% *}")
 done
 nLocks=${#aLocks[@]}
@@ -141,7 +114,7 @@ vArm 'if [ -n "$pidWait" ]; then
       [ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-# Top down, each name's gate first. Above PATH the gate is only passed, and
+# Top down, each path's gate first. Above PATH the gate is only passed, and
 # the lock is shared; at PATH the gate is held until the lock is, and the lock
 # is exclusive, on fd 3, where list and remove look for it. Every wait is for
 # something further down than anything this create holds, so no two creates

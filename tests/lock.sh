@@ -13,12 +13,11 @@
 #          directory and the lock with it; four processes taking turns on
 #          one path and never overlapping; a lock covering what is under it,
 #          and a directory waiting going ahead of what comes after for under
-#          it; one file in two work trees of a repository one lock, and a
-#          clone a repository of its own; and remove and list leaving alone
-#          what create did not make. Locks paths in a directory of its own,
-#          and takes the files under /tmp/icc-lock/ that names in there
-#          made, since nothing else can be waiting on them; the files of the
-#          directories above it are everyone's, and stay.
+#          it; and remove and list leaving alone what create did not make.
+#          Locks paths in a directory of its own, and takes the files under
+#          /tmp/icc-lock/ that paths in there made, since nothing else can be
+#          waiting on them; the files of the directories above it are
+#          everyone's, and stay.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -82,19 +81,17 @@ vRefused() {
 
 ##
 # @fn pLockOf()
-# @brief Print the file under /tmp/icc-lock/ that a name is locked by.
+# @brief Print the file under /tmp/icc-lock/ that a path is locked by.
 # @details Written out apart from create, as what create is held to: the
-#          sha256 of the name. A name is a path, or, in a git work tree,
-#          git, the common git directory and the path in the tree, a line
-#          each.
-# @param $1 osName - the name
+#          sha256 of the path.
+# @param $1 pPath - the path, as readlink -m spells it
 # @stdout the file
 # @return 0
 ##
 pLockOf() {
-  local osName=$1
+  local pPath=$1
   local osKey
-  osKey=$(printf '%s' "$osName" | sha256sum)
+  osKey=$(printf '%s' "$pPath" | sha256sum)
   echo "/tmp/icc-lock/${osKey%% *}"
 }
 
@@ -169,7 +166,7 @@ vWaits() {
 # @param $1 osPath - the path, as create takes it
 # @param $2 nSeconds - the lease
 # @global pTaken - set, the hold's directory
-# @global aLocks - read and set, every file the harness's names have made
+# @global aLocks - read and set, every file the harness's paths have made
 # @global hShared - read, the files of the directories above its own
 # @return 0; under set -e a create that does not return at once ends the
 #         harness
@@ -208,7 +205,7 @@ vRefused "$pIccLock/create" $'file\n' 30
 [ "$("$pIccLock/create" file 99999999999999999999 2>&1)" = \
   "SECONDS too big: 99999999999999999999" ]
 # Taken: the record names the path as readlink -m spells it, then the file
-# its name's sha256 names, then the file of every directory above it, top
+# its sha256 names, then the file of every directory above it, top
 # down; list says up.
 vTake file 30
 pHeld=$pTaken
@@ -354,34 +351,6 @@ pHeld=
 vTake tree/h 30
 "$pIccLock/remove" "$pTaken"
 vTake tree/sub/deeper 30
-"$pIccLock/remove" "$pTaken"
-# In a git work tree a path is named by its repository: one file in two work
-# trees is one lock, whether it is there or not, and the top of either one
-# covers both. A clone is a repository of its own, and its files are not.
-git -c init.defaultBranch=main init -q repo
-mkdir repo/src
-echo a > repo/src/a.c
-git -C repo add src
-git -C repo -c user.name=icc -c user.email=icc@localhost \
-  -c commit.gpgsign=false commit -qm a
-git -C repo worktree add -q ../worktree
-git clone -q repo clone
-vTake repo/src/a.c 30
-pHeld=$pTaken
-vWaits worktree/src/a.c
-vWaits worktree
-vTake worktree/src/b.c 30
-"$pIccLock/remove" "$pTaken"
-vTake clone/src/a.c 30
-"$pIccLock/remove" "$pTaken"
-"$pIccLock/remove" "$pHeld"
-vTake worktree 30
-pHeld=$pTaken
-vWaits repo/src/b.c
-vWaits repo
-"$pIccLock/remove" "$pHeld"
-pHeld=
-vTake repo 30
 "$pIccLock/remove" "$pTaken"
 # remove refuses what is not a hold, and a look-alike keeps whatever create
 # did not make, its stranger's pid included; list skips one with no record.

@@ -1,0 +1,76 @@
+#!/bin/bash
+##
+# @file remove
+# @brief Give a lock back: end its hold and delete its directory.
+# @details remove DIR. DIR is what create printed, spelled any way that
+#          resolves to a /tmp/icc-lock-* directory. It must hold what
+#          create wrote: a lock file whose second line is a file under
+#          /tmp/icc-lock/, and a pid file holding a number. The hold is
+#          killed only while it still has that file open on fd 3, so a
+#          stranger's pid, or a recycled one, is left alone. Then the two
+#          files go, and the directory with them unless something else is
+#          in it. remove sends TERM and does not wait: the lock goes as the
+#          hold does, a moment later.
+#          A hold that was already gone, its lease run out or killed, held
+#          nothing when remove came, so the lock lapsed before it was given
+#          back, and someone else may have held PATH since. remove says so
+#          and exits 1, and takes the directory all the same.
+# @stdin nothing
+# @stdout nothing
+# @stderr the reason, on refusal; "lapsed: DIR" when the lock had lapsed
+# @exit 0 the lock was held until now, and is given back; 1 DIR is missing
+#       or not a hold, or held something create did not make and was left
+#       in place, or the lock had lapsed and DIR is gone
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+pArg=${1:?usage: remove DIR}
+set -eu
+# /proc/PID/fd spells a path one way, and the caller may spell DIR any of
+# several; canonicalise, as Pipes' remove does, before comparing.
+pDir=$(readlink -f -- "$pArg" 2>/dev/null || :)
+[ -n "$pDir" ] && [ -d "$pDir" ] &&
+  [ -s "$pDir/lock" ] && [ -s "$pDir/pid" ] || {
+  echo "not a hold: $pArg" >&2
+  exit 1
+}
+case $pDir in
+  /tmp/icc-lock-*)
+    ;;
+  *)
+    echo "not a hold: $pArg" >&2
+    exit 1
+    ;;
+esac
+# What create wrote: the locked file under /tmp/icc-lock/, and the hold's pid,
+# a number. A directory that does not hold that was not made here, so its
+# files are not this script's to delete.
+pLock=$(sed -n 2p "$pDir/lock")
+pidHold=$(cat "$pDir/pid")
+[[ $pLock =~ ^/tmp/icc-lock/[0-9a-f]{64}$ && $pidHold =~ ^[0-9]+$ ]] || {
+  echo "not a hold: $pArg" >&2
+  exit 1
+}
+# Kill the hold only while it is this lock's: create left the locked file on
+# its fd 3, which is what list reads. A hold that has ended matches nothing,
+# and neither does a stranger's pid or a recycled one.
+eState=down
+[ "$(readlink "/proc/$pidHold/fd/3" 2>/dev/null)" = "$pLock" ] &&
+  kill "$pidHold" 2>/dev/null &&
+  eState=up || :
+# lock and pid are what create made; take those and nothing else. Only a
+# /tmp/icc-lock-* directory gets this far, and rmdir refuses one with anything
+# left in it, so a look-alike costs its own two files and never a stranger's
+# tree. The locked file under /tmp/icc-lock/ is not this hold's to take.
+rm -f "$pDir/lock" "$pDir/pid"
+rmdir "$pDir" || {
+  echo "not a hold, left in place: $pArg" >&2
+  exit 1
+}
+[ "$eState" = up ] || {
+  echo "lapsed: $pArg" >&2
+  exit 1
+}

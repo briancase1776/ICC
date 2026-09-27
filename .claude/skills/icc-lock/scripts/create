@@ -1,0 +1,91 @@
+#!/bin/bash
+##
+# @file create
+# @brief Wait until nobody holds PATH, then hold it and print the hold.
+# @details create PATH SECONDS. PATH is any path, there or not, taken as
+#          readlink -m spells it, so every spelling of one path is one
+#          lock; a newline in it is refused. SECONDS is the most the lock
+#          is held, a count more than zero, read as icc-lib's nCount reads
+#          one. The lock is flock(2), exclusive, on /tmp/icc-lock/KEY, KEY
+#          the sha256 of PATH. create opens that file and waits for the
+#          lock as long as it takes. Only then does it make the hold's
+#          directory, print it, and start the hold: a sleep of SECONDS
+#          that inherits the locked file, so the lock is held until the
+#          hold ends, however it ends. The hold ignores a hangup, as a
+#          server does. The directory holds two files: lock, naming PATH
+#          and the locked file a line each, and pid, the hold's.
+#          A create cut off while it waits has made nothing and printed
+#          nothing, and leaves nothing waiting behind it. One that cannot
+#          finish once it has the lock takes its directory and its hold
+#          with it, and the lock goes with them.
+# @stdin nothing
+# @stdout the hold's directory, one line, the moment it is made, which is
+#         once PATH is held
+# @stderr the reason, on refusal
+# @exit 0 PATH is held; 1 the arguments are refused, or create was cut
+#       off, or the hold could not be finished, and none of it is left
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+osPath=${1:?usage: create PATH SECONDS}
+nSeconds=${2:?usage: create PATH SECONDS}
+set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+nSeconds=$(nCount SECONDS "$nSeconds")
+[ "$nSeconds" -gt 0 ] || {
+  echo "SECONDS must be more than zero" >&2
+  exit 1
+}
+# The lock is on the path, and one path has many spellings, so every spelling
+# is made the one readlink -m makes before anything is named for it. The path
+# need not be there: a file is locked before it is written. A newline is
+# refused, before and after: $( ) drops a trailing one, which would lock some
+# other path, and the hold's directory keeps PATH as a line.
+pPath=$(readlink -m -- "$osPath")
+case $osPath/$pPath in
+  *$'\n'*)
+    echo "PATH has a newline in it" >&2
+    exit 1
+    ;;
+esac
+osKey=$(printf '%s' "$pPath" | sha256sum)
+pLock=/tmp/icc-lock/${osKey%% *}
+mkdir -p /tmp/icc-lock
+# Armed before anything is made, as icc-lib's vArm says. Each pid stays empty
+# until there is one, because kill 0 would signal the process group, and the
+# waiter's is emptied once it is done, because a pid is soon someone else's.
+# The waiter is waited for once it is killed, so a create cut off leaves
+# nothing waiting to take the lock after it has gone.
+pDir=
+pidWait=
+pidHold=
+vArm 'if [ -n "$pidWait" ]; then
+        kill "$pidWait" 2>/dev/null || :
+        wait "$pidWait" 2>/dev/null || :
+      fi
+      [ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
+      [ -n "$pDir" ] && rm -rf "$pDir" || :
+      exit 1'
+# The lock belongs to the open file, not to a process, so what flock takes on
+# this shell's fd 3 is this shell's, and the hold's once it inherits it. flock
+# waits in the background: a shell waiting on a foreground child runs a
+# signal's trap only once the child is done, and this one may never be.
+exec 3<> "$pLock"
+flock 3 &
+pidWait=$!
+wait "$pidWait"
+pidWait=
+pMakeDir icc-lock
+printf '%s\n' "$pPath" "$pLock" > "$pDir/lock"
+# The hold is a server, started as icc-lib's vServe says, and then sleep and
+# nothing else, with the lock on fd 3, where list and remove look for it.
+(
+  vServe
+  exec sleep "$nSeconds"
+) </dev/null >/dev/null 2>&1 &
+pidHold=$!
+echo "$pidHold" > "$pDir/pid"
+vDisarm

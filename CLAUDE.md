@@ -8,7 +8,7 @@ instruction to that session.
 
 ## This repo
 
-Eight skills under one `.claude/`, one harness apiece under `tests/`, and
+Nine skills under one `.claude/`, one harness apiece under `tests/`, and
 this file. Two of the skills serve the others: icc-lib is the functions
 they share, which each of them sources by fixed path, and icc-raspberry
 is the test data, a raspberry of sixteen kinds that the harnesses blow.

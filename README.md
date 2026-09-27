@@ -2,10 +2,11 @@
 
 Wires between running things, made out of what is already on the box.
 
-A pipe is a FIFO held open. A fitting is `tee(1)` or `dd(1)`. A patch is a
-text file saying which end went where. Whoever holds an end can be an
-agent, a program, or a person at a terminal — the name says Claude for
-historical reasons and only one piece still means it.
+A pipe is a FIFO held open. A fitting is `tee(1)` or `dd(1)`. A lock is
+`flock(1)` held by a sleep. A patch is a text file saying which end went
+where. Whoever holds an end can be an agent, a program, or a person at a
+terminal — the name says Claude for historical reasons and only one piece
+still means it.
 
     # four parties on a mesh, six lanes each
     pPatchDir=$(.claude/skills/icc-patch/scripts/create mesh 4 6)
@@ -35,22 +36,21 @@ rather than hangs when you ask for more than the wire holds.
     icc-tee        the fitting   copy one pipe onto many
     icc-merge      the fitting   copy many pipes onto one
     icc-pipes      the lane      a bidirectional channel at a path
+    icc-lock       the key       a path to one holder at a time
     icc-lib        the bench     the functions every other piece sources
     icc-raspberry  the egg       test data: sixteen kinds, from urandom
 
-Eight Claude Code skills in one repo, under one `.claude/skills/`.
+Nine Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage, and only a Claude can call that.
 
 ## Held open
 
-Two repos are names with no design in them, on purpose. Each says what the
+One repo is a name with no design in it, on purpose. It says what the
 idea was, why it may not need to exist, and what would have to be true
 first.
 
-- [ICC-Lock](https://github.com/briancase1776/ICC-Lock) — an exclusive
-  turn, and why the obvious design is the wrong one
 - [ICC-Switch](https://github.com/briancase1776/ICC-Switch) — a partition
   taking one pattern, and why a party may already do it
 
@@ -75,8 +75,9 @@ the far end.
 
 ## What it will not do
 
-It does not know what your bytes mean, who is at the other end, or whose
-turn it is. There is nowhere to put any of that, on purpose.
+It does not know what your bytes mean or who is at the other end. It will
+keep a path to one holder at a time, and not know who that is or what the
+path is for. There is nowhere to put any of that, on purpose.
 
 ## Licence
 

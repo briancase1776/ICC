@@ -1,24 +1,15 @@
 #!/bin/bash
 ##
 # @file lock.sh
-# @brief Prove the lock: one holder per path, across processes, for a while.
-# @details Prove the lock: bad arguments refused; a path taken, recorded
-#          and listed; another path taken beside it, and the directory above
-#          it held; every spelling of the held path held, told at once and
-#          told by what, or after WAIT; a wait cut off by timeout or by TERM
-#          leaving nothing behind, not even something still waiting; a hold
-#          that a hangup leaves standing; a
-#          create getting the path the moment the holder gives it back, or
-#          the hold is killed, or its lease runs out, and remove saying a
-#          lock lapsed; a create cut off once it has the lock taking its
-#          directory and the lock with it; four processes taking turns on
-#          one path and never overlapping; a lock covering what is under it,
-#          and a directory waiting going ahead of what comes after for under
-#          it; and remove and list leaving alone what create did not make.
-#          Locks paths in a directory of its own, and takes the files under
-#          /tmp/icc-lock/ that paths in there made, since nothing else can be
-#          waiting on them; the files of the directories above it are
-#          everyone's, and stay.
+# @brief Prove the lock: one holder per path, the rest told at once.
+# @details Prove the lock: bad arguments refused; a path locked, recorded
+#          and listed; every spelling of it told held, with nothing made;
+#          another path locked beside it; forty creates for one path at
+#          once, and exactly one of them the holder; remove giving a lock
+#          back by any spelling, refusing a path not locked, and leaving a
+#          look-alike in place; and list skipping what is not a lock.
+#          Locks paths in a directory of its own, and gives back every lock
+#          it took.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -36,25 +27,15 @@ source .claude/skills/icc-lib/scripts/lib
 pIccLock=$(cd .claude/skills/icc-lock/scripts && pwd)
 # Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
 # whatever is named, so a check that fails leaves nothing of the harness's
-# own behind. A pid is emptied once it is done, because it is soon someone
-# else's.
+# own behind.
 pWork=
-pHeld=
-pBeside=
 pFake=
-pidSleep=
-pidWaiter=
-aWorkers=()
-aLocks=()
-declare -A hShared
-vArm '[ -n "$pidWaiter" ] && kill "$pidWaiter" 2>/dev/null || :
-      [ -n "$pidSleep" ] && kill "$pidSleep" 2>/dev/null || :
-      [ ${#aWorkers[@]} -eq 0 ] || kill "${aWorkers[@]}" 2>/dev/null || :
-      for pHold in $pHeld $pBeside; do
-        "$pIccLock/remove" "$pHold" 2>/dev/null || :
-      done
+vArm 'if [ -n "$pWork" ]; then
+        for osName in file other race kept; do
+          "$pIccLock/remove" "$pWork/$osName" 2>/dev/null || :
+        done
+      fi
       [ -n "$pFake" ] && rm -rf "$pFake" || :
-      [ ${#aLocks[@]} -eq 0 ] || rm -f "${aLocks[@]}"
       cd /
       [ -n "$pWork" ] && rm -rf "$pWork" || :'
 pWork=$(mktemp -d)
@@ -80,322 +61,71 @@ vRefused() {
   fi
 }
 
-##
-# @fn pLockOf()
-# @brief Print the file under /tmp/icc-lock/ that a path is locked by.
-# @details Written out apart from create, as what create is held to: the
-#          sha256 of the path.
-# @param $1 pPath - the path, as readlink -m spells it
-# @stdout the file
-# @return 0
-##
-pLockOf() {
-  local pPath=$1
-  local osKey
-  osKey=$(printf '%s' "$pPath" | sha256sum)
-  echo "/tmp/icc-lock/${osKey%% *}"
-}
-
-##
-# @fn nOpeners()
-# @brief Print how many descriptors, in every process, have a file open.
-# @details Every fd under /proc, compared with the file by -ef, which a
-#          builtin test does, so nothing is forked per fd. A hold has the
-#          locked file open on one; a create waiting has it on two, its own
-#          and its flock's.
-# @param $1 pFile - the file
-# @stdout the count
-# @return 0
-##
-nOpeners() {
-  local pFile=$1
-  local pFd
-  local nOpen=0
-  for pFd in /proc/[0-9]*/fd/*; do
-    [ "$pFd" -ef "$pFile" ] 2>/dev/null || continue
-    nOpen=$((nOpen + 1))
-  done
-  echo "$nOpen"
-}
-
-##
-# @fn vWaiting()
-# @brief Wait until a create is waiting for a lock that one hold holds.
-# @param $1 pFile - the locked file
-# @param $2 pidCreate - the create, which must still be running
-# @return 0 once three descriptors have the file open; it exits 1 instead
-#         when the create ends first
-##
-vWaiting() {
-  local pFile=$1
-  local pidCreate=$2
-  while [ "$(nOpeners "$pFile")" -lt 3 ]; do
-    kill -0 "$pidCreate"
-    sleep 0.1
-  done
-}
-
-##
-# @fn vBusy()
-# @brief Check a path is held: a create for it that does not wait says so
-#        at once, with 2, having printed nothing on stdout.
-# @param $1 osPath - the path, as create takes it
-# @stderr "not held" and the path, when it was not
-# @global osSaid - set, what the create said on stderr
-# @return 0 it was held; it exits 1 instead when it was not, having given
-#         back what it took
-##
-vBusy() {
-  local osPath=$1
-  local pOut
-  local nStatus=0
-  pOut=$("$pIccLock/create" "$osPath" 30 2> said) || nStatus=$?
-  osSaid=$(cat said)
-  [ "$nStatus" -eq 2 ] && [ -z "$pOut" ] || {
-    [ -z "$pOut" ] || "$pIccLock/remove" "$pOut" 2>/dev/null || :
-    echo "not held: $osPath" >&2
-    exit 1
-  }
-}
-
-##
-# @fn vTake()
-# @brief Take a path within five seconds, or stop here, and note its
-#        locked files.
-# @details Five seconds, so that a hold just killed or run out is gone by
-#          then, and a lock that is wrongly held stops the harness instead
-#          of hanging it. Called, not captured: every file its record
-#          names, and each one's gate, goes on aLocks for the cleanup, but
-#          for the directories above the harness's own, and the hold goes
-#          on pTaken.
-# @param $1 osPath - the path, as create takes it
-# @param $2 nSeconds - the lease
-# @global pTaken - set, the hold's directory
-# @global aLocks - read and set, every file the harness's paths have made
-# @global hShared - read, the files of the directories above its own
-# @return 0; under set -e a create that does not get the path ends the
-#         harness
-##
-vTake() {
-  local osPath=$1
-  local nSeconds=$2
-  local pFile
-  pTaken=$("$pIccLock/create" "$osPath" "$nSeconds" 5)
-  while read -r pFile; do
-    [ -z "${hShared[$pFile]-}" ] || continue
-    aLocks+=("$pFile" "$pFile.gate")
-  done < <(sed -n '2,$p' "$pTaken/lock")
-}
-
-# The directories from / to the harness's own, top down. Their files are
-# everyone's but the last, and the cleanup leaves them.
-aAbove=(/)
-IFS=/ read -r -a aParts <<< "${pWork#/}"
-pPrefix=
-for osPart in "${aParts[@]}"; do
-  pPrefix=$pPrefix/$osPart
-  aAbove+=("$pPrefix")
-done
-for pPrefix in "${aAbove[@]:0:${#aAbove[@]}-1}"; do
-  hShared[$(pLockOf "$pPrefix")]=1
-done
-# Refused, in the words the pieces use: no SECONDS, SECONDS or WAIT not a
-# count, SECONDS none, a newline anywhere in PATH, even the one $( ) would
+# Refused: no PATH, and a newline anywhere in it, even the one $( ) would
 # drop.
-vRefused "$pIccLock/create" file
-vRefused "$pIccLock/create" file x
-vRefused "$pIccLock/create" file -1
-vRefused "$pIccLock/create" file 30 x
-vRefused "$pIccLock/create" file 30 -1
-vRefused "$pIccLock/create" $'fi\nle' 30
-vRefused "$pIccLock/create" $'file\n' 30
-[ "$("$pIccLock/create" file 0 2>&1)" = "SECONDS must be more than zero" ]
-[ "$("$pIccLock/create" file 99999999999999999999 2>&1)" = \
-  "SECONDS too big: 99999999999999999999" ]
-# Taken: the record names the path as readlink -m spells it, then the file
-# its sha256 names, then the file of every directory above it, top
-# down; list says up.
-vTake file 30
-pHeld=$pTaken
-pLock=$(sed -n 2p "$pHeld/lock")
-[ "$(sed -n 1p "$pHeld/lock")" = "$pWork/file" ]
-[ "$pLock" = "$(pLockOf "$pWork/file")" ]
-for pPrefix in "${aAbove[@]}"; do
-  pLockOf "$pPrefix"
-done > above
-[ "$(sed -n '3,$p' "$pHeld/lock")" = "$(cat above)" ]
-"$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
-[ "$(nOpeners "$pLock")" -eq 1 ]
-# Another path is a lock of its own, and the directory above a held path is
-# held by it, and says so.
-vTake other 30
-"$pIccLock/remove" "$pTaken"
-vBusy "$pWork"
-[ "$osSaid" = "held by $pHeld: $pWork/file" ]
-# Held, every spelling of it is held, told at once and by what; with a WAIT,
-# told once WAIT is spent and not before; and cut off by timeout while it
-# waits, it has printed nothing. Nothing is left waiting behind: the hold is
-# still the only one with the file open, and nobody has its gate.
+vRefused "$pIccLock/create"
+vRefused "$pIccLock/create" $'fi\nle'
+vRefused "$pIccLock/create" $'file\n'
+vRefused "$pIccLock/remove"
+# Locked: the directory is named for the path as readlink -m spells it, holds
+# it as a line, and list says so.
+pLock=$("$pIccLock/create" file)
+osKey=$(printf '%s' "$pWork/file" | sha256sum)
+[ "$pLock" = "/tmp/icc-lock-${osKey%% *}" ]
+[ "$(cat "$pLock/lock")" = "$pWork/file" ]
+"$pIccLock/list" | grep -qxF "$pLock $pWork/file"
+# Held, every spelling of it is told so at once, with 2, and nothing is
+# made: the lock is as it was.
 mkdir sub
 ln -s "$pWork" link
 for osSpelling in file ./file sub/../file "$pWork//file" link/file; do
-  vBusy "$osSpelling"
-  [ "$osSaid" = "held by $pHeld: $pWork/file" ]
+  nStatus=0
+  pOut=$("$pIccLock/create" "$osSpelling" 2> said) || nStatus=$?
+  [ "$nStatus" -eq 2 ]
+  [ -z "$pOut" ]
+  [ "$(cat said)" = "held: $pWork/file" ]
 done
-nStart=$SECONDS
-nStatus=0
-"$pIccLock/create" file 30 2 2>/dev/null || nStatus=$?
-[ "$nStatus" -eq 2 ]
-[ $((SECONDS - nStart)) -ge 1 ]
-[ $((SECONDS - nStart)) -lt 5 ]
-nStatus=0
-pOut=$(timeout 0.5 "$pIccLock/create" file 30 60) || nStatus=$?
-[ "$nStatus" -eq 124 ]
-[ -z "$pOut" ]
-[ "$(nOpeners "$pLock")" -eq 1 ]
-[ "$(nOpeners "$pLock.gate")" -eq 0 ]
-# The hold is a server, and a hangup is not its business: it still holds the
-# lock after one.
-kill -HUP "$(cat "$pHeld/pid")"
-sleep 1
-"$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
-# TERM to a create alone, while it waits, and not to its flock, still ends it
-# at once with 1, and it takes its flock with it. At once is well inside the
-# holder's lease, which is still running after: a create that ran its trap
-# only when its flock returned would end, but not until then.
-"$pIccLock/create" file 30 60 > waited &
-pidWaiter=$!
-vWaiting "$pLock" "$pidWaiter"
-nStart=$SECONDS
-kill -TERM "$pidWaiter"
-nStatus=0
-wait "$pidWaiter" || nStatus=$?
-pidWaiter=
-[ "$nStatus" -eq 1 ]
-[ $((SECONDS - nStart)) -lt 5 ]
-[ ! -s waited ]
-[ "$(nOpeners "$pLock")" -eq 1 ]
-[ "$(nOpeners "$pLock.gate")" -eq 0 ]
-"$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
-# A create waiting gets the path the moment the holder gives it back.
-"$pIccLock/create" file 30 5 > waited &
-pidWaiter=$!
-vWaiting "$pLock" "$pidWaiter"
-"$pIccLock/remove" "$pHeld"
-[ ! -e "$pHeld" ]
-wait "$pidWaiter"
-pidWaiter=
-pHeld=$(cat waited)
-"$pIccLock/list" | grep -qxF "$pHeld up $pWork/file"
-# However the hold goes, the lock goes with it: killed outright, it is free.
-kill -KILL "$(cat "$pHeld/pid")"
-vTake file 30
-"$pIccLock/list" | grep -qxF "$pHeld down $pWork/file"
-nStatus=0
-osSaid=$("$pIccLock/remove" "$pHeld" 2>&1) || nStatus=$?
-[ "$nStatus" -eq 1 ]
-[ "$osSaid" = "lapsed: $pHeld" ]
-[ ! -e "$pHeld" ]
-pHeld=$pTaken
-"$pIccLock/remove" "$pHeld"
-pHeld=
-# SECONDS is a lease: once it runs out the lock is free, whether or not its
-# holder is done, and remove says it lapsed and takes the directory anyway.
-vTake lease 1
-pBeside=$pTaken
-vTake lease 30
-pHeld=$pTaken
-"$pIccLock/list" | grep -qxF "$pBeside down $pWork/lease"
-nStatus=0
-osSaid=$("$pIccLock/remove" "$pBeside" 2>&1) || nStatus=$?
-[ "$nStatus" -eq 1 ]
-[ "$osSaid" = "lapsed: $pBeside" ]
-[ ! -e "$pBeside" ]
-pBeside=
-"$pIccLock/remove" "$pHeld"
-pHeld=
-# Cut off just after it makes its directory, which is once it holds the
-# path, a create takes the directory with it, and the lock is free again.
-vCutOff "$pIccLock/create" cut 30
-vTake cut 30
-"$pIccLock/remove" "$pTaken"
-# Four processes, three turns each, on one path: every turn is in then out,
-# and nobody's in lands between another's in and out.
-for iWorker in 1 2 3 4; do
+[ "$(cat "$pLock/lock")" = "$pWork/file" ]
+# Another path is a lock of its own, and so is the directory above.
+"$pIccLock/create" other > /dev/null
+"$pIccLock/create" "$pWork" > /dev/null
+"$pIccLock/remove" other
+"$pIccLock/remove" "$pWork"
+# Forty creates for one path at once: exactly one holds it, and thirty-nine
+# are told it is held.
+for iRacer in $(seq 40); do
   (
-    for iTurn in 1 2 3; do
-      pTurn=$("$pIccLock/create" turns 10 30)
-      echo "in $iWorker" >> turns
-      sleep 0.05
-      echo "out $iWorker" >> turns
-      "$pIccLock/remove" "$pTurn"
-    done
+    nStatus=0
+    "$pIccLock/create" race > /dev/null 2>&1 || nStatus=$?
+    echo "$nStatus" > "raced.$iRacer"
   ) &
-  aWorkers+=($!)
 done
-for pidWorker in "${aWorkers[@]}"; do
-  wait "$pidWorker"
-done
-aWorkers=()
-vTake turns 30
-"$pIccLock/remove" "$pTaken"
-[ "$(wc -l < turns)" -eq 24 ]
-awk '
-  NR % 2 == 1 && $1 != "in" { exit 1 }
-  NR % 2 == 0 && ($1 != "out" || $2 != nWorker) { exit 1 }
-  { nWorker = $2 }' turns
-# A lock covers what is under it: a directory waits while a file in it is
-# held, and a file waits while the directory is; a file beside the held one,
-# and a directory beside it, do not.
-vTake tree/f 30
-pHeld=$pTaken
-vBusy tree
-[ "$osSaid" = "held by $pHeld: $pWork/tree/f" ]
-vTake tree/g 30
-"$pIccLock/remove" "$pTaken"
-vTake treetop 30
-"$pIccLock/remove" "$pTaken"
-# A directory waiting goes ahead of whatever comes for under it after, which
-# is held behind it, free as it is, until the directory has had its turn,
-# and is told what it is behind.
-"$pIccLock/create" tree 30 5 > waited &
-pidWaiter=$!
-vWaiting "$(pLockOf "$pWork/tree")" "$pidWaiter"
-vBusy tree/h
-[ "$osSaid" = "held by a create waiting ahead: $pWork/tree/h" ]
-"$pIccLock/remove" "$pHeld"
-wait "$pidWaiter"
-pidWaiter=
-pHeld=$(cat waited)
-"$pIccLock/list" | grep -qxF "$pHeld up $pWork/tree"
-vBusy tree/h
-vBusy tree/sub/deeper
-"$pIccLock/remove" "$pHeld"
-pHeld=
-vTake tree/h 30
-"$pIccLock/remove" "$pTaken"
-vTake tree/sub/deeper 30
-"$pIccLock/remove" "$pTaken"
-# remove refuses what is not a hold, and a look-alike keeps whatever create
-# did not make, its stranger's pid included; list skips one with no record.
-vRefused "$pIccLock/remove" "$pWork"
-vRefused "$pIccLock/remove" /tmp/icc-lock-missing
-pFake=$(mktemp -d /tmp/icc-lock-XXXXXXXX)
-sleep 30 &
-pidSleep=$!
-printf '%s\n' "$pWork/fake" "$pLock" > "$pFake/lock"
-echo "$pidSleep" > "$pFake/pid"
+wait
+[ "$(cat raced.* | grep -cx 0)" -eq 1 ]
+[ "$(cat raced.* | grep -cx 2)" -eq 39 ]
+"$pIccLock/remove" race
+# remove gives a lock back by any spelling, and then it can be taken again;
+# a path not locked is refused.
+"$pIccLock/remove" link/file
+[ ! -e "$pLock" ]
+[ "$("$pIccLock/remove" file 2>&1)" = "not locked: $pWork/file" ]
+vRefused "$pIccLock/remove" file
+[ "$("$pIccLock/create" file)" = "$pLock" ]
+"$pIccLock/remove" file
+# A lock that holds something create did not make is left in place, and the
+# something with it.
+pFake=$("$pIccLock/create" kept)
 : > "$pFake/kept"
-vRefused "$pIccLock/remove" "$pFake"
-kill -0 "$pidSleep"
+vRefused "$pIccLock/remove" kept
 [ -e "$pFake/kept" ]
-[ -z "$("$pIccLock/list" | grep -F "$pFake")" ]
-kill "$pidSleep"
-pidSleep=
-rm -rf "$pFake"
+rm -f "$pFake/kept"
+"$pIccLock/remove" kept
 pFake=
-rm -f "${aLocks[@]}"
-aLocks=()
+# list skips a directory that is not a lock.
+pFake=$(mktemp -d /tmp/icc-lock-XXXXXXXX)
+[ -z "$("$pIccLock/list" | grep -F "$pFake")" ]
+rmdir "$pFake"
+pFake=
 cd /
 rm -rf "$pWork"
 vDisarm

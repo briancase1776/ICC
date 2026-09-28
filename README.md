@@ -3,7 +3,7 @@
 Wires between running things, made out of what is already on the box.
 
 A pipe is a FIFO held open. A fitting is `tee(1)` or `dd(1)`. A lock is
-`flock(1)` held by a sleep. A patch is a text file saying which end went
+a directory `mkdir(1)` made. A patch is a text file saying which end went
 where. Whoever holds an end can be an agent, a program, or a person at a
 terminal — the name says Claude for historical reasons and only one piece
 still means it.

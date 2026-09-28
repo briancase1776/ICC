@@ -1,132 +1,35 @@
 #!/bin/bash
 ##
 # @file create
-# @brief Wait until nobody holds PATH, then hold it and print the hold.
-# @details create PATH SECONDS [WAIT]. PATH is any path, there or not,
-#          taken as readlink -m spells it, so every spelling of one path is
-#          one lock; a newline in it is refused. SECONDS is the most the
-#          lock is held, a count more than zero, and WAIT the most create
-#          waits for it, a count, 0 when it is not given; both are read as
-#          icc-lib's nCount reads one. When PATH, or anything above or under
-#          it, is still held once WAIT is spent, create says what holds it,
-#          a line per hold as list names it, and exits 2, having made
-#          nothing and left nothing waiting.
-#          PATH, and every directory above it, has a file under
-#          /tmp/icc-lock/, KEY the sha256 of the path, and a gate beside it,
-#          KEY.gate. The lock is flock(2): shared on the file of every
-#          directory above PATH, top down, and exclusive on PATH's own, so a
-#          lock covers everything under it, and waits for anything above it
-#          or under it that is held. Every path is reached through its gate:
-#          passed on the way to a shared lock, and held while waiting for an
-#          exclusive one, so a directory waiting goes ahead of anything that
-#          comes for what is under it after; one that does not wait never
-#          stands in line.
-#          Only once PATH is held does create make the hold's directory,
-#          print it, and start the hold: a sleep of SECONDS that inherits
-#          every locked file, so the lock is held until the hold ends,
-#          however it ends. The hold ignores a hangup, as a server does. The
-#          directory holds two files: lock, naming PATH, then PATH's file,
-#          then the file of every directory above it, top down, a line
-#          each; and pid, the hold's.
-#          A create cut off while it waits has made nothing and printed
-#          nothing, and leaves nothing waiting behind it. One that cannot
-#          finish once it has the lock takes its directory and its hold
-#          with it, and the lock goes with them.
+# @brief Take the lock on PATH, or say it is held.
+# @details create PATH. The lock is a directory, /tmp/icc-lock-KEY, KEY the
+#          sha256 of PATH as readlink -m spells it, so every spelling of one
+#          path is one lock. mkdir(1) makes it or fails, and does either at
+#          once: of any number of creates for one path at once, one makes
+#          it and the rest are told it is held. PATH need not be there; a
+#          newline in it is refused. The directory holds one file, lock,
+#          naming PATH. The lock is held until remove gives it back: nothing
+#          else ends it, and nothing runs to hold it.
 # @stdin nothing
-# @stdout the hold's directory, one line, the moment it is made, which is
-#         once PATH is held
-# @stderr the reason, on refusal; "held by DIR: PATH" for each hold in
-#         the way, or "held by a create waiting ahead: PATH" when what is in
-#         the way is only another create, waiting
-# @exit 0 PATH is held; 1 the arguments are refused, or create was cut
-#       off, or the hold could not be finished, and none of it is left; 2
-#       PATH is held by someone else, and nothing was made
+# @stdout the lock's directory, one line, the moment it is made
+# @stderr the reason, on refusal; "held: PATH" when the lock was taken
+#         already
+# @exit 0 PATH is locked; 1 PATH is refused, or the lock could not be
+#       finished and none of it is left; 2 PATH was locked already, and
+#       nothing was made
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
 #
 # MIT Licence. See LICENCE.TXT
 ##
-osPath=${1:?usage: create PATH SECONDS [WAIT]}
-nSeconds=${2:?usage: create PATH SECONDS [WAIT]}
-nWait=${3-0}
+osPath=${1:?usage: create PATH}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
-
-##
-# @fn vHeld()
-# @brief Say what holds PATH, and leave with 2.
-# @details Called when a lock could not be had in time, which is before
-#          anything is made, so there is nothing to clean up: the traps are
-#          cleared, and every lock and gate this create has goes with its
-#          descriptors. What holds PATH is every hold list says is up on
-#          PATH, above it, or under it. When there is none, what is in the
-#          way is a create waiting ahead, which has no hold yet to name.
-# @stderr "held by DIR: PATH" a line per hold in the way, or "held by a
-#         create waiting ahead: PATH"
-# @global pPath - read, the path asked for
-# @return does not return; it exits 2
-##
-vHeld() {
-  local pHold
-  local eState
-  local pHeld
-  local bNamed=
-  vDisarm
-  while read -r pHold eState pHeld; do
-    [ "$eState" = up ] || continue
-    [[ ${pPath%/}/ == "${pHeld%/}"/* || ${pHeld%/}/ == "${pPath%/}"/* ]] ||
-      continue
-    echo "held by $pHold: $pHeld" >&2
-    bNamed=1
-  done < <("$(dirname "$0")/list")
-  [ -n "$bNamed" ] || echo "held by a create waiting ahead: $pPath" >&2
-  exit 2
-}
-
-##
-# @fn vFlock()
-# @brief Take a lock on a descriptor, waiting no longer than WAIT allows.
-# @details flock waits in the background: a shell waiting on a foreground
-#          child runs a signal's trap only once the child is done. The lock
-#          belongs to the open file, not to a process, so what flock takes
-#          on this shell's descriptor is this shell's, and the hold's once
-#          it inherits it. flock says 1 when the lock was not had in time.
-# @param $1 eMode - -s for shared, -x for exclusive
-# @param $2 fdLock - the descriptor
-# @global nDeadline - read, when WAIT runs out, in $SECONDS
-# @global pidWait - set, flock's pid while it waits, and empty after
-# @return 0; it exits 2 by vHeld when the lock was not had in time, and
-#         under set -e a flock that fails otherwise ends the caller
-##
-vFlock() {
-  local eMode=$1
-  local fdLock=$2
-  local nLeft=$((nDeadline - SECONDS))
-  local nStatus=0
-  if [ "$nLeft" -gt 0 ]; then
-    flock "$eMode" -w "$nLeft" "$fdLock" &
-  else
-    flock "$eMode" -n "$fdLock" &
-  fi
-  pidWait=$!
-  wait "$pidWait" || nStatus=$?
-  pidWait=
-  [ "$nStatus" -ne 1 ] || vHeld
-  [ "$nStatus" -eq 0 ]
-}
-
-nSeconds=$(nCount SECONDS "$nSeconds")
-[ "$nSeconds" -gt 0 ] || {
-  echo "SECONDS must be more than zero" >&2
-  exit 1
-}
-nWait=$(nCount WAIT "$nWait")
-# The lock is on the path, and one path has many spellings, so every spelling
-# is made the one readlink -m makes before anything is named for it. The path
-# need not be there: a file is locked before it is written. A newline is
-# refused, before and after: $( ) drops a trailing one, which would lock some
-# other path, and the hold's directory keeps PATH as a line.
+# One path has many spellings, so every spelling is made the one readlink -m
+# makes before the lock is named for it. A newline is refused, before and
+# after: $( ) drops a trailing one, which would lock some other path, and the
+# lock keeps PATH as a line.
 pPath=$(readlink -m -- "$osPath")
 case $osPath/$pPath in
   *$'\n'*)
@@ -134,67 +37,27 @@ case $osPath/$pPath in
     exit 1
     ;;
 esac
-# One file per path, top down from / to PATH.
-IFS=/ read -r -a aParts <<< "${pPath#/}"
-aPrefixes=(/)
-pPrefix=
-for osPart in "${aParts[@]}"; do
-  pPrefix=$pPrefix/$osPart
-  aPrefixes+=("$pPrefix")
-done
-aLocks=()
-for pPrefix in "${aPrefixes[@]}"; do
-  osKey=$(printf '%s' "$pPrefix" | sha256sum)
-  aLocks+=("/tmp/icc-lock/${osKey%% *}")
-done
-nLocks=${#aLocks[@]}
-mkdir -p /tmp/icc-lock
-# Armed before anything is made, as icc-lib's vArm says. Each pid stays empty
-# until there is one, because kill 0 would signal the process group, and the
-# waiter's is emptied once it is done, because a pid is soon someone else's.
-# The waiter is waited for once it is killed, so a create cut off leaves
-# nothing waiting to take the lock after it has gone. Every lock and gate it
-# has goes with its descriptors when it exits.
+osKey=$(printf '%s' "$pPath" | sha256sum)
+pLock=/tmp/icc-lock-${osKey%% *}
+# Until the lock names its path it is not finished: a create that cannot
+# finish takes the directory with it. Armed before anything is made, as
+# icc-lib's vArm says, and the directory is made inside the $( ) whose
+# assignment a signal waits for, so the cleanup knows it once it is there.
 pDir=
-pidWait=
-pidHold=
-vArm 'if [ -n "$pidWait" ]; then
-        kill "$pidWait" 2>/dev/null || :
-        wait "$pidWait" 2>/dev/null || :
+vArm 'if [ -n "$pDir" ]; then
+        rm -f "$pDir/lock"
+        rmdir "$pDir" 2>/dev/null || :
       fi
-      [ -n "$pidHold" ] && kill "$pidHold" 2>/dev/null || :
-      [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
-# WAIT runs from here, over every lock there is to take.
-nDeadline=$((SECONDS + nWait))
-# Top down, each path's gate first. Above PATH the gate is only passed, and
-# the lock is shared; at PATH the gate is held until the lock is, and the lock
-# is exclusive, on fd 3, where list and remove look for it. Every wait is for
-# something further down than anything this create holds, so no two creates
-# can each wait on the other.
-iLock=0
-for pLock in "${aLocks[@]}"; do
-  exec {fdGate}<> "$pLock.gate"
-  vFlock -x "$fdGate"
-  iLock=$((iLock + 1))
-  if [ "$iLock" -lt "$nLocks" ]; then
-    exec {fdGate}<&-
-    exec {fdLock}<> "$pLock"
-    vFlock -s "$fdLock"
-  else
-    exec 3<> "$pLock"
-    vFlock -x 3
-    exec {fdGate}<&-
-  fi
-done
-pMakeDir icc-lock
-printf '%s\n' "$pPath" "$pLock" "${aLocks[@]:0:nLocks-1}" > "$pDir/lock"
-# The hold is a server, started as icc-lib's vServe says, and then sleep and
-# nothing else, holding every lock this shell took.
-(
-  vServe
-  exec sleep "$nSeconds"
-) </dev/null >/dev/null 2>&1 &
-pidHold=$!
-echo "$pidHold" > "$pDir/pid"
+pDir=$(mkdir -- "$pLock" 2>/dev/null && echo "$pLock") || {
+  vDisarm
+  [ -d "$pLock" ] || {
+    echo "cannot lock: $pPath" >&2
+    exit 1
+  }
+  echo "held: $pPath" >&2
+  exit 2
+}
+echo "$pDir"
+printf '%s\n' "$pPath" > "$pDir/lock"
 vDisarm

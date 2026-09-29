@@ -45,15 +45,6 @@ Nine Claude Code skills in one repo, under one `.claude/skills/`.
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage, and only a Claude can call that.
 
-## Held open
-
-One repo is a name with no design in it, on purpose. It says what the
-idea was, why it may not need to exist, and what would have to be true
-first.
-
-- [ICC-Switch](https://github.com/briancase1776/ICC-Switch) — a partition
-  taking one pattern, and why a party may already do it
-
 ## Running it
 
     git clone https://github.com/briancase1776/ICC

@@ -59,16 +59,6 @@ first.
     git clone https://github.com/briancase1776/ICC
     ./tests/run.sh
 
-If you had this repo while the pieces were submodules, pulling leaves
-all six of them in your working tree and says nothing: git drops the
-link and leaves the directory, so `git status` is clean while six stale
-checkouts sit beside the new `.claude/`, their old scripts still
-running from their old paths. Take them out once:
-
-    git submodule deinit -f . 2>/dev/null || :
-    rm -rf ICC-Pipes ICC-Frames ICC-Tee ICC-Merge ICC-Patch ICC-Bridge
-    rm -rf .git/modules
-
 Every piece's harness, bottom up: a payload bigger than one lane holds,
 pushed through pipes, fittings and shapes, and compared byte for byte at
 the far end.

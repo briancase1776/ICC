@@ -2,17 +2,19 @@
 ##
 # @file remove
 # @brief Give the lock on PATH back.
-# @details remove PATH. PATH is spelled any way that resolves to the path
-#          create was given. Whoever took the lock, remove gives it back:
-#          the lock is advisory, and one whose holder has gone is given back
-#          this way. Only what create made is taken, the lock file and then
-#          the directory, which rmdir leaves in place if anything else is in
-#          it.
+# @details remove PATH. PATH is named as create names it, by icc-lib's
+#          vLockOf, so any spelling that create would take gives back the
+#          same lock, and one create refuses, remove refuses too. Whoever
+#          took the lock, remove gives it back: the lock is advisory, and one
+#          whose holder has gone is given back this way. Only what create
+#          made is taken, the lock file and then the directory; a directory
+#          holding anything else is left as it is, lock file and all.
 # @stdin nothing
 # @stdout nothing
 # @stderr the reason, on refusal
-# @exit 0 the lock is given back; 1 PATH was not locked, or its directory
-#       held something create did not make and was left in place
+# @exit 0 the lock is given back; 1 PATH is refused or was not locked, or
+#       its directory held something create did not make and was left in
+#       place
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -21,16 +23,32 @@
 ##
 osPath=${1:?usage: remove PATH}
 set -eu
-# Named as create names it.
-pPath=$(readlink -m -- "$osPath")
-osKey=$(printf '%s' "$pPath" | sha256sum)
-pLock=/tmp/icc-lock-${osKey%% *}
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+shopt -s nullglob dotglob
+vLockOf "$osPath"
 [ -d "$pLock" ] || {
   echo "not locked: $pPath" >&2
   exit 1
 }
+# Looked at before anything goes: the lock file, or nothing when a create was
+# killed outright before it could write one. Anything else was not made here.
+aIn=("$pLock"/*)
+case ${#aIn[@]}:${aIn[0]-} in
+  0:|1:"$pLock/lock")
+    ;;
+  *)
+    echo "not a lock, left in place: $pLock" >&2
+    exit 1
+    ;;
+esac
 rm -f "$pLock/lock"
-rmdir "$pLock" || {
+# A lock already gone was given back by another remove between the look and
+# here, and is not locked; one still there was given something meanwhile.
+rmdir "$pLock" 2>/dev/null || {
+  [ -d "$pLock" ] || {
+    echo "not locked: $pPath" >&2
+    exit 1
+  }
   echo "not a lock, left in place: $pLock" >&2
   exit 1
 }

@@ -14,8 +14,9 @@
 #          directory made and printed at once; the cut-off check passing a
 #          command that arms first and failing one that does not; and cut
 #          off in a command it names, passing one that printed what it made
-#          and failing one that printed nothing. Runs in a directory of its
-#          own.
+#          and failing one that printed nothing; a lock named one way for
+#          every spelling of its path, and a newline refused; and a refusal
+#          passed and a success stopped. Runs in a directory of its own.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -156,6 +157,23 @@ printf '%s\n' '#!/bin/bash' "source '$pIccLib/lib'" 'pDir=' \
 chmod +x printer silent
 vCutOffAt TERM tr "$pWork/printer"
 (vCutOffAt TERM tr "$pWork/silent") 2>/dev/null && exit 1
+# A lock is named for its path in any spelling, the same way every time, and
+# a newline anywhere in the path is refused.
+pHere=$(pwd -P)
+(
+  vLockOf "$pHere/x"
+  osKey=$(printf '%s' "$pHere/x" | sha256sum)
+  [ "$pPath" = "$pHere/x" ]
+  [ "$pLock" = "/tmp/icc-lock-${osKey%% *}" ]
+  pFirst=$pLock
+  vLockOf ./four/../x
+  [ "$pLock" = "$pFirst" ]
+)
+(vLockOf $'x\n') 2>/dev/null && exit 1
+[ "$(vLockOf $'x\ny' 2>&1)" = "PATH has a newline in it" ]
+# vRefused passes a command that is refused, and stops at one that is not.
+(vRefused false)
+(vRefused true) 2>/dev/null && exit 1
 cd /
 rm -rf "$pWork"
 vDisarm

@@ -4,7 +4,8 @@ description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
   a seat's lanes read off Patch's map, cleanup armed before anything is
   made, a piece's directory made and printed at once, servers deaf to a
-  hangup, and the harnesses' cut-off checks. Not for a session to call;
+  hangup, a lock named for its path, and the harnesses' cut-off and
+  refusal checks. Not for a session to call;
   the other ICC skills need it beside them, in the same skills
   directory.
 ---
@@ -46,6 +47,10 @@ the lanes are Pipes', so reading one into the other is ICC's to write.
                           print it at once, before anything goes in it
     vServe                first thing in a hold or a copier: no traps,
                           and deaf to HUP, as a server under nohup is
+    vLockOf PATH          name the lock on PATH, as icc-lock's create
+                          and remove both do: set pPath to PATH as
+                          readlink -m spells it, and pLock to its
+                          directory; refuse a newline
     vCutOffAt SIGNAL STUB COMMAND...
                           for the harnesses: send SIGNAL to COMMAND
                           while it waits in STUB, and check it exits 1
@@ -53,6 +58,8 @@ the lanes are Pipes', so reading one into the other is ICC's to write.
                           first, or what a stand-in mktemp made
     vCutOff COMMAND...    vCutOffAt TERM mktemp COMMAND: just after its
                           first mktemp
+    vRefused COMMAND...   for the harnesses: run COMMAND, and stop when
+                          it is not refused
 
 A function that refuses says why on stderr and exits 1. Called in
 `$( )`, as the n functions are, that ends only the substitution, and

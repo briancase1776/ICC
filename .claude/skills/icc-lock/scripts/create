@@ -2,21 +2,30 @@
 ##
 # @file create
 # @brief Take the lock on PATH, or say it is held.
-# @details create PATH. The lock is a directory, /tmp/icc-lock-KEY, KEY the
-#          sha256 of PATH as readlink -m spells it, so every spelling of one
-#          path is one lock. mkdir(1) makes it or fails, and does either at
-#          once: of any number of creates for one path at once, one makes
-#          it and the rest are told it is held. PATH need not be there; a
-#          newline in it is refused. The directory holds one file, lock,
-#          naming PATH. The lock is held until remove gives it back: nothing
-#          else ends it, and nothing runs to hold it.
+# @details create PATH. The lock is a directory, /tmp/icc-lock-KEY, named
+#          for PATH as icc-lib's vLockOf names it: KEY the sha256 of PATH
+#          as readlink -m spells it, so every spelling of one path is one
+#          lock. PATH need not be there; a newline in it is refused.
+#          mkdir(1) makes it or fails, and does either at once: of any
+#          number of creates for one path at once, one makes it and the
+#          rest are told it is held. The directory holds one file, lock,
+#          naming PATH. The lock is held until remove gives it back:
+#          nothing else ends it, and nothing runs to hold it.
+#          mkdir is tried once more, and only once, when it failed and the
+#          lock was gone by the time create looked: that lock was given
+#          back in between, so the path was free, not held.
+#          The lock is taken and written down with INT, TERM and HUP held.
+#          One that comes meanwhile is honoured after: the lock is given
+#          back and create exits 1. So a create cut off by one leaves no
+#          lock behind, with its path or without.
 # @stdin nothing
-# @stdout the lock's directory, one line, the moment it is made
+# @stdout PATH as readlink -m spells it, once it is locked: what remove
+#         takes
 # @stderr the reason, on refusal; "held: PATH" when the lock was taken
 #         already
 # @exit 0 PATH is locked; 1 PATH is refused, or the lock could not be
-#       finished and none of it is left; 2 PATH was locked already, and
-#       nothing was made
+#       taken, or create was cut off, and none of it is left; 2 PATH was
+#       locked already, and nothing was made
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -26,38 +35,39 @@
 osPath=${1:?usage: create PATH}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
-# One path has many spellings, so every spelling is made the one readlink -m
-# makes before the lock is named for it. A newline is refused, before and
-# after: $( ) drops a trailing one, which would lock some other path, and the
-# lock keeps PATH as a line.
-pPath=$(readlink -m -- "$osPath")
-case $osPath/$pPath in
-  *$'\n'*)
-    echo "PATH has a newline in it" >&2
-    exit 1
-    ;;
-esac
-osKey=$(printf '%s' "$pPath" | sha256sum)
-pLock=/tmp/icc-lock-${osKey%% *}
+vLockOf "$osPath"
 # Until the lock names its path it is not finished: a create that cannot
 # finish takes the directory with it. Armed before anything is made, as
-# icc-lib's vArm says, and the directory is made inside the $( ) whose
-# assignment a signal waits for, so the cleanup knows it once it is there.
+# icc-lib's vArm says.
 pDir=
 vArm 'if [ -n "$pDir" ]; then
         rm -f "$pDir/lock"
         rmdir "$pDir" 2>/dev/null || :
       fi
       exit 1'
-pDir=$(mkdir -- "$pLock" 2>/dev/null && echo "$pLock") || {
-  vDisarm
-  [ -d "$pLock" ] || {
-    echo "cannot lock: $pPath" >&2
+# Held, not ignored, as Patch's create holds them while it makes a piece and
+# writes it down: a flag now, and the signal honoured once the lock says its
+# path. mkdir runs in a subshell that ignores them, and inherits that, so one
+# sent to the whole group cannot stop it between making the directory and
+# saying it did.
+bSignalled=
+trap 'bSignalled=1' INT TERM HUP
+iTry=0
+until osWhy=$(trap '' INT TERM HUP; mkdir -- "$pLock" 2>&1); do
+  iTry=$((iTry + 1))
+  if [ -d "$pLock" ]; then
+    vDisarm
+    echo "held: $pPath" >&2
+    exit 2
+  fi
+  [ "$iTry" -lt 2 ] || {
+    echo "cannot lock $pPath: $osWhy" >&2
     exit 1
   }
-  echo "held: $pPath" >&2
-  exit 2
-}
-echo "$pDir"
+done
+pDir=$pLock
 printf '%s\n' "$pPath" > "$pDir/lock"
+vStopOnSignal
+[ -z "$bSignalled" ] || exit 1
+echo "$pPath"
 vDisarm

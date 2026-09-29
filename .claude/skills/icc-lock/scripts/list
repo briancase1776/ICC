@@ -20,8 +20,9 @@ for pDir in /tmp/icc-lock-*/; do
   [ -d "$pDir" ] || continue
   pDir=${pDir%/}
   [[ ${pDir#/tmp/icc-lock-} =~ ^[0-9a-f]{64}$ ]] || continue
-  # Read quietly: a lock can be given back while this runs. stderr is
-  # silenced before the file is opened, or the open's own error still prints.
-  read -r pPath 2>/dev/null < "$pDir/lock" || pPath=
+  # Read whole, with IFS empty, so a space at either end of PATH stays. Read
+  # quietly: a lock can be given back while this runs, and stderr is silenced
+  # before the file is opened, or the open's own error still prints.
+  IFS= read -r pPath 2>/dev/null < "$pDir/lock" || pPath=
   echo "$pDir ${pPath:--}"
 done

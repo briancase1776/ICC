@@ -10,7 +10,8 @@
 #          it one way: counts checked, pipes checked, a seat's lanes read
 #          off Patch's map, cleanup armed before anything is made, a
 #          piece's directory made and printed at once, servers started
-#          deaf to a hangup, and the harnesses' cut-off checks. Sourcing
+#          deaf to a hangup, a lock named for its path, and the harnesses'
+#          cut-off and refusal checks. Sourcing
 #          turns on extglob, which the lane glob needs when this file is
 #          read.
 #          A function that refuses says why on stderr and exits 1. Called
@@ -309,6 +310,36 @@ vServe() {
 }
 
 ##
+# @fn vLockOf()
+# @brief Name the lock on a path: the path, and the lock's directory.
+# @details Called, not captured, by icc-lock's create and remove, so the
+#          two name every lock one way and refuse the same paths. The path
+#          is as readlink -m spells it, so every spelling of one path is
+#          one lock, and it need not be there. A newline is refused, before
+#          and after: $( ) drops a trailing one, which would name some other
+#          path's lock, and a lock keeps its path as a line.
+# @param $1 osPath - the path as given
+# @stderr the reason, on refusal
+# @global osWho - read, as nCount reads it
+# @global pPath - set, the path as readlink -m spells it
+# @global pLock - set, /tmp/icc-lock-KEY, KEY the sha256 of pPath
+# @return 0; it exits 1 instead when the path is refused
+##
+vLockOf() {
+  local osPath=$1
+  local osKey
+  pPath=$(readlink -m -- "$osPath") || exit 1
+  case $osPath/$pPath in
+    *$'\n'*)
+      echo "${osWho:+$osWho: }PATH has a newline in it" >&2
+      exit 1
+      ;;
+  esac
+  osKey=$(printf '%s' "$pPath" | sha256sum) || exit 1
+  pLock=/tmp/icc-lock-${osKey%% *}
+}
+
+##
 # @fn vCutOffAt()
 # @brief For the harnesses: cut a command off while it waits in one it
 #        runs, and check it goes and takes what it made with it.
@@ -375,4 +406,24 @@ vCutOffAt() {
 ##
 vCutOff() {
   vCutOffAt TERM mktemp "$@"
+}
+
+##
+# @fn vRefused()
+# @brief For the harnesses: run a command that must be refused, and stop
+#        if it is not.
+# @details set -e is ignored for a pipeline that begins with !, so `! cmd`
+#          states a refusal without ever being able to fail the harness.
+#          vRefused runs the command and stops if it succeeds.
+# @param $1... aCommand - the command and its arguments
+# @stderr "not refused" and the command, when it was not; the command's
+#         own stderr goes nowhere
+# @return 0 the command was refused; it exits 1 instead when it was not
+##
+vRefused() {
+  local aCommand=("$@")
+  if "${aCommand[@]}" 2>/dev/null; then
+    echo "not refused: ${aCommand[*]}" >&2
+    exit 1
+  fi
 }

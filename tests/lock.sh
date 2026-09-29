@@ -2,14 +2,18 @@
 ##
 # @file lock.sh
 # @brief Prove the lock: one holder per path, the rest told at once.
-# @details Prove the lock: bad arguments refused; a path locked, recorded
-#          and listed; every spelling of it told held, with nothing made;
-#          another path locked beside it; forty creates for one path at
-#          once, and exactly one of them the holder; remove giving a lock
-#          back by any spelling, refusing a path not locked, and leaving a
-#          look-alike in place; and list skipping what is not a lock.
-#          Locks paths in a directory of its own, and gives back every lock
-#          it took.
+# @details Prove the lock: bad arguments refused; a path locked, printed
+#          as remove takes it, recorded and listed, a space at its end and
+#          all; every spelling of it told held, with nothing made, and a
+#          spelling create refuses refused by remove too; another path
+#          locked beside it; forty creates for one path at once, and
+#          exactly one of them the holder; a lock given back between a
+#          failed mkdir and the look after it taken on the second try; a
+#          signal to create's whole group while it takes the lock leaving
+#          no lock at all; remove giving a lock back by any spelling,
+#          refusing a path not locked, saying so when another remove gave
+#          it back first, and leaving a look-alike whole. Locks paths in a
+#          directory of its own, and gives back every lock it took.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -27,38 +31,54 @@ source .claude/skills/icc-lib/scripts/lib
 pIccLock=$(cd .claude/skills/icc-lock/scripts && pwd)
 # Armed before anything is made, as icc-lib's vArm says: the one cleanup takes
 # whatever is named, so a check that fails leaves nothing of the harness's
-# own behind.
+# own behind. Every path the harness locks is in pWork, and pWork itself.
 pWork=
-pFake=
+pKept=
 vArm 'if [ -n "$pWork" ]; then
-        for osName in file other race kept; do
+        [ -z "$pKept" ] || rm -f "$pKept/kept"
+        for osName in file other race retry signal gone kept "sp "; do
           "$pIccLock/remove" "$pWork/$osName" 2>/dev/null || :
         done
+        "$pIccLock/remove" "$pWork" 2>/dev/null || :
       fi
-      [ -n "$pFake" ] && rm -rf "$pFake" || :
       cd /
       [ -n "$pWork" ] && rm -rf "$pWork" || :'
 pWork=$(mktemp -d)
 cd "$pWork"
 pWork=$(pwd -P)
+mkdir stub
 
 ##
-# @fn vRefused()
-# @brief Run a command that must be refused, and stop here if it is not.
-# @details set -e is ignored for a pipeline that begins with !, so `! cmd`
-#          states a refusal without ever being able to fail the harness.
-#          vRefused() runs the command and stops here if it succeeds.
-# @param $1... aCommand - the command and its arguments
-# @stderr "not refused" and the command, when it was not; the command's
-#         own stderr goes nowhere
-# @return 0 the command was refused; it exits 1 instead when it was not
+# @fn pLockOf()
+# @brief Print the directory a path is locked by.
+# @details Written out apart from icc-lib's vLockOf, as what it is held to:
+#          the sha256 of the path.
+# @param $1 pPath - the path, as readlink -m spells it
+# @stdout the directory
+# @return 0
 ##
-vRefused() {
-  local aCommand=("$@")
-  if "${aCommand[@]}" 2>/dev/null; then
-    echo "not refused: ${aCommand[*]}" >&2
-    exit 1
-  fi
+pLockOf() {
+  local pPath=$1
+  local osKey
+  osKey=$(printf '%s' "$pPath" | sha256sum)
+  echo "/tmp/icc-lock-${osKey%% *}"
+}
+
+##
+# @fn vStub()
+# @brief Stand a script in for a command, first on PATH, for one call.
+# @details The stand-in takes itself away first, with the real rm, so any
+#          later call is the real command. The real one and not whatever is
+#          first on PATH: a stand-in for rm would call itself, forever.
+# @param $1 osCommand - the command stood in for: mkdir, rm
+# @param $2... aLines - the script's lines after that
+# @return 0
+##
+vStub() {
+  local osCommand=$1
+  shift
+  printf '%s\n' '#!/bin/bash' 'command -p rm -- "$0"' "$@" > "stub/$osCommand"
+  chmod +x "stub/$osCommand"
 }
 
 # Refused: no PATH, and a newline anywhere in it, even the one $( ) would
@@ -67,11 +87,11 @@ vRefused "$pIccLock/create"
 vRefused "$pIccLock/create" $'fi\nle'
 vRefused "$pIccLock/create" $'file\n'
 vRefused "$pIccLock/remove"
-# Locked: the directory is named for the path as readlink -m spells it, holds
-# it as a line, and list says so.
-pLock=$("$pIccLock/create" file)
-osKey=$(printf '%s' "$pWork/file" | sha256sum)
-[ "$pLock" = "/tmp/icc-lock-${osKey%% *}" ]
+# Locked: create prints the path as readlink -m spells it, which is what
+# remove takes; the directory is named for it and holds it as a line; and
+# list says so.
+[ "$("$pIccLock/create" file)" = "$pWork/file" ]
+pLock=$(pLockOf "$pWork/file")
 [ "$(cat "$pLock/lock")" = "$pWork/file" ]
 "$pIccLock/list" | grep -qxF "$pLock $pWork/file"
 # Held, every spelling of it is told so at once, with 2, and nothing is
@@ -86,11 +106,16 @@ for osSpelling in file ./file sub/../file "$pWork//file" link/file; do
   [ "$(cat said)" = "held: $pWork/file" ]
 done
 [ "$(cat "$pLock/lock")" = "$pWork/file" ]
-# Another path is a lock of its own, and so is the directory above.
-"$pIccLock/create" other > /dev/null
-"$pIccLock/create" "$pWork" > /dev/null
-"$pIccLock/remove" other
-"$pIccLock/remove" "$pWork"
+# A spelling create refuses, remove refuses too, and gives back nothing.
+vRefused "$pIccLock/remove" $'file\n'
+[ -e "$pLock/lock" ]
+# Another path is a lock of its own, and so is the directory above; and a
+# path with a space at its end is listed with it.
+"$pIccLock/remove" "$("$pIccLock/create" other)"
+"$pIccLock/remove" "$("$pIccLock/create" "$pWork")"
+"$pIccLock/create" "sp " > /dev/null
+"$pIccLock/list" | grep -qxF "$(pLockOf "$pWork/sp ") $pWork/sp "
+"$pIccLock/remove" "sp "
 # Forty creates for one path at once: exactly one holds it, and thirty-nine
 # are told it is held.
 for iRacer in $(seq 40); do
@@ -104,28 +129,55 @@ wait
 [ "$(cat raced.* | grep -cx 0)" -eq 1 ]
 [ "$(cat raced.* | grep -cx 2)" -eq 39 ]
 "$pIccLock/remove" race
-# remove gives a lock back by any spelling, and then it can be taken again;
-# a path not locked is refused.
+# A lock given back between a mkdir that failed on it and the look after is
+# free, not held: create tries once more and takes it. The stand-in fails
+# the first mkdir and gives the lock back, as its holder would, then stands
+# aside.
+"$pIccLock/create" retry > /dev/null
+vStub mkdir 'command -p rm -f -- "$2/lock"' 'command -p rmdir -- "$2"' \
+  'exit 1'
+[ "$(PATH=$pWork/stub:$PATH "$pIccLock/create" retry)" = "$pWork/retry" ]
+"$pIccLock/remove" retry
+# A signal to create's whole group just after mkdir, as a tool call that is
+# cut off sends, leaves no lock, with its path or without: create finishes
+# taking it, gives it back, and exits 1, having printed nothing. setsid gives
+# create a group of its own, which the stand-in signals.
+vStub mkdir 'command -p mkdir "$@" || exit' 'kill -TERM 0'
+nStatus=0
+pOut=$(PATH=$pWork/stub:$PATH setsid -w "$pIccLock/create" signal) ||
+  nStatus=$?
+[ "$nStatus" -eq 1 ]
+[ -z "$pOut" ]
+[ ! -e "$(pLockOf "$pWork/signal")" ]
+# remove gives a lock back by any spelling, and then it can be taken again; a
+# path not locked is refused.
 "$pIccLock/remove" link/file
 [ ! -e "$pLock" ]
 [ "$("$pIccLock/remove" file 2>&1)" = "not locked: $pWork/file" ]
 vRefused "$pIccLock/remove" file
-[ "$("$pIccLock/create" file)" = "$pLock" ]
-"$pIccLock/remove" file
-# A lock that holds something create did not make is left in place, and the
-# something with it.
-pFake=$("$pIccLock/create" kept)
-: > "$pFake/kept"
+"$pIccLock/remove" "$("$pIccLock/create" file)"
+# A lock another remove gave back while this one looked is not locked, not
+# left in place: the stand-in for rm takes the whole lock away first.
+"$pIccLock/create" gone > /dev/null
+vStub rm 'command -p rm "$@"' 'command -p rmdir -- "${2%/*}"'
+[ "$(PATH=$pWork/stub:$PATH "$pIccLock/remove" gone 2>&1)" = \
+  "not locked: $pWork/gone" ]
+[ ! -e "$(pLockOf "$pWork/gone")" ]
+# A lock that holds something create did not make is left in place, whole:
+# the something, and the lock file with its path.
+"$pIccLock/create" kept > /dev/null
+pKept=$(pLockOf "$pWork/kept")
+: > "$pKept/kept"
 vRefused "$pIccLock/remove" kept
-[ -e "$pFake/kept" ]
-rm -f "$pFake/kept"
+[ -e "$pKept/kept" ]
+[ "$(cat "$pKept/lock")" = "$pWork/kept" ]
+rm -f "$pKept/kept"
+pKept=
 "$pIccLock/remove" kept
-pFake=
 # list skips a directory that is not a lock.
 pFake=$(mktemp -d /tmp/icc-lock-XXXXXXXX)
 [ -z "$("$pIccLock/list" | grep -F "$pFake")" ]
 rmdir "$pFake"
-pFake=
 cd /
 rm -rf "$pWork"
 vDisarm

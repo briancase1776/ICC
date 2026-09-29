@@ -20,24 +20,35 @@ back. That is all there is.
 
 ## Operations
 
-    scripts/create PATH   take the lock on PATH and print its directory;
-                          or, when someone has it, say "held: PATH" and
-                          exit 2
+    scripts/create PATH   take the lock on PATH and print PATH as
+                          readlink -m spells it; or, when someone has
+                          it, say "held: PATH" and exit 2
     scripts/list          one line per lock: DIR PATH
     scripts/remove PATH   give the lock on PATH back
 
 PATH is any path, there or not: a file can be locked before it is
 written. It is taken as `readlink -m` spells it, so `src/a.c`,
 `./src/a.c` and the same file through a symlink are one lock, and
-remove takes any of them.
+remove takes any of them, and what create printed.
 
-    scripts/create src/a.c    # one tool call: locked, or "held" and 2
-    # ... edit src/a.c, over as many tool calls as it takes ...
-    scripts/remove src/a.c    # another
+Name PATH absolutely. A relative path is read from the caller's own
+working directory, and no two holders need share one: the root is the
+only frame of reference every holder has in common.
 
-The scripts source icc-lib's shared functions from beside this skill,
-`../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
-to be installed with it.
+    scripts/create /home/me/proj/src/a.c    # locked, or "held" and 2
+    # ... edit it, over as many tool calls as it takes ...
+    scripts/remove /home/me/proj/src/a.c
+
+remove a lock only when your own create took it, with exit 0, and only
+once. remove gives back whoever's lock it finds; one said twice, or for
+a path you were told was held, gives back someone else's.
+
+A holder that needs several paths and is told a later one is held gives
+back the ones it already took, and tries again later.
+
+create and remove source icc-lib's shared functions from beside this
+skill, `../../icc-lib/scripts/lib` in the same skills directory, so
+icc-lib has to be installed with it.
 
 ## Facts about the lock
 
@@ -48,7 +59,14 @@ to be installed with it.
 - One holder. mkdir either makes the directory or finds it there, as one
   step, so of any number of creates at once exactly one makes it.
 - No waiting. create answers at once. Held means held: do something
-  else and ask again later.
+  else and ask again later. When mkdir fails and the lock is gone by
+  the time create looks, it was given back in between: create tries
+  mkdir once more, and only once.
+- A create cut off by INT, TERM or HUP, sent to it or to its whole
+  process group, leaves no lock: it holds the signal until the lock says
+  its path, then gives the lock back and exits 1. KILL cannot be held. A create
+  killed outright as it takes the lock can leave it, with or without its
+  path, as any holder that dies leaves its lock.
 - No end. A lock is held until remove, and nothing else ends it. A lock
   that ran out on its own would let a second holder in while the first
   was still at work. So a holder that stops without remove leaves its

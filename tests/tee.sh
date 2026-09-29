@@ -64,25 +64,6 @@ pPipeB=$("$pIccPipes/create" 6)
 pPipeC=$("$pIccPipes/create" 6)
 pNarrow=$("$pIccPipes/create" 2)
 
-##
-# @fn vRefused()
-# @brief Run a command that must be refused, and stop here if it is not.
-# @details set -e is ignored for a pipeline that begins with !, so `! cmd`
-#          states a refusal without ever being able to fail the harness.
-#          vRefused() runs the command and stops here if it succeeds.
-# @param $1... aCommand - the command and its arguments
-# @stderr "not refused" and the command, when it was not; the command's
-#         own stderr goes nowhere
-# @return 0 the command was refused; it exits 1 instead when it was not
-##
-vRefused() {
-  local aCommand=("$@")
-  if "${aCommand[@]}" 2>/dev/null; then
-    echo "not refused: ${aCommand[*]}" >&2
-    exit 1
-  fi
-}
-
 vRefused "$pIccTee/create" "$pPipeA" 0
 vRefused "$pIccTee/create" "$pPipeA" 2 "$pPipeB"
 vRefused "$pIccTee/create" "$pPipeA" 0 "$pNarrow"

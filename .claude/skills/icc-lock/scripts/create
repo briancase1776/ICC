@@ -1,29 +1,20 @@
 #!/bin/bash
 ##
 # @file create
-# @brief Take the lock on PATH, or say it is held.
+# @brief Take the lock on PATH.
 # @details create PATH. The lock is a directory, /tmp/icc-lock-KEY, named
 #          for PATH as icc-lib's vLockOf names it: KEY the sha256 of PATH
 #          as readlink -m spells it, so every spelling of one path is one
 #          lock. PATH need not be there; a newline in it is refused.
 #          mkdir(1) makes it or fails, and does either at once: of any
 #          number of creates for one path at once, one makes it and the
-#          rest are told it is held. Then the lock file goes in it, naming
-#          PATH, and PATH is printed. The lock is held until remove gives it
+#          rest are refused. mkdir says why: File exists is held, and
+#          anything else is a fault. The lock is held until remove gives it
 #          back: nothing else ends it, and nothing runs to hold it.
-#          mkdir is tried once more, and only once, when it failed and the
-#          lock was gone by the time create looked: that lock was given
-#          back in between, so the path was free, not held.
-#          A create cut off once mkdir has made the lock leaves it, as any
-#          holder that dies leaves its lock: with its path, or, cut off
-#          before the lock file, without.
 # @stdin nothing
-# @stdout PATH as readlink -m spells it, once it is locked: what remove
-#         takes
-# @stderr the reason, on refusal; "held: PATH" when the lock was taken
-#         already
-# @exit 0 PATH is locked; 1 PATH is refused, or the lock could not be
-#       taken; 2 PATH was locked already, and nothing was made
+# @stdout PATH as readlink -m spells it, once it is locked
+# @stderr the reason, on refusal: mkdir's own when the lock is not made
+# @exit 0 PATH is locked; 1 it is not
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -34,17 +25,5 @@ osPath=${1:?usage: create PATH}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
 vLockOf "$osPath"
-iTry=0
-until osWhy=$(mkdir -- "$pLock" 2>&1); do
-  [ ! -d "$pLock" ] || {
-    echo "held: $pPath" >&2
-    exit 2
-  }
-  iTry=$((iTry + 1))
-  [ "$iTry" -lt 2 ] || {
-    echo "cannot lock $pPath: $osWhy" >&2
-    exit 1
-  }
-done
-printf '%s\n' "$pPath" > "$pLock/lock"
+mkdir -- "$pLock"
 echo "$pPath"

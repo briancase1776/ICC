@@ -1,13 +1,12 @@
 #!/bin/bash
 ##
 # @file list
-# @brief One line per lock: its directory, and the path it locks.
+# @brief One line per lock: its directory.
 # @details list takes nothing. A lock is a /tmp/icc-lock-KEY directory, KEY
-#          sixty-four hex digits; anything else is skipped. PATH is read
-#          from its lock file, and is - when there is none: a create that
-#          has not finished yet, or one killed outright before it could say.
+#          sixty-four hex digits, the sha256 of the path it locks; anything
+#          else is skipped. Which path that is, is not written down.
 # @stdin nothing
-# @stdout "DIR PATH", one line per lock, in glob order
+# @stdout the lock's directory, one line per lock, in glob order
 # @stderr nothing
 # @exit 0, with locks or without
 #
@@ -20,9 +19,5 @@ for pDir in /tmp/icc-lock-*/; do
   [ -d "$pDir" ] || continue
   pDir=${pDir%/}
   [[ ${pDir#/tmp/icc-lock-} =~ ^[0-9a-f]{64}$ ]] || continue
-  # Read whole, with IFS empty, so a space at either end of PATH stays. Read
-  # quietly: a lock can be given back while this runs, and stderr is silenced
-  # before the file is opened, or the open's own error still prints.
-  IFS= read -r pPath 2>/dev/null < "$pDir/lock" || pPath=
-  echo "$pDir ${pPath:--}"
+  echo "$pDir"
 done

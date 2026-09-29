@@ -317,7 +317,7 @@ vServe() {
 #          is as readlink -m spells it, so every spelling of one path is
 #          one lock, and it need not be there. A newline is refused, before
 #          and after: $( ) drops a trailing one, which would name some other
-#          path's lock, and a lock keeps its path as a line.
+#          path's lock.
 # @param $1 osPath - the path as given
 # @stderr the reason, on refusal
 # @global osWho - read, as nCount reads it

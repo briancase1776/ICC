@@ -9,8 +9,8 @@
 #          locked beside it; forty creates for one path at once, and
 #          exactly one of them the holder; a lock given back between a
 #          failed mkdir and the look after it taken on the second try; a
-#          signal to create's whole group while it takes the lock leaving
-#          no lock at all; remove giving a lock back by any spelling,
+#          lock cut off before it said its path listed with -, held, and
+#          given back by its path; remove giving a lock back by any spelling,
 #          refusing a path not locked, saying so when another remove gave
 #          it back first, and leaving a look-alike whole. Locks paths in a
 #          directory of its own, and gives back every lock it took.
@@ -36,7 +36,7 @@ pWork=
 pKept=
 vArm 'if [ -n "$pWork" ]; then
         [ -z "$pKept" ] || rm -f "$pKept/kept"
-        for osName in file other race retry signal gone kept "sp "; do
+        for osName in file other race retry dead gone kept "sp "; do
           "$pIccLock/remove" "$pWork/$osName" 2>/dev/null || :
         done
         "$pIccLock/remove" "$pWork" 2>/dev/null || :
@@ -138,17 +138,17 @@ vStub mkdir 'command -p rm -f -- "$2/lock"' 'command -p rmdir -- "$2"' \
   'exit 1'
 [ "$(PATH=$pWork/stub:$PATH "$pIccLock/create" retry)" = "$pWork/retry" ]
 "$pIccLock/remove" retry
-# A signal to create's whole group just after mkdir, as a tool call that is
-# cut off sends, leaves no lock, with its path or without: create finishes
-# taking it, gives it back, and exits 1, having printed nothing. setsid gives
-# create a group of its own, which the stand-in signals.
-vStub mkdir 'command -p mkdir "$@" || exit' 'kill -TERM 0'
+# A create cut off between mkdir and the lock file leaves a lock that does
+# not say its path, as any holder that dies leaves its lock: list shows it
+# with -, it is held, and remove gives it back by its path.
+pDead=$(pLockOf "$pWork/dead")
+mkdir "$pDead"
+"$pIccLock/list" | grep -qxF "$pDead -"
 nStatus=0
-pOut=$(PATH=$pWork/stub:$PATH setsid -w "$pIccLock/create" signal) ||
-  nStatus=$?
-[ "$nStatus" -eq 1 ]
-[ -z "$pOut" ]
-[ ! -e "$(pLockOf "$pWork/signal")" ]
+"$pIccLock/create" dead 2>/dev/null || nStatus=$?
+[ "$nStatus" -eq 2 ]
+"$pIccLock/remove" dead
+[ ! -e "$pDead" ]
 # remove gives a lock back by any spelling, and then it can be taken again; a
 # path not locked is refused.
 "$pIccLock/remove" link/file

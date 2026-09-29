@@ -8,24 +8,22 @@
 #          lock. PATH need not be there; a newline in it is refused.
 #          mkdir(1) makes it or fails, and does either at once: of any
 #          number of creates for one path at once, one makes it and the
-#          rest are told it is held. The directory holds one file, lock,
-#          naming PATH. The lock is held until remove gives it back:
-#          nothing else ends it, and nothing runs to hold it.
+#          rest are told it is held. Then the lock file goes in it, naming
+#          PATH, and PATH is printed. The lock is held until remove gives it
+#          back: nothing else ends it, and nothing runs to hold it.
 #          mkdir is tried once more, and only once, when it failed and the
 #          lock was gone by the time create looked: that lock was given
 #          back in between, so the path was free, not held.
-#          The lock is taken and written down with INT, TERM and HUP held.
-#          One that comes meanwhile is honoured after: the lock is given
-#          back and create exits 1. So a create cut off by one leaves no
-#          lock behind, with its path or without.
+#          A create cut off once mkdir has made the lock leaves it, as any
+#          holder that dies leaves its lock: with its path, or, cut off
+#          before the lock file, without.
 # @stdin nothing
 # @stdout PATH as readlink -m spells it, once it is locked: what remove
 #         takes
 # @stderr the reason, on refusal; "held: PATH" when the lock was taken
 #         already
 # @exit 0 PATH is locked; 1 PATH is refused, or the lock could not be
-#       taken, or create was cut off, and none of it is left; 2 PATH was
-#       locked already, and nothing was made
+#       taken; 2 PATH was locked already, and nothing was made
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -36,38 +34,17 @@ osPath=${1:?usage: create PATH}
 set -eu
 source "$(dirname "$0")/../../icc-lib/scripts/lib"
 vLockOf "$osPath"
-# Until the lock names its path it is not finished: a create that cannot
-# finish takes the directory with it. Armed before anything is made, as
-# icc-lib's vArm says.
-pDir=
-vArm 'if [ -n "$pDir" ]; then
-        rm -f "$pDir/lock"
-        rmdir "$pDir" 2>/dev/null || :
-      fi
-      exit 1'
-# Held, not ignored, as Patch's create holds them while it makes a piece and
-# writes it down: a flag now, and the signal honoured once the lock says its
-# path. mkdir runs in a subshell that ignores them, and inherits that, so one
-# sent to the whole group cannot stop it between making the directory and
-# saying it did.
-bSignalled=
-trap 'bSignalled=1' INT TERM HUP
 iTry=0
-until osWhy=$(trap '' INT TERM HUP; mkdir -- "$pLock" 2>&1); do
-  iTry=$((iTry + 1))
-  if [ -d "$pLock" ]; then
-    vDisarm
+until osWhy=$(mkdir -- "$pLock" 2>&1); do
+  [ ! -d "$pLock" ] || {
     echo "held: $pPath" >&2
     exit 2
-  fi
+  }
+  iTry=$((iTry + 1))
   [ "$iTry" -lt 2 ] || {
     echo "cannot lock $pPath: $osWhy" >&2
     exit 1
   }
 done
-pDir=$pLock
-printf '%s\n' "$pPath" > "$pDir/lock"
-vStopOnSignal
-[ -z "$bSignalled" ] || exit 1
+printf '%s\n' "$pPath" > "$pLock/lock"
 echo "$pPath"
-vDisarm

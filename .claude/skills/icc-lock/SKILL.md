@@ -62,11 +62,10 @@ icc-lib has to be installed with it.
   else and ask again later. When mkdir fails and the lock is gone by
   the time create looks, it was given back in between: create tries
   mkdir once more, and only once.
-- A create cut off by INT, TERM or HUP, sent to it or to its whole
-  process group, leaves no lock: it holds the signal until the lock says
-  its path, then gives the lock back and exits 1. KILL cannot be held. A create
-  killed outright as it takes the lock can leave it, with or without its
-  path, as any holder that dies leaves its lock.
+- A create cut off once mkdir has made the lock leaves it, as any holder
+  that dies leaves its lock. Cut off before the lock file is written,
+  the lock does not say its path, and list shows - for it; remove takes
+  it by its path all the same.
 - No end. A lock is held until remove, and nothing else ends it. A lock
   that ran out on its own would let a second holder in while the first
   was still at work. So a holder that stops without remove leaves its

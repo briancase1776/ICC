@@ -50,9 +50,10 @@ across the session line as a SendMessage, and only a Claude can call that.
     git clone https://github.com/briancase1776/ICC
     ./tests/run.sh
 
-Every piece's harness, bottom up: a payload bigger than one lane holds,
-pushed through pipes, fittings and shapes, and compared byte for byte at
-the far end.
+Every piece's harness, bottom up, each proving its own piece against the
+pieces below it. From Frames up, that is a payload bigger than one lane
+holds, pushed through pipes, fittings and shapes, and compared byte for
+byte at the far end.
 
 ## What it will not do
 

@@ -8,13 +8,12 @@
 #              source "$(dirname "$0")/../../icc-lib/scripts/lib"
 #          What is here is what more than one piece does, so they all do
 #          it one way: counts checked, pipes checked, a seat's lanes read
-#          off Patch's map and waited on without taking from them,
-#          cleanup armed before anything is made, a
-#          piece's directory made and printed at once, servers started
-#          deaf to a hangup, a lock named for its path, and the harnesses'
-#          cut-off and refusal checks. Sourcing
-#          turns on extglob, which the lane glob needs when this file is
-#          read.
+#          off Patch's map and waited on without taking from them, cleanup
+#          armed before anything is made, a piece's directory made and
+#          printed at once, servers started deaf to a hangup, a lock named
+#          for its path, and the harnesses' cut-off and refusal checks.
+#          Sourcing turns on extglob, which the lane glob needs when this
+#          file is read.
 #          A function that refuses says why on stderr and exits 1. Called
 #          in $( ), that exit ends only the substitution, and bash does
 #          not carry set -e into one: the caller assigns the result, and
@@ -238,18 +237,22 @@ oLanes() {
 #          anything: a reader cut off while it waits has taken nothing and
 #          can be called again, where one cut off partway through its
 #          reading has lost what it took. read -t 0 looks at a lane without
-#          taking from it, as Merge's copier does, and the lanes are held
-#          open, as Pipes holds them, so opening one to look waits for
-#          nothing. It gives up at nine tenths of the time the caller's
-#          call may run, so it says so before the call is cut off: the
-#          milliseconds in BASH_MAX_TIMEOUT_MS, as Claude Code names that
-#          time, when they are a number, and 600000, Claude Code's own,
-#          when not. A lane that is not a fifo is refused at once rather
-#          than waited on.
+#          taking from it, as Merge's copier does. The lane is opened to
+#          read and write, which on a fifo waits for nothing: a lane whose
+#          holder is gone is looked at and found empty, where opened only
+#          to read it would hang the look, deadline and all. Before every
+#          look it checks the lane is still a fifo and refuses it at once
+#          if not, so a lane taken away while it waits is refused then,
+#          and never opened: opened to read and write, a path that is gone
+#          would be made. It gives up at nine tenths of the time the
+#          caller's call may run, so it says so before the call is cut
+#          off: the milliseconds in BASH_MAX_TIMEOUT_MS, as Claude Code
+#          names that time, when nCount takes them as a count, and 600000,
+#          Claude Code's own, when not.
 # @param $1 pPatch - the patch, as Patch's create printed it
 # @param $2 osSeat - the seat, as the map spells it
 # @stderr "not yet, nothing taken" when the time runs out first; "not a
-#         lane" and the path, for one that is not a fifo
+#         lane" and the path, for one that is not a fifo or no longer is
 # @global osWho - read, as nCount reads it
 # @global BASH_MAX_TIMEOUT_MS - read
 # @return 0 every lane has something on it; it exits 1 instead when the
@@ -258,17 +261,21 @@ oLanes() {
 vWaitFor() {
   local pPatch=$1
   local osSeat=$2
-  local nMs=${BASH_MAX_TIMEOUT_MS:-600000}
+  local nMs
   local nEnd
   local pLane
-  [[ $nMs =~ ^[0-9]+$ ]] || nMs=600000
+  nMs=$(nCount ms "${BASH_MAX_TIMEOUT_MS:-600000}" 2>/dev/null) ||
+    nMs=600000
   nEnd=$((SECONDS + nMs * 9 / 10000))
   while read -r pLane _; do
-    [ -p "$pLane" ] || {
-      echo "${osWho:+$osWho: }not a lane: $pLane" >&2
-      exit 1
-    }
-    until read -t 0 < "$pLane"; do
+    while :; do
+      [ -p "$pLane" ] || {
+        echo "${osWho:+$osWho: }not a lane: $pLane" >&2
+        exit 1
+      }
+      if read -t 0 <> "$pLane"; then
+        break
+      fi
       [ "$SECONDS" -lt "$nEnd" ] || {
         echo "${osWho:+$osWho: }not yet, nothing taken" >&2
         exit 1

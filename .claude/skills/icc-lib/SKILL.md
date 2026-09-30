@@ -3,11 +3,10 @@ name: icc-lib
 description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
   a seat's lanes read off Patch's map and waited on without taking from
-  them, cleanup armed before anything is
-  made, a piece's directory made and printed at once, servers deaf to a
-  hangup, a lock named for its path, and the harnesses' cut-off and
-  refusal checks. Not for a session to call;
-  the other ICC skills need it beside them, in the same skills
+  them, cleanup armed before anything is made, a piece's directory made
+  and printed at once, servers deaf to a hangup, a lock named for its
+  path, and the harnesses' cut-off and refusal checks. Not for a session
+  to call; the other ICC skills need it beside them, in the same skills
   directory.
 ---
 
@@ -44,6 +43,8 @@ into the other is ICC's to write.
                           on it, taking nothing; or say "not yet, nothing
                           taken" and exit 1 at nine tenths of
                           BASH_MAX_TIMEOUT_MS, 600000 when it is unset
+                          or not a count; refuse a lane that is not a
+                          fifo, before every look
     vArm CLEANUP          arm CLEANUP on EXIT, and INT, TERM and HUP to
                           exit 1, before anything is made
     vStopOnSignal         INT, TERM and HUP exit 1 again, after a handler

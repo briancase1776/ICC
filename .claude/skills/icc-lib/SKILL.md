@@ -2,7 +2,8 @@
 name: icc-lib
 description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
-  a seat's lanes read off Patch's map, cleanup armed before anything is
+  a seat's lanes read off Patch's map and waited on without taking from
+  them, cleanup armed before anything is
   made, a piece's directory made and printed at once, servers deaf to a
   hangup, a lock named for its path, and the harnesses' cut-off and
   refusal checks. Not for a session to call;
@@ -22,9 +23,10 @@ A session has no reason to call it. It is a skill so that it travels
 with the others: install the ICC skills together, into one skills
 directory.
 
-oLanes is the one no piece calls. It is for a script that sits at a
-seat and wants its lanes, and it is here because the map is Patch's and
-the lanes are Pipes', so reading one into the other is ICC's to write.
+oLanes and vWaitFor are the two no piece calls. They are for a script
+that sits at a seat and wants its lanes, or waits on them, and they are
+here because the map is Patch's and the lanes are Pipes', so reading one
+into the other is ICC's to write.
 
 ## The functions
 
@@ -38,6 +40,10 @@ the lanes are Pipes', so reading one into the other is ICC's to write.
     oLanes PATCH SEAT w|r the lanes SEAT writes, one per line; or those
                           it reads, each with the seats that write into
                           it: off Patch's map, as Pipes and Patch say
+    vWaitFor PATCH SEAT   wait until every lane SEAT reads has something
+                          on it, taking nothing; or say "not yet, nothing
+                          taken" and exit 1 at nine tenths of
+                          BASH_MAX_TIMEOUT_MS, 600000 when it is unset
     vArm CLEANUP          arm CLEANUP on EXIT, and INT, TERM and HUP to
                           exit 1, before anything is made
     vStopOnSignal         INT, TERM and HUP exit 1 again, after a handler

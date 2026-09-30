@@ -8,7 +8,10 @@
 #          piece has to make, and refused when a pipe is not one, is odd,
 #          differs, or has a file for a lane; a seat's lanes read off a
 #          map, a fitting's one way and a shared pipe's both, at every
-#          lane, and no seat by another spelling; a cleanup armed that INT,
+#          lane, and no seat by another spelling; a wait on a seat's lanes
+#          that says not yet while one is empty, is done when all have
+#          something, takes nothing, and refuses a lane that is not a
+#          fifo; a cleanup armed that INT,
 #          TERM and HUP each run and exit 1, and that vDisarm clears; a
 #          server that a hangup leaves standing and TERM ends; a piece's
 #          directory made and printed at once; the cut-off check passing a
@@ -96,6 +99,31 @@ printf '%s\n' 'star 1 6 1' '0 0 s p' 'p 1 s 0' > star/patch
 [ "$(oLanes star 0 r)" = "$(printf 's/%s p\n' 1 3 5)" ]
 [ "$(oLanes star p w)" = "$(printf 's/%s\n' 1 3 5)" ]
 [ "$(oLanes star p r)" = "$(printf 's/%s 0\n' 0 2 4)" ]
+# A wait on a seat's lanes, held open here as Pipes holds them: not yet
+# while one is empty, at once when the time is short, and at nine tenths
+# of three seconds, osWho in front; done when every one has something, a
+# limit that is not a number read as the default; and what was on the
+# lane still there. A lane that is not a fifo is refused, not waited on.
+mkdir in01 inp
+mkfifo in01/0 in01/1 inp/0 inp/1
+exec {fdIn01}<>in01/0 {fdInp}<>inp/0
+[ "$(BASH_MAX_TIMEOUT_MS=1000 vWaitFor meshp 0 2>&1)" = \
+  "not yet, nothing taken" ]
+nStart=$SECONDS
+[ "$(osWho=hear BASH_MAX_TIMEOUT_MS=3000 vWaitFor meshp p 2>&1)" = \
+  "hear: not yet, nothing taken" ]
+nWaited=$((SECONDS - nStart))
+[ "$nWaited" -ge 2 ]
+[ "$nWaited" -le 4 ]
+printf 'said\n' > in01/0
+(BASH_MAX_TIMEOUT_MS=1000 vWaitFor meshp 0)
+(BASH_MAX_TIMEOUT_MS=x vWaitFor meshp 0)
+read -r -t 1 -u "$fdIn01" osSaid
+[ "$osSaid" = said ]
+exec {fdIn01}<&- {fdInp}<&-
+mkdir nolane
+printf '%s\n' 'mesh-p 2 2 1' '0 1 gone 1' > nolane/patch
+[ "$(vWaitFor nolane 0 2>&1)" = "not a lane: gone/0" ]
 # A cleanup armed runs on every signal it names, and the exit is 1.
 for osSignal in INT TERM HUP; do
   nStatus=0

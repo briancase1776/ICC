@@ -43,7 +43,8 @@ rather than hangs when you ask for more than the wire holds.
 Nine Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
-across the session line as a SendMessage, and only a Claude can call that.
+across the session line as a SendMessage or a Routine, and only a Claude
+can call those.
 
 ## Running it
 

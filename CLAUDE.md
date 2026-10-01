@@ -37,8 +37,6 @@ rule below.
   drift apart.
 - **Small.** If a file is getting long, you are adding scope, not
   features.
-- **No speculative work.** Build what is asked, not what might be asked
-  later.
 - **Keep the lines sharp.** Between one piece and the next, and between
   all of them and the session using them. Change is not what this guards
   against: add a piece, change what one does, retire one, that is the

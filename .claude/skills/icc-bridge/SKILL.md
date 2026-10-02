@@ -1,6 +1,7 @@
 ---
 name: icc-bridge
 description: >-
+  Currently unavailable.
   Take an icc-frames payload off an icc-pipes pipe as text a message can
   carry, a SendMessage or a Routine, and put such text back on a pipe as
   the payload it spells. The same bytes on the far wire as on the near

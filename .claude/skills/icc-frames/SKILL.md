@@ -1,6 +1,7 @@
 ---
 name: icc-frames
 description: >-
+  Currently unavailable.
   Write something big down an icc-pipes pipe and read it back whole. Slices
   a payload into frames, spreads them over the lanes, reassembles them in
   order on the other end. What the bytes mean is the caller's business.

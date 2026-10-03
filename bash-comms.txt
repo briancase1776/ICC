@@ -2,11 +2,12 @@ bash-comms.txt
 
 Bash for the Wire
 
-How to use bash to move bytes between whoever holds the ends, in one
-container, and have it behave. Each recipe is what ICC's pieces do, with
-the reason they do it that way. It covers lanes, locks and the two
-fittings, not patches, frames or bridges. How a bash file is named and
-laid out is bash-practices.txt.
+The bash that makes ICC's wire work: each bit, how it works, and what
+goes wrong without it. It is not a guide to ICC's pieces; their SKILL.md
+files are that. Patches, frames and bridges are left out. How a bash
+file is named and laid out is bash-practices.txt.
+
+Every claim here was run on Linux, bash 5.2 and GNU coreutils.
 
 Copyright (c) 2026 Brian Case. All rights reserved.
 AI contributor: Claude (Anthropic)
@@ -15,154 +16,178 @@ MIT Licence. See LICENCE.TXT
 
 The Lane
 
-A lane is a FIFO: a file that is a queue. Bytes written in come out
-when read, in order, once.
+A lane is a FIFO: a file that is a queue. What is written comes out
+when read, in order, once. Read bytes are gone.
 
-- Make one.
-      mkfifo "$pDir/0"
+    pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
+    mkfifo "$pDir/0" "$pDir/1"
 
-- Hold it open, both ways, in a process that stays.
+- Held open, nothing waits on an open.
       exec 3<> "$pDir/0"
       ( trap '' HUP; exec sleep infinity ) </dev/null >/dev/null 2>&1 &
-  Opening a FIFO normally waits for the other end. Opened read-write it
-  waits for nothing, on Linux, and while the sleep holds it so, no one
-  else's open waits either. The sleep inherits fd 3 and ignores a
-  hangup, so the lane outlives the shell that made it.
+  Opening a FIFO waits until someone opens the other end. Opened both
+  ways (<>) it waits for nothing, and a sleep that holds it so is
+  always that other end, so nobody's open ever waits. The sleep keeps
+  fd 3 after the shell that made it is gone.
 
-- Write a little: one printf.
-      printf '%s' "$osBytes" > "$pDir/0"
-  One write of at most 4096 bytes, PIPE_BUF, lands whole: no other
-  writer's bytes can land inside it.
+- A write of 4096 bytes or less lands whole.
+      env printf '%s' "$osBytes" > "$pDir/0"
+  4096 is PIPE_BUF. One write that size or smaller arrives in one
+  piece: no other writer's bytes land inside it. Bigger writes from two
+  writers tear into each other. Use env printf, which is coreutils':
+  bash's own printf splits text with newlines into many writes (300
+  short lines went out as 54).
 
-- Write a lot: dd.
+- dd moves a lot, 4096 at a time.
       dd of="$pDir/0" bs=4096 status=none < "$pFile"
-  Every write dd makes is at most 4096, so each lands whole. Not cat:
-  its writes have no such bound. Not iflag=fullblock: it waits to fill
-  a block, which stalls a lane that goes quiet.
+  Every write dd makes is at most 4096, so each lands whole, and it
+  passes on each read at once. cat writes 128K at a time, past PIPE_BUF.
 
-- Read, always with a limit.
-      timeout 1 dd if="$pDir/1" bs=4096 status=none
-  A held lane never says end of file, so a bare read waits forever. In
-  Claude Code that hangs the tool call. timeout prints what came and
-  exits 124: that is the limit running out, not a failure. The read
-  costs the whole limit every time.
+- A read needs a limit.
+      osGot=$(timeout 1 dd if="$pDir/1" bs=4096 status=none)
+  A held lane never says end of file, so a bare read waits forever and
+  hangs the tool call. timeout gives you what came, and exit 124: time
+  ran out, nothing broke. It always costs the whole second.
+  Two catches. timeout can kill dd after it took a block and before it
+  printed it, and that block is gone; on a lane still being written,
+  look first and take only what is there (below). And timeout signals
+  its whole process group: with job control on, as in Claude Code's
+  Bash tool, everything after a | dies with it. Capture with $( ) or
+  > file, never a pipe.
 
-- Look without taking.
+- read -t 0 looks without taking.
       [ -p "$pLane" ] && read -t 0 <> "$pLane"
-  read -t 0 takes nothing; its status says whether bytes are waiting.
-  Opened read-write, the look never waits on an open, even on a lane
-  whose holder is gone. Check -p first: <> on a path that is gone makes
-  a plain file there.
+  It reads nothing. It succeeds if bytes are waiting and fails if not.
+  <> opens the lane both ways, so the look cannot hang even when the
+  holder is gone. Test -p first: <> on a path that is gone makes a
+  plain file there.
 
-- Wait until something comes, still taking nothing.
+- Taking only what is there loses nothing.
+      while [ -p "$pLane" ] && read -t 0 <> "$pLane"; do
+        dd bs=4096 count=1 status=none <> "$pLane"
+      done
+  Nothing kills dd partway, so no block is lost.
+
+- Waiting by looking takes nothing, so giving up is safe.
       nEnd=$((SECONDS + 30))
-      until read -t 0 <> "$pLane"; do
+      while :; do
+        [ -p "$pLane" ] || exit 1
+        read -t 0 <> "$pLane" && break
         [ "$SECONDS" -lt "$nEnd" ] || exit 1
         sleep 1
       done
-  A reader stopped while it waits has lost nothing. One stopped partway
-  through reading has lost what it took.
 
-Rules of the Lane
+- read -r keeps a line's edges.
+      IFS= read -r -t 1 osLine <> "$pDir/1"
+  On a FIFO, read takes one byte at a time and stops at the newline,
+  leaving the rest on the lane for the next read.
 
-- One way. Agree who writes a lane and who reads it before anyone
-  does. In ICC side 0 writes the even lanes and side 1 the odd ones.
-- One writer, or every write 4096 or less. Bigger writes from two
-  writers tear into each other.
-- One reader. Bytes read are gone, and what one reader takes another
-  never sees.
+How a Lane Behaves
+
+- One way. Each lane has one side writing and the other reading. A
+  side that reads its own lane takes its own bytes off the wire, and
+  nothing reports it.
+- One writer, or every write 4096 or less.
+- One reader. What one reader takes another never sees.
 - Order holds within a lane and nowhere else.
-- A lane holds 64K. A writer past that waits for a reader. More lanes
-  is more in flight, nothing else.
-- Nothing stops a side reading the lane it writes, and taking its own
-  bytes off the wire. Nothing reports it either.
+- Edges are not kept. Two writes can come out as one read, and one big
+  write as several. Only a line, read with read -r, keeps its edge.
+- A lane holds 64K in 4096-byte writes, less in odd sizes (2049-byte
+  writes stop at 32K). A write past that waits until someone reads, so
+  bound writes too: timeout 5 dd of=...
 
 Processes That Stay
 
-- Let go of the caller's output.
+- Let go of the caller's output first.
       ( ... ) </dev/null >/dev/null 2>&1 &
   A background process that keeps the stdout of a $( ) keeps the $( )
-  waiting for it, forever.
+  and the tool call waiting for it, forever. Redirections run left to
+  right, so let go of stdout before any < that might wait.
 
-- Drop the parent's traps, ignore hangups, then exec.
-      ( trap - EXIT INT TERM; trap '' HUP; exec sleep infinity ) &
-  Without the first, a child that is killed runs its parent's cleanup.
-  Without the second, it dies with the terminal or tool call that made
-  it. An ignored HUP stays ignored across exec. TERM still ends it.
+- An ignored hangup stays ignored across exec.
+      ( trap '' HUP; exec sleep infinity ) &
+  So the process lives through a terminal closing. TERM still ends it.
+  The end of a Bash tool call sends no hangup.
 
-- Write its pid down, and check it is still yours before you kill it.
-      echo $! > "$pDir/pid"
+- A ( ) child does not run its parent's traps: bash resets them in it.
+  Only a signal in the instant after the fork beats that.
+
+- /proc says whether a pid is still yours.
+      pidHold=$(cat "$pDir/pid")
       [ "$(readlink "/proc/$pidHold/fd/3")" = "$pDir/0" ] &&
         kill "$pidHold"
-  Pids are recycled. The holder's open lane, under /proc/PID/fd, says
-  it is still the holder. pkill -f on the path finds nothing: the path
-  is in its open files, not its argv.
+  Pids are recycled. If fd 3 still points at the lane, it is still the
+  holder. pgrep -f will not find it: the path is in its open files,
+  not its argv.
 
-- Each Bash tool call is a fresh shell. What lasts between calls is
-  files, FIFOs, directories and background processes. Shell variables
-  and open fds of the shell do not.
+- Each Bash tool call is a fresh shell. Files, FIFOs, directories and
+  background processes last between calls. Variables and the shell's
+  open fds do not.
 
 The Lock
 
-      mkdir "$pLock"     # took it, or refused at once
-      rmdir "$pLock"     # gave it back
+    mkdir "$pLock"     # took it, or refused at once
+    rmdir "$pLock"     # gave it back
 
-mkdir makes the directory or fails, in one step, so of any number of
-callers at once exactly one makes it. Never mkdir -p: it succeeds when
-the directory is already there. No waiting and no timeout: a lock left
-by a holder that died is in plain sight, and anyone's rmdir clears it.
-ICC names the lock /tmp/icc-lock- and the sha256 of the path as
-readlink -m spells it, so every spelling of one path is one lock. It
-is advisory: it keeps out only those who take it too.
+mkdir creates the directory or fails, in one step, so when forty try
+at once exactly one wins. Never mkdir -p: it succeeds when the
+directory is already there. Nothing times out and nothing waits: a
+lock left by a holder that died is in plain sight, and anyone's rmdir
+clears it. Name the directory for the path spelled one way, readlink
+-m, so every spelling of a path is one lock. Advisory: it keeps out
+only those who take it too.
 
-The Fittings
+Tee and Merge
 
-- Open each lane once, and let bash pick the fd.
-      exec {fdOut}> "$pDst/0"
-      exec {fdIn}< "$pSrc/0"
-  Open them in the parent, before forking the copier: an open that
-  hangs or fails is then the parent's, where the caller's limit
-  reaches it.
+- tee copies one lane onto many.
+      tee -a -- "$pOutA/0" "$pOutB/0" >/dev/null 2>&1 < "$pIn/0" &
+  It writes up to 8192 bytes at a time, past PIPE_BUF, so it must be
+  the only writer on every outlet lane. It goes as fast as its slowest
+  outlet: one full outlet stalls them all.
 
-- One lane onto many: tee.
-      tee -a -- "$pOutA/0" "$pOutB/0" < "$pIn/0" > /dev/null &
-  tee writes up to 8192 bytes at a time, so it must be the only writer
-  on every outlet lane. It goes as fast as its slowest outlet: one full
-  outlet stalls them all.
-
-- Many lanes into one, without mixing them: drain one before the next.
+- One loop that drains one inlet before the next merges without mixing.
+      exec {fdOut}> "$pOut/0" {fdA}< "$pInA/0" {fdB}< "$pInB/0"
       while :; do
-        for fdIn in "${aIns[@]}"; do
+        for fdIn in "$fdA" "$fdB"; do
           while read -t 0 -u "$fdIn"; do
-            dd bs=4096 count=1 status=none <&"$fdIn" >&"$fdOut"
+            osStats=$(LC_ALL=C dd bs=4096 count=1 \
+              <&"$fdIn" 2>&1 >&"$fdOut")
+            case $osStats in
+              0+0\ *)
+                exit 0
+                ;;
+            esac
           done
         done
         sleep 0.05
       done
-  One loop, one block at a time, each block whole. A copier per inlet,
-  each writing the outlet when it has something, mixes the inlets block
-  by block: measured, 13 rounds of 15 came out wrong. ICC's merge also
-  stops when dd says 0+0 records in, which is an inlet ending, and
-  waits with read -t 0.05 on a pipe no one writes instead of forking a
-  sleep.
+  One block at a time, at most 4096, so each lands whole. A copier per
+  inlet mixes them block by block: ICC measured up to 13 rounds of 15
+  wrong. An inlet that goes quiet partway lets the next one in.
+  Open the lanes before forking the loop (exec {fd} picks the
+  numbers), so an open that waits or fails is the caller's. An inlet
+  whose holder is gone reads as bytes waiting and dd reads 0+0
+  records; without the case the loop spins on it and starves the
+  rest. LC_ALL=C keeps dd's words dd's.
 
 Clean Up
 
-      pDir=
-      trap '[ -z "$pDir" ] || rm -rf "$pDir"; exit 1' EXIT
-      trap 'exit 1' INT TERM HUP
-      pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
-      echo "$pDir"
-      ...
-      trap - EXIT INT TERM HUP
+    pDir=
+    trap '[ -z "$pDir" ] || rm -rf "$pDir"; exit 1' EXIT
+    trap 'exit 1' INT TERM HUP
+    pDir=$(mktemp -d /tmp/icc-pipes-XXXXXXXX)
+    echo "$pDir"
+    ...
+    trap - EXIT INT TERM HUP
 
-- Arm the cleanup before making anything. Bash runs a caught signal
-  only after the $( ) and its assignment are done, so the cleanup
-  always knows what there is to take.
+- Set the trap before making anything. A signal to the shell runs the
+  trap only after the $( ) and its assignment finish, so it sees pDir.
+  A signal to the whole group, as timeout and Ctrl-C send, kills the
+  $( ) too, so put nothing in it but mktemp.
 - Print what you made the moment you make it. A script cut off later
   has already said what it left.
-- A signal exits 1, which runs the EXIT trap. When everything is made,
-  clear the traps: what is there is meant to stay.
+- INT, TERM or HUP exits 1, which runs the EXIT trap. Once everything
+  is made, clear the traps so it stays.
 
 Keep the Data Data
 
@@ -170,25 +195,20 @@ Keep the Data Data
 - printf '%s' "$osBytes", never printf "$osBytes": the first argument
   is a format, and % and \ in it are read. echo reads backslashes in
   some shells and not others.
-- Into awk: OS=$osText awk '... ENVIRON["OS"] ...'. awk -v reads \t,
-  \\ and the rest as escapes. ENVIRON is the environment awk was given,
-  byte for byte. NAME=value before a command sets NAME for that one
-  command.
+- Into awk: OS=$osText awk '... ENVIRON["OS"] ...'. awk -v reads \t
+  and \\ as escapes; ENVIRON hands over the bytes as they are.
 - Quote every expansion: "$pDir/0".
-- A count with a leading zero is octal to $(( )). Use $((10#$nCount)).
 
 Bash, Not sh
 
-- First line #!/bin/bash, and run the script by its path. Never
-  sh script: that forces dash on it.
-- dash cannot redirect a two-digit fd, so under it nothing opens past
-  fd 9. {fd}, read -t, arrays and $'...' are bash too.
-- Set LC_ALL=C before reading a command's own messages, such as dd's
-  0+0 records in. Another locale can say it in other words.
+- First line #!/bin/bash, and run the script by its path. sh script
+  forces dash on it.
+- dash cannot open fd 10 or above: exec 10<> says "10: not found".
+  {fd} hands out 10 and up. read -t, arrays and $'...' are bash too.
 
 Where It Ends
 
-Everything here works in one container, through its /tmp: every
-subagent of a session, and every session on that machine. Sessions in
-separate containers share no /tmp, and no lane, lock or fitting
-crosses that line.
+All of this works in one container, through its /tmp: every subagent
+of a session, and every session on that machine. Sessions in separate
+containers share no /tmp, and no lane, lock or copier crosses that
+line.

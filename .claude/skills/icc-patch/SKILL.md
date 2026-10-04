@@ -62,7 +62,8 @@ to be installed with it.
              too, whose cable is p's alone. p holds that one read end
              and writes nothing
 
-These are the shapes there are. CLAUDE.md says how to add one.
+These are the shapes Patch makes. Any other is wired by hand from
+Pipes, Tee and Merge, which are all a patch is.
 
 N counts seats other than p. Fewer seats, fewer cables, by the shape
 alone: a fitting with one end on a side is no fitting. mesh 2 is one
@@ -192,6 +193,7 @@ those pipes with the rest.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The pipes and fittings are their own
-processes, as their skills say, so a patch outlives calls. Seats in one
-session share the container and its /tmp; sessions do not, so no patch
-crosses that line.
+processes, as their skills say, so a patch outlives calls. Everything
+that shares /tmp can share a patch: every subagent of a session, and
+every session run on one machine. Sessions in separate containers share
+no /tmp, so no patch crosses that line.

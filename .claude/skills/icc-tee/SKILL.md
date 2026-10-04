@@ -101,5 +101,7 @@ of that and of the lanes. The skill adds nothing to them.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The copiers are their own processes,
-so the tee outlives calls. Seats in one session share the container and
-its /tmp; sessions do not, so no tee crosses that line.
+so the tee outlives calls. Everything that shares /tmp can share a tee:
+every subagent of a session, and every session run on one machine.
+Sessions in separate containers share no /tmp, so no tee crosses that
+line.

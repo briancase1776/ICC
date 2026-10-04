@@ -127,9 +127,9 @@ Linux and POSIX differ, both are given; this skill is Linux.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The hold is its own process, so the
-pipe outlives calls. A foreground read that does not return hangs the
-tool call until the harness times it out.
+pipe outlives calls. A foreground read that does not return keeps the
+tool call from returning; bound it.
 
-Seats in one session share the container, so they share
-/tmp. Sessions do not share a container; no pipe crosses
-that line.
+Everything that shares /tmp can share a pipe: every subagent of a
+session, and every session run on one machine. Sessions in separate
+containers share no /tmp, so no pipe crosses that line.

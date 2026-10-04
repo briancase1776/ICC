@@ -13,6 +13,9 @@ Read and write for a pipe that icc-pipes made. Pipes says what a lane is
 and which lanes each side writes; see its SKILL.md. Frames says how a
 payload of any size goes down those lanes and comes back the same.
 
+Shelved: no caller needs a payload sliced over lanes now. It comes back
+when one does, and Bridge, which carries Frames payloads, with it.
+
 ## Operations
 
     scripts/write DIR SIDE < bytes    slice stdin into frames, put them on

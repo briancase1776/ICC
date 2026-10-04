@@ -1,9 +1,10 @@
 ---
 name: icc-bridge
 description: >-
-  Currently unavailable: its scripts are shelved with icc-frames. What it
+  Currently unavailable: out and in are shelved with icc-frames. What it
   says of the carriers across the session line, SendMessage, send_message
-  and a Routine, holds. Take an icc-frames payload off an icc-pipes pipe
+  and a Routine, holds, and sent gives back a send_message's text as it
+  was sent. out and in take an icc-frames payload off an icc-pipes pipe
   as text a message can carry, and put such text back on a pipe as the
   payload it spells. The same bytes on the far wire as on the near one.
   Who sends the message, how, to whom, and what the bytes mean, is the
@@ -21,8 +22,8 @@ send_message, and a Routine bound to the other session. The facts about
 each are below.
 
 Shelved: out and in carry only Frames payloads, and Frames is shelved.
-They come back with it. The facts about the message and its carriers do
-not depend on them, and hold.
+They come back with it. The facts about the message and its carriers,
+and sent, do not depend on them, and hold.
 
 ## Operations
 
@@ -30,6 +31,8 @@ not depend on them, and hold.
                                    reads, print it as text
     scripts/in  DIR SIDE < text    take text, put the payload it spells
                                    on the lanes SIDE writes
+    scripts/sent < text > text     take a send_message's text as it
+                                   arrived, print it as it was sent
 
 DIR is what Pipes' create printed, or an end in a Patch map. SIDE is 0
 or 1, as Pipes says. Which side you are, and where the text goes, is
@@ -106,10 +109,18 @@ cloud sessions of one account.
   notifications are pending, and ReadNotifications returns it. in takes
   the text, not the wrapper.
 - The text does not arrive as it was sent. Every line comes indented
-  four spaces, and &, < and > come as &amp;, &lt; and &gt;, so text that
-  was already escaped arrives escaped again. Those are the changes seen,
-  not a promise there are no others. The alphabet has none of the three,
-  but in refuses the indent: take four spaces off every line first.
+  four spaces, an empty one too, and &, < and > come as &amp;, &lt; and
+  &gt;, so text that was already escaped arrives escaped again. Tabs,
+  quotes, backslashes, $ and trailing spaces come as they were sent. A
+  text that ended in a newline arrives with one more line, empty but for
+  the indent. Those are the changes seen, not a promise there are no
+  others.
+- sent undoes them. Hand it the lines inside the wrapper, after the
+  harness's two and the blank one, as they arrived: it takes the four
+  spaces off each and the three entities back, once, and prints the text
+  as it was sent, its last newline or none included. A line without the
+  four spaces refuses the whole text. in refuses the indent, so text
+  for in goes through sent first.
 - The sender's tool result echoes the message as it was delivered,
   indent and escapes included. That says it arrived, not that it was
   read.

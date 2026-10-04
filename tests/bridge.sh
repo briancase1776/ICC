@@ -9,8 +9,11 @@
 #          empty payload; text that is not the alphabet puts nothing on
 #          the wire, and a wire with nothing on it prints nothing; a copy
 #          of the skills outside .claude still finds Frames; each end cut
-#          off just after it makes its temp file takes it with it; remove
-#          the pipes.
+#          off just after it makes its temp file takes it with it; sent
+#          gives back two messages as send_message delivered them, and
+#          random text through the same changes, with a newline at its
+#          end and without, and refuses a line not indented and no text;
+#          remove the pipes.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -64,6 +67,26 @@ vCutOff "$pIccBridge/out" "$pPipeA" 1
 echo 'not the alphabet' | "$pIccBridge/in" "$pPipeA" 0 2>/dev/null && exit 1
 timeout 1 "$pIccBridge/out" "$pPipeA" 1 > text 2>/dev/null && exit 1
 [ ! -s text ]
+# sent: two messages a session sent itself, as they were sent and as they
+# arrived, the second ending in a newline.
+printf 'one\nline two\thas a tab, and ends with two spaces  \n  starts with two spaces\nquotes \042 and \047 and backslash \134 and \044HOME and \140tick\140\n< > & &lt; &gt; &amp; &quot; &#39;\n\nlast line after a blank, no newline at the end' \
+  > said
+printf '    one\n    line two\thas a tab, and ends with two spaces  \n      starts with two spaces\n    quotes \042 and \047 and backslash \134 and \044HOME and \140tick\140\n    &lt; &gt; &amp; &amp;lt; &amp;gt; &amp;amp; &amp;quot; &amp;#39;\n    \n    last line after a blank, no newline at the end\n' \
+  | "$pIccBridge/sent" | cmp - said
+printf 'two\n' > said
+printf '    two\n    \n' | "$pIccBridge/sent" | cmp - said
+# Random text through the same changes comes back the same, whether or not
+# it ends in a newline.
+for osEnd in '' '\n'; do
+  LC_ALL=C tr -dc '\t\n -~' < /dev/urandom | head -c 20000 > said
+  printf "$osEnd" >> said
+  { cat said; printf '\n'; } |
+    sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/^/    /' |
+    "$pIccBridge/sent" | cmp - said
+done
+[ -z "$(printf '    in\nout\n' | "$pIccBridge/sent" 2>/dev/null)" ]
+printf '    in\nout\n' | "$pIccBridge/sent" 2>/dev/null && exit 1
+: | "$pIccBridge/sent" 2>/dev/null && exit 1
 # Frames is found beside the bridge, wherever the skills sit: here, a copy of
 # them in a directory that is not .claude/skills.
 cp -r "$pIccBridge/../.." skills

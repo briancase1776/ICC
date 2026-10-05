@@ -23,7 +23,9 @@ appends what it found to its record in `tests/cal/data/`, with the date,
 the ICC commit and the machine. A record is a cal certificate, to be
 looked up years after the run: a run is only ever added to it, and
 nothing in it is changed or taken out, a run that came out off
-included. Commit the record with the run. `tests/cal.sh`, the last
+included. Commit the record once the run has its `@ end`, and never
+while a run is still writing to it: a line committed half written reads
+as a line taken out once the run finishes it. `tests/cal.sh`, the last
 harness run.sh runs, looks at every commit that touched a record for a
 line taken out.
 

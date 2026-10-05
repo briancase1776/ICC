@@ -14,6 +14,8 @@
 #          20000 at DEPTH 1, 100000 at 2, 400000 at 6. The same 20000
 #          written straight into a merge's three inlets, no tee. 100000 at
 #          DEPTH 1 and 2, seat 2 reading nothing for the first second.
+#          Then 4 MiB put on one inlet of a merge by one dd, timed each
+#          trial, and once more with the copier's dd's counted.
 #          Each trial prints a line: how long p took from the release, and
 #          whole and the order the seats came in; or cut and the runs p
 #          got, a header as h and a body as its letter, with their
@@ -24,7 +26,9 @@
 #          says is certain; seat 2 stalled at DEPTH 1, cut every time; and
 #          with no load added, every other case whole every time. How
 #          often a case is cut under load is what was found, and passes
-#          either way.
+#          either way. The 4 MiB comes out whole every time, and with
+#          fewer than 256 dd's, where one for every block would be 1024;
+#          how long it took is what was found.
 # @stdin nothing
 # @stdout one line per trial, and one per case
 # @stderr whatever failed outside a trial
@@ -262,6 +266,68 @@ vCase() {
   fi
 }
 
+##
+# @fn vRate()
+# @brief Time 4 MiB across a merge of one inlet, trial by trial, and count
+#        the dd's its copier forks for it once.
+# @details The count is taken by a dd first on the copier's PATH that notes
+#          itself and execs the real one, so that trial is not timed.
+# @stdout a line per trial, and one for the case
+# @global nOff - added to; the pieces it makes - set, and taken
+# @return 0
+##
+vRate() {
+  local iTrial
+  local nMs
+  local aMs=()
+  local nWhole=0
+  local nMedian
+  local nForked
+  local bCounted=0
+  local pidRead
+  head -c 4194304 /dev/urandom > "$pWork/big"
+  mkdir -p "$pWork/bin"
+  printf '%s\n' '#!/bin/bash' 'echo >> "${0%/*}/forked"' \
+    "exec $(type -P dd) \"\$@\"" > "$pWork/bin/dd"
+  chmod +x "$pWork/bin/dd"
+  : > "$pWork/bin/forked"
+  echo "case rate 4 MiB: load $(cut -d' ' -f1-3 /proc/loadavg)"
+  aInlets=("$("$pIccPipes/create" 2)")
+  pOutlet=$("$pIccPipes/create" 2)
+  pMerge=$("$pIccMerge/create" "$pOutlet" 0 "${aInlets[0]}")
+  for ((iTrial = 1; iTrial <= nTrials; iTrial++)); do
+    timeout 120 head -c 4194304 "$pOutlet/0" > "$pWork/got" &
+    pidRead=$!
+    nMs=${EPOCHREALTIME//[!0-9]/}
+    dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 status=none
+    wait "$pidRead" || :
+    nMs=$(((${EPOCHREALTIME//[!0-9]/} - nMs) / 1000))
+    aMs+=("$nMs")
+    if cmp -s "$pWork/big" "$pWork/got"; then
+      nWhole=$((nWhole + 1))
+      echo "t=$iTrial ${nMs}ms whole"
+    else
+      echo "t=$iTrial ${nMs}ms wrong, $(wc -c < "$pWork/got") of 4194304"
+    fi
+  done
+  "$pIccMerge/remove" "$pMerge" || :
+  pMerge=$(PATH=$pWork/bin:$PATH "$pIccMerge/create" "$pOutlet" 0 \
+    "${aInlets[0]}")
+  timeout 120 head -c 4194304 "$pOutlet/0" > "$pWork/got" &
+  pidRead=$!
+  dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 status=none
+  wait "$pidRead" || :
+  ! cmp -s "$pWork/big" "$pWork/got" || bCounted=1
+  nForked=$(wc -l < "$pWork/bin/forked")
+  vTake
+  nMedian=$(printf '%s\n' "${aMs[@]}" | sort -n |
+    awk '{a[NR] = $1} END {print a[int((NR + 1) / 2)]}')
+  vFound $((nWhole == nTrials && bCounted && nForked < 256)) \
+    "rate 4 MiB, $nTrials trials: $nWhole whole, median ${nMedian}ms;" \
+    "counted once, $nForked dd's, whole $bCounted, where a dd for every" \
+    "block would be 1024"
+}
+
 osLetters=abc
 for osFlag in iflag=fullblock ''; do
   for osSpec in 3000:1 8000:1 20000:1 100000:2 400000:6; do
@@ -276,6 +342,7 @@ for osFlag in iflag=fullblock ''; do
     vCase stalled 100000 "$nDepth" "$osFlag"
   done
 done
+vRate
 
 echo "$nOff off"
 [ "$nOff" -eq 0 ]

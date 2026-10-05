@@ -7,16 +7,16 @@
 #          SIDE is 0 or 1, the side whose writes are copied. No SRC is DST
 #          and none is given twice, in any spelling. One copier, a shell of
 #          its own, goes round the SRCs in the order given and drains each
-#          in turn: while any lane SIDE writes of that SRC has bytes, it
-#          takes a dd(1) block at bs=4096 off each such lane and writes it
-#          to the same lane of DST, and only when none has any does it go
-#          on to the next SRC. Byte for byte, in order per inlet, until
-#          removed; the copier ignores a hangup, as a server does. create
-#          opens every lane the copier uses itself, so a pipe whose hold is
-#          dead blocks create, where the caller's bound reaches it. The
-#          merge's directory holds two files: merge, naming DST, SIDE and
-#          each SRC a line, and pid, the copier's. The merge makes nothing
-#          but itself.
+#          in turn: while any lane SIDE writes of that SRC has bytes, a
+#          dd(1) at bs=4096 moves up to 16 blocks off each such lane to the
+#          same lane of DST, and only once none has had any for a hundredth
+#          of a second does it go on to the next SRC. Byte for byte, in
+#          order per inlet, until removed; the copier ignores a hangup, as a
+#          server does. create opens every lane the copier uses itself, so a
+#          pipe whose hold is dead blocks create, where the caller's bound
+#          reaches it. The merge's directory holds two files: merge, naming
+#          DST, SIDE and each SRC a line, and pid, the copier's. The merge
+#          makes nothing but itself.
 #          The directory is printed the moment it is made, as icc-lib's
 #          pMakeDir does it, so a create that fails after has already
 #          said what it made. A create that cannot finish takes its
@@ -114,9 +114,10 @@ nPerSrc=${#aOuts[@]}
   # A server, started as icc-lib's vServe says. Its fd 0 is the first SRC's
   # first lane it copies, which is what list and remove know it by, the way
   # Pipes finds a holder. Its stdout and stderr go nowhere: the outlet
-  # carries what the inlets wrote and nothing else. dd's summary is kept for
-  # the one line that says the end of an inlet was reached, 0+0 records in,
-  # so it must be dd's own words and not a translation of them.
+  # carries what the inlets wrote and nothing else. What dd says is kept for
+  # the line that says a lane was found empty and the one that says the end
+  # of an inlet was reached, 0+0 records in, so it must be dd's own words and
+  # not a translation of them.
   vServe
   exec 0<&"${aIns[0]}" >/dev/null 2>&1
   export LC_ALL=C
@@ -129,28 +130,55 @@ nPerSrc=${#aOuts[@]}
     for ((iSrc = 0; iSrc < ${#aSrcs[@]}; iSrc++)); do
       # Drain this SRC before the next: another inlet's bytes cannot land
       # between two blocks of this one while this one still has any waiting.
+      # A writer between two of its writes leaves its inlet empty too, and a
+      # copier as quick as the writer finds it so. So a SRC found empty after
+      # it gave something is looked at again a hundredth of a second later,
+      # and left only if nothing came. Only the copier reads it, so empty
+      # then is nothing written since.
       bMore=1
+      bMoved=0
       while [ "$bMore" -eq 1 ]; do
         bMore=0
         for ((iPer = 0; iPer < nPerSrc; iPer++)); do
           fdIn=${aIns[iSrc * nPerSrc + iPer]}
           read -t 0 -u "$fdIn" || continue
-          # One block, at most PIPE_BUF, so it lands whole on the outlet. A
-          # dd that fails could not write the outlet, and one that read
-          # nothing met the end of its inlet: either way the merge is over.
+          # Block after block, each at most PIPE_BUF so it lands whole on the
+          # outlet, each written before the next is read, up to 16, a lane's
+          # 64K in pages: no turn gives an outlet lane more than it holds, so
+          # the copier goes on to the next lane before it waits on a full one.
+          # iflag=nonblock makes the read that finds the lane empty fail, in
+          # dd's words, the one failure the copier goes on from; any other
+          # could not write the outlet, and a dd that read nothing met the end
+          # of its inlet: either way the merge is over. The flag stays on the
+          # lane's open file, which create opened for the copier and its dd's
+          # alone, and read -t 0 only looks.
           # exec, so the dd is the copier's own child and not a subshell's:
           # with a trap set bash forks the substitution and forks again for
           # dd, and remove, which kills the copier's children, would miss it.
-          osStats=$(exec dd bs=4096 count=1 <&"$fdIn" 2>&1 \
-            >&"${aOuts[iPer]}") || exit 0
+          if ! osStats=$(exec dd bs=4096 count=16 iflag=nonblock \
+              <&"$fdIn" 2>&1 >&"${aOuts[iPer]}"); then
+            case $osStats in
+              *'error reading'*': Resource temporarily unavailable'*)
+                ;;
+              *)
+                exit 0
+                ;;
+            esac
+          fi
           case $osStats in
             0+0\ *)
               exit 0
               ;;
           esac
           bMore=1
+          bMoved=1
           bIdle=0
         done
+        if [ "$bMore" -eq 0 ] && [ "$bMoved" -eq 1 ]; then
+          read -t 0.01 -u "$fdIdle" || :
+          bMore=1
+          bMoved=0
+        fi
       done
     done
     [ "$bIdle" -eq 0 ] || read -t 0.05 -u "$fdIdle" || :

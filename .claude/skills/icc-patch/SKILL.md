@@ -159,19 +159,22 @@ those pipes with the rest.
 - What writes into each inlet of p's merge is a seat's tee, not the
   seat. The tee reads up to 8192 bytes at a time, writes them to the
   seats' cables first and the merge's inlet last, and reads again, and
-  nothing makes the next chunk land before the merge looks again. So
-  the inlet can go empty partway through what a seat puts on, while
-  every seat reads, and the merge lets another inlet in, as Merge says.
-  Only a write of at most PIPE_BUF that the tee reads alone comes out
-  whole for certain. Measured on a mesh-p 3, three seats putting on at
-  once a short header and 3000 to 400000 bytes, printf into dd bs=4096,
-  every seat reading all along: with no load added, whole in 1000 of
-  1000 trials. With a busy loop for every CPU, 2199 of 2200; the one
-  cut came after the header, which printf writes on its own. With four
-  for every CPU, 8000 to 100000 bytes were cut in 26 of 1200, and 3000
-  and 400000 in none of 600. Every cut came after the first 4096 bytes,
-  with other seats' bytes inside it. Under that load, dd writing
-  straight into a merge's inlets, with no tee, was cut in none of 300.
+  nothing makes the next chunk land within the hundredth of a second
+  the merge looks again after. So the inlet can go empty that long
+  partway through what a seat puts on, while every seat reads, and the
+  merge lets another inlet in, as Merge says. Only a write of at most
+  PIPE_BUF that the tee reads alone comes out whole for certain.
+  Measured with the copier that forked a dd for every block, which was
+  slow enough that a seat's tee stayed ahead of it, on a mesh-p 3,
+  three seats putting on at once a short header and 3000 to 400000
+  bytes, printf into dd bs=4096, every seat reading all along: with no
+  load added, whole in 1000 of 1000 trials. With a busy loop for every
+  CPU, 2199 of 2200; the one cut came after the header, which printf
+  writes on its own. With four for every CPU, 8000 to 100000 bytes were
+  cut in 26 of 1200, and 3000 and 400000 in none of 600. Every cut came
+  after the first 4096 bytes, with other seats' bytes inside it. Under
+  that load, dd writing straight into a merge's inlets, with no tee, was
+  cut in none of 300.
 - A seat that does not read stops each tee that feeds it once its cable
   from that tee fills; that tee puts nothing more into its inlet, and
   the merge goes on to the others. On a mesh-p 3 at DEPTH 1, every seat

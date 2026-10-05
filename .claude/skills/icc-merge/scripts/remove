@@ -82,10 +82,10 @@ while read -r pidCopier; do
   # file, and it is still ours if it has the first SRC's lane SIDE on fd 0.
   # That mark is not this merge's alone -- a second merge from the same inlet
   # has a copier that looks the same -- so it is the pid file that says which
-  # is ours. The copier forks a dd for every block it moves, and a dd still
-  # running when the copier dies is left behind, waiting on a full outlet for
-  # as long as nobody reads it. So the copier is stopped where it stands, so
-  # it forks nothing more, its dd is killed, and then the copier.
+  # is ours. The copier forks a dd for every turn it gives a lane, and a dd
+  # still running when the copier dies is left behind, waiting on a full
+  # outlet for as long as nobody reads it. So the copier is stopped where it
+  # stands, so it forks nothing more, its dd is killed, and then the copier.
   [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = \
     "${aSrcs[0]}/$eSide" ] || continue
   kill -STOP "$pidCopier" 2>/dev/null || continue

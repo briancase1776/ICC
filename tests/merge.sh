@@ -8,8 +8,16 @@
 #          time, then plain bytes on one lane from both inlets, then two
 #          raspberries bigger than a lane, each put on by one dd from its
 #          inlet at once, and see each come out whole, one inlet after the
-#          other, remove it. The pipes stay up. A merge whose outlet is
-#          full and unread is removed with nothing of it left running. An
+#          other, and a writer that pauses between its blocks for less
+#          than the copier's hundredth of a second, with another inlet
+#          waiting, comes out whole too; remove it. The pipes stay up. A
+#          merge whose outlet is full and unread is removed with nothing
+#          of it left running and only the block in hand lost. A Frames
+#          payload put on while the copier is stopped still comes through
+#          once it goes on. 4 MiB crosses with a dd forked for a turn and
+#          not for every block. An inlet that ends, and an outlet that
+#          can no longer be written, with SIGPIPE ignored and not, each
+#          end the merge, the second with at most a block lost. An
 #          inlet that is the outlet, one given
 #          twice, a lane that is not a lane, and an odd lane count are
 #          refused; remove takes what create made and not a path out of it
@@ -51,11 +59,15 @@ pDeep=
 pNoSrc=
 pBadSide=
 pIdle=
+pFastIn=
+pFastOut=
+pDead=
 vArm '[ -n "$pMergeDir" ] && "$pIccMerge/remove" "$pMergeDir" 2>/dev/null || :
       for pFake in $pOutside $pDeep $pNoSrc $pBadSide $pIdle; do
         rm -rf "$pFake"
       done
-      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow $pBroken $pOddA $pOddB; do
+      for pPipe in $pPipeA $pPipeB $pPipeC $pNarrow $pBroken $pOddA $pOddB \
+          $pFastIn $pFastOut $pDead; do
         "$pIccPipes/remove" "$pPipe" 2>/dev/null || rm -rf "$pPipe"
       done
       cd /
@@ -188,6 +200,30 @@ for iRound in $(seq 5); do
   wait "$pidA" "$pidB" "$pidOut"
   cat inA inB | cmp -s - out || cat inB inA | cmp - out
 done
+# A writer that pauses between its blocks, each pause shorter than the
+# hundredth of a second the copier looks again after, keeps its turn: forty
+# blocks of a two thousandths of a second apart, with a block of b put on
+# the other inlet after the first, come out together, and b before or after.
+head -c 4096 /dev/zero | tr '\0' a > blockA
+head -c 4096 /dev/zero | tr '\0' b > blockB
+timeout 10 head -c $((41 * 4096)) "$pPipeC/0" > out &
+pidOut=$!
+{
+  exec {fdPause}<> <(:)
+  for iBlock in $(seq 40); do
+    dd if=blockA bs=4096 status=none
+    [ "$iBlock" -ne 1 ] || dd if=blockB of="$pPipeB/0" bs=4096 status=none
+    read -t 0.002 -u "$fdPause" || :
+  done
+} > "$pPipeA/0"
+wait "$pidOut"
+case $(tr -s ab < out) in
+  ab|ba)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
 "$pIccMerge/remove" "$pMergeDir"
 [ ! -d "$pMergeDir" ]
 for pPipe in $pPipeA $pPipeB $pPipeC; do
@@ -195,11 +231,12 @@ for pPipe in $pPipeA $pPipeB $pPipeC; do
 done
 # A merge whose outlet is full and unread has a dd waiting on it, the block
 # it took off the inlet in hand. remove takes that dd with the copier, and
-# nothing of the merge is left running.
+# nothing of the merge is left running. Of what went on, the outlet lane
+# and the inlet lane hold a lane each, and only the block in hand is lost.
 pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA")
 pidCopier=$(cat "$pMergeDir/pid")
-head -c 300000 /dev/zero |
-  timeout 2 dd of="$pPipeA/0" bs=4096 2>/dev/null && exit 1
+head -c 300000 /dev/zero > full
+timeout 2 dd if=full of="$pPipeA/0" bs=4096 2>/dev/null && exit 1
 [ -n "$(pgrep -P "$pidCopier")" ]
 "$pIccMerge/remove" "$pMergeDir"
 sleep 1
@@ -211,6 +248,83 @@ case $(ps -o stat= -p "$pidCopier" 2>/dev/null) in
     exit 1
     ;;
 esac
+[ "$(timeout 1 head -c 65536 "$pPipeC/0" | wc -c)" -eq 65536 ]
+[ "$(timeout 1 head -c 65536 "$pPipeA/0" | wc -c)" -eq 65536 ]
+read -t 0 < "$pPipeC/0" && exit 1
+read -t 0 < "$pPipeA/0" && exit 1
+# A turn moves at most what a lane holds: a Frames payload put on while the
+# copier is stopped fills the inlet's lanes, and once the copier goes on it
+# comes through whole, where a copier that drained a lane in one turn filled
+# one outlet lane and waited on it with the others empty.
+head -c 262144 /dev/urandom > in
+pMergeDir=$("$pIccMerge/create" "$pPipeC" 0 "$pPipeA")
+pidCopier=$(cat "$pMergeDir/pid")
+kill -STOP "$pidCopier"
+timeout 10 "$pIccFrames/write" "$pPipeA" 0 < in &
+pidA=$!
+sleep 0.5
+kill -CONT "$pidCopier"
+wait "$pidA"
+timeout 5 "$pIccFrames/read" "$pPipeC" 1 > out
+cmp in out
+"$pIccMerge/remove" "$pMergeDir"
+# 4 MiB crosses a merge with a dd forked for each turn, a lane's 16 blocks
+# at most, and not for every block, which would be 1024. Counted by a dd
+# first on the copier's PATH that notes itself and execs the real one.
+pFastIn=$("$pIccPipes/create" 2)
+pFastOut=$("$pIccPipes/create" 2)
+mkdir bin
+printf '%s\n' '#!/bin/bash' 'echo >> "${0%/*}/forked"' \
+  "exec $(type -P dd) \"\$@\"" > bin/dd
+chmod +x bin/dd
+: > bin/forked
+pMergeDir=$(PATH=$pWork/bin:$PATH "$pIccMerge/create" "$pFastOut" 0 \
+  "$pFastIn")
+head -c 4194304 /dev/urandom > big
+timeout 30 head -c 4194304 "$pFastOut/0" > out &
+pidOut=$!
+dd if=big of="$pFastIn/0" bs=4096 status=none
+wait "$pidOut"
+cmp big out
+[ "$(wc -l < bin/forked)" -lt 256 ]
+"$pIccMerge/remove" "$pMergeDir"
+# An inlet that ends ends the merge: its hold gone, what was on it still
+# comes out, and then list says down.
+pDead=$("$pIccPipes/create" 2)
+pMergeDir=$("$pIccMerge/create" "$pFastOut" 0 "$pDead")
+printf abc > "$pDead/0"
+kill "$(cat "$pDead/pid")"
+[ "$(timeout 1 head -c 3 "$pFastOut/0")" = abc ]
+for iLook in $(seq 20); do
+  ! "$pIccMerge/list" | grep -qx "$pMergeDir up $pFastOut 0 $pDead" ||
+    sleep 0.1
+done
+"$pIccMerge/list" | grep -qx "$pMergeDir down $pFastOut 0 $pDead"
+"$pIccMerge/remove" "$pMergeDir"
+"$pIccPipes/remove" "$pDead" 2>/dev/null || rm -rf "$pDead"
+pDead=
+# An outlet that can no longer be written ends the merge too, whether the
+# copier was made with SIGPIPE ignored or not, and of what went on only the
+# block in hand is lost: the rest is still on the inlet.
+for osPipe in - ''; do
+  pDead=$("$pIccPipes/create" 2)
+  pMergeDir=$(trap "$osPipe" PIPE; "$pIccMerge/create" "$pDead" 0 "$pFastIn")
+  kill "$(cat "$pDead/pid")"
+  head -c 20000 /dev/zero > some
+  dd if=some of="$pFastIn/0" bs=4096 status=none
+  for iLook in $(seq 20); do
+    ! "$pIccMerge/list" | grep -qx "$pMergeDir up $pDead 0 $pFastIn" ||
+      sleep 0.1
+  done
+  "$pIccMerge/list" | grep -qx "$pMergeDir down $pDead 0 $pFastIn"
+  [ "$(timeout 1 head -c 15904 "$pFastIn/0" | wc -c)" -eq 15904 ]
+  "$pIccMerge/remove" "$pMergeDir"
+  "$pIccPipes/remove" "$pDead" 2>/dev/null || rm -rf "$pDead"
+  pDead=
+done
+pMergeDir=
+"$pIccPipes/remove" "$pFastOut"
+"$pIccPipes/remove" "$pFastIn"
 "$pIccPipes/remove" "$pNarrow"
 "$pIccPipes/remove" "$pPipeC"
 "$pIccPipes/remove" "$pPipeB"

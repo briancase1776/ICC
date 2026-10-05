@@ -179,8 +179,15 @@ those pipes with the rest.
   writer to wait on a seat that has not read yet, that seat's cable from
   the tee has to hold all that is written to it in the meantime. A lane
   is 16 pages deep, and a pipe in series adds 16 more and the tee
-  between them one: measured, 16, 33, 50 and 67 blocks of 4096 went
-  into one lane of 1, 2, 3 and 4 pipes in series before the next waited.
+  between them what it has read and not written yet: one page, or two,
+  since tee(1) reads up to 8192 at a time. Written a block of 4096 at a
+  time into a lane of the cable, nobody reading, a cable DEPTH pipes
+  deep took 17 DEPTH - 1 blocks before the next waited, every time:
+  16, 33, 50, 67, 84, 135, 203 and 407 at 1, 2, 3, 4, 5, 8, 12 and 24.
+  Into the seat's write end instead, through its own pipe and tee
+  first, 17 DEPTH + 16. One dd writing as fast as the lanes take it can
+  leave two pages in a tee, and took up to 18 DEPTH - 2. These are
+  whole pages; shorter writes fill less of one, as Pipes says.
 - A seat may sit in more than one patch. A ring and a mesh over the same
   seats is two patches.
 - list says up when every pipe and fitting says up. If one is down, the

@@ -156,6 +156,29 @@ those pipes with the rest.
   and when they interleave, and nowhere else do two writers share a
   pipe. A star and a ring have no fittings, and a mesh no merge: every
   read end on a mesh has one writer, and nothing meets.
+- What writes into each inlet of p's merge is a seat's tee, not the
+  seat. The tee reads up to 8192 bytes at a time, writes them to the
+  seats' cables first and the merge's inlet last, and reads again, and
+  nothing makes the next chunk land before the merge looks again. So
+  the inlet can go empty partway through what a seat puts on, while
+  every seat reads, and the merge lets another inlet in, as Merge says.
+  Only a write of at most PIPE_BUF that the tee reads alone comes out
+  whole for certain. Measured on a mesh-p 3, three seats putting on at
+  once a short header and 3000 to 400000 bytes, printf into dd bs=4096,
+  every seat reading all along: with no load added, whole in 1000 of
+  1000 trials. With a busy loop for every CPU, 2199 of 2200; the one
+  cut came after the header, which printf writes on its own. With four
+  for every CPU, 8000 to 100000 bytes were cut in 26 of 1200, and 3000
+  and 400000 in none of 600. Every cut came after the first 4096 bytes,
+  with other seats' bytes inside it. Under that load, dd writing
+  straight into a merge's inlets, with no tee, was cut in none of 300.
+- A seat that does not read stops each tee that feeds it once its cable
+  from that tee fills; that tee puts nothing more into its inlet, and
+  the merge goes on to the others. On a mesh-p 3 at DEPTH 1, every seat
+  writing 100000 bytes and one reading nothing for a second: cut in 40
+  of 40, p getting the first 60K or so of each of the other two and the
+  rest once that seat read. At DEPTH 2, whose cable holds all 100000,
+  whole in 40 of 40.
 - Nothing a seat writes comes back to it through a fitting, and nothing
   p writes comes back to p, except on a ring-p 1, where the hop tee goes
   round to the one seat there is. On a mesh each read end carries one

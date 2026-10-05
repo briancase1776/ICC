@@ -10,7 +10,9 @@
 #          again, remove it, see nothing left. Make a mesh-p and a ring-p
 #          with every cable a seat reads in series, see the map name every
 #          pipe, a write bigger than single pipes hold go on with nobody
-#          reading and come out whole. Sit a moot on ring-p 3,
+#          reading and come out whole. See a seat that reads nothing stop
+#          the tees that feed it, and p's merge go on to the next seat's.
+#          Sit a moot on ring-p 3,
 #          three seats and a chair blowing raspberries at once through
 #          every tee and merge, and check every one and every seat's
 #          spittle count. A create cut off by a signal leaves nothing
@@ -332,6 +334,31 @@ case $(timeout 1 cat "$pReadEnd/0") in
     ;;
 esac
 "$pIccPatch/remove" "$pDir"
+# A seat that reads nothing stops the tees that feed it once its cable fills,
+# and p's merge goes on to the next inlet: seats 0 and 1 each put on more
+# than one pipe holds while seat 2 reads nothing, and what p has after two
+# seconds is short of all of the first, with the other's after it.
+vMake mesh-p 3
+aJobs=()
+for osSeat in 0 1; do
+  pWriteEnd=$(pAt "$osSeat" 0 p)
+  head -c 100000 /dev/zero | tr '\0' "$osSeat" |
+    timeout 10 dd of="$pWriteEnd/0" bs=4096 2>/dev/null &
+  aJobs+=($!)
+done
+pReadEnd=$(pAt 0 1 1)
+timeout 10 dd if="$pReadEnd/0" of=/dev/null bs=4096 2>/dev/null &
+aJobs+=($!)
+pReadEnd=$(pAt 1 1 0)
+timeout 10 dd if="$pReadEnd/0" of=/dev/null bs=4096 2>/dev/null &
+aJobs+=($!)
+pReadEnd=$(pAt p 1 0)
+timeout 2 head -c 200000 "$pReadEnd/0" > "$pWork/met" || :
+osFirst=$(head -c 1 "$pWork/met")
+[ "$(tr -cd "$osFirst" < "$pWork/met" | wc -c)" -lt 100000 ]
+[ "$(tr -d "$osFirst" < "$pWork/met" | wc -c)" -gt 0 ]
+"$pIccPatch/remove" "$pDir"
+wait "${aJobs[@]}" || :
 # p's cable from the merge is three deep, one pipe for each seat in it
 vMake ring-p 3 6
 vMade icc-pipes 16

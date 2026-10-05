@@ -15,7 +15,8 @@
 #          -r and head -c take the first and leave the second whole, and
 #          dd count=1 takes what one read returns. Nobody reading, what a
 #          lane holds before a write waits, written 4096, 100 or 2049 at a
-#          time, 100 then 4096s, and 4096s after a read freed 100. While
+#          time, 100 then 4096s, and 4096 then 100s after a read of 100
+#          left room at the front of the first page. While
 #          the hold is up, every open opens; once it is down, < and >
 #          block and <> opens. Every case prints one line, ok or off in
 #          front as vFound says.
@@ -30,6 +31,7 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+export LC_ALL=C
 cd "$(dirname "$0")/../.."
 source .claude/skills/icc-lib/scripts/lib
 pIccPipes=.claude/skills/icc-pipes/scripts
@@ -39,8 +41,8 @@ nOff=0
 pWork=
 pA=
 pB=
-vArm '[ -z "$pA" ] || "$pIccPipes/remove" "$pA"
-  [ -z "$pB" ] || "$pIccPipes/remove" "$pB"
+vArm '[ -z "$pA" ] || "$pIccPipes/remove" "$pA" || :
+  [ -z "$pB" ] || "$pIccPipes/remove" "$pB" || :
   [ -z "$pWork" ] || rm -rf "$pWork"'
 pWork=$(mktemp -d)
 pA=$("$pIccPipes/create" 2)
@@ -113,10 +115,11 @@ for osFlag in iflag=fullblock ''; do
     for ((iPiece = 0; iPiece < 100; iPiece++)); do
       printf '%s' "${osText:iPiece * 100:100}"
       sleep 0.005
-    done | timeout 15 dd bs=4096 $osFlag of="$pA/0" 2> "$pWork/said"
+    done | timeout 15 dd bs=4096 $osFlag of="$pA/0" 2> "$pWork/said" || :
     wait $! || :
     [ "$(cat "$pWork/got")" != "${osText:0:10000}" ] || nWhole=$((nWhole + 1))
     osSaid=$(awk '/records out/ {print $1}' "$pWork/said")
+    osSaid=${osSaid:-none}
     hSaid[$osSaid]=$((${hSaid[$osSaid]-0} + 1))
   done
   osSaid=
@@ -141,13 +144,17 @@ for nDribbles in 20 60; do
   for osFlag in iflag=fullblock ''; do
     if [ -n "$osFlag" ]; then
       nWant=$((nPut / 4096 * 4096))
+      osWant="$((nPut / 4096))+0 records out"
     else
       nWant=$nPut
+      osWant="0+$nDribbles records out"
     fi
     nAsSaid=0
     osSeen=
     for ((iRun = 0; iRun < nRuns; iRun++)); do
-      timeout 30 dd if="$pA/0" of="$pB/0" bs=4096 $osFlag \
+      # --foreground sends the INT to dd alone: sent to its group as
+      # well, a second INT can end dd before it says what went out
+      timeout --foreground 30 dd if="$pA/0" of="$pB/0" bs=4096 $osFlag \
         2> "$pWork/said" &
       pidCopier=$!
       for ((iDribble = 0; iDribble < nDribbles; iDribble++)); do
@@ -160,13 +167,16 @@ for nDribbles in 20 60; do
       wait "$pidCopier" || :
       nAfter=$(nDrain "$pB/0")
       nLeft=$(nDrain "$pA/0")
-      osSeen="$osSeen $nRunning/$nAfter/$nLeft"
+      osSaid=$(awk '/records out/ {print $1}' "$pWork/said")
+      osSeen="$osSeen $nRunning/$nAfter/$nLeft/${osSaid:-none}"
       [ "$nRunning" -ne "$nWant" ] || [ "$nAfter" -ne 0 ] ||
-        [ "$nLeft" -ne 0 ] || nAsSaid=$((nAsSaid + 1))
+        [ "$nLeft" -ne 0 ] || ! grep -qx "$osWant" "$pWork/said" ||
+        nAsSaid=$((nAsSaid + 1))
     done
     vFound $((nAsSaid == nRuns)) \
       "lane fed $nPut, ${osFlag:-no flag}: $nRuns runs, $nAsSaid went on" \
-      "$nWant and lost $((nPut - nWant)); on, after the cut, left:$osSeen"
+      "$nWant and lost $((nPut - nWant)), $osWant; on, after the cut," \
+      "left, out:$osSeen"
   done
 done
 

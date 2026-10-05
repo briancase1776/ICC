@@ -11,9 +11,10 @@
 #          seat 1, at the cable's first pipe: 17 DEPTH - 1 blocks. One dd
 #          a block into seat 1's write end, through its own pipe and tee
 #          first: 17 DEPTH + 16, on both its cables. One dd streaming into
-#          seat 0's cable to seat 2, cut off once it waits: from 17 DEPTH
-#          - 1 to 18 DEPTH - 2. Every cable written is drained at the end
-#          its seat holds, and gives back what went in, byte for byte.
+#          seat 0's cable to seat 2, cut off after 3 seconds, long after it
+#          waits: from 17 DEPTH - 1 to 18 DEPTH - 2. Every cable written is
+#          drained at the end its seat holds, and gives back what went in,
+#          byte for byte.
 #          Each run prints one line, ok or off in front as vFound says.
 # @stdin nothing
 # @stdout one line per run
@@ -26,6 +27,7 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+export LC_ALL=C
 cd "$(dirname "$0")/../.."
 source .claude/skills/icc-lib/scripts/lib
 pIccPatch=.claude/skills/icc-patch/scripts
@@ -45,7 +47,7 @@ done
 nOff=0
 pWork=
 pDir=
-vArm '[ -z "$pDir" ] || "$pIccPatch/remove" "$pDir"
+vArm '[ -z "$pDir" ] || "$pIccPatch/remove" "$pDir" || :
   [ -z "$pWork" ] || rm -rf "$pWork"'
 pWork=$(mktemp -d)
 nSource=$((18 * nMost + 20))
@@ -86,11 +88,13 @@ aCable() {
 #        until one waits a second; print how many went on.
 # @param $1 pLane - the lane
 # @stdout the count of blocks
-# @return 0
+# @stderr the reason, when pLane is not a fifo
+# @return 0; it exits 1 instead when pLane is not a fifo
 ##
 nByBlock() {
   local pLane=$1
   local nBlocks=0
+  [ -p "$pLane" ] || { echo "not a lane: $pLane" >&2; exit 1; }
   while [ "$nBlocks" -lt "$nSource" ] &&
       timeout 1 dd if="$pWork/source" of="$pLane" bs=4096 skip="$nBlocks" \
         count=1 status=none; do
@@ -140,7 +144,8 @@ for nDepth in "${aDepths[@]}"; do
     mapfile -t aTo2 < <(aCable 0 2)
     mapfile -t aFrom1To0 < <(aCable 1 0)
     mapfile -t aFrom1To2 < <(aCable 1 2)
-    bDeep=$((${#aTo1[@]} == nDepth && ${#aTo2[@]} == nDepth))
+    bDeep=$((${#aTo1[@]} == nDepth && ${#aTo2[@]} == nDepth &&
+      ${#aFrom1To0[@]} == nDepth && ${#aFrom1To2[@]} == nDepth))
 
     nA=$(nByBlock "${aTo1[0]}/0")
     bA=$(bDrained "${aTo1[-1]}/0" "$nA" "$pWork/a")

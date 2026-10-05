@@ -9,8 +9,9 @@
 #          an hour or more, and the machine is saturated for most of it.
 #          Each run appends to tests/cal/data/NAME.txt and to nothing
 #          else: an @ run line saying when and what was run; an @ icc line
-#          naming the commit and saying clean, or changed and an @ changed
-#          line for every path that differed from it; an @ box line saying
+#          naming the commit, or none, and saying clean, or unknown when
+#          git could not tell, or changed and then an @ changed line for
+#          every path that differed from it; an @ box line saying
 #          what machine; everything the calibration printed; and an @ end
 #          line saying when it ended, with what status, and the load then.
 #          A run cut off has no @ end. A record is a cal certificate: it is
@@ -28,6 +29,7 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+export LC_ALL=C
 cd "$(dirname "$0")/../.."
 
 ##
@@ -44,15 +46,21 @@ vRun() {
   local osName=$1
   shift
   local pRecord=tests/cal/data/$osName.txt
+  local osCommit
   local osChanged
   local osTree=clean
   local nStatus
-  osChanged=$(git status --porcelain -- . ':!tests/cal/data' 2>/dev/null) ||
+  osCommit=$(git rev-parse --verify -q HEAD 2> /dev/null) || osCommit=none
+  if osChanged=$(git status --porcelain -- . ':!tests/cal/data' 2> /dev/null)
+  then
+    [ -z "$osChanged" ] || osTree=changed
+  else
     osChanged=
-  [ -z "$osChanged" ] || osTree=changed
+    osTree=unknown
+  fi
   {
     echo "@ run $(date -u +%Y-%m-%dT%H:%M:%SZ) $osName $*"
-    echo "@ icc $(git rev-parse HEAD 2>/dev/null || echo none) $osTree"
+    echo "@ icc $osCommit $osTree"
     [ -z "$osChanged" ] || sed 's/^/@ changed /' <<< "$osChanged"
     echo "@ box $(nproc) cpus, load $(cut -d' ' -f1-3 /proc/loadavg)," \
       "Linux $(uname -r) $(uname -m), bash $BASH_VERSION," \

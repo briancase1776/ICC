@@ -22,9 +22,9 @@
 #          line, ok or off in front as vFound says: in every trial nothing
 #          lost or wrong; 3000 with the flag whole every time, as Patch
 #          says is certain; seat 2 stalled at DEPTH 1, cut every time; and
-#          with no load added, the tee in, every other case whole every
-#          time. How often a case is cut under load, or with no tee, is
-#          what was found, and passes either way.
+#          with no load added, every other case whole every time. How
+#          often a case is cut under load is what was found, and passes
+#          either way.
 # @stdin nothing
 # @stdout one line per trial, and one per case
 # @stderr whatever failed outside a trial
@@ -36,6 +36,7 @@
 # MIT Licence. See LICENCE.TXT
 ##
 set -eu
+export LC_ALL=C
 cd "$(dirname "$0")/../.."
 source .claude/skills/icc-lib/scripts/lib
 pIccPipes=.claude/skills/icc-pipes/scripts
@@ -67,24 +68,24 @@ vTake() {
     wait "${aDrains[@]}" 2> /dev/null || :
   fi
   aDrains=()
-  [ -z "$pDir" ] || "$pIccPatch/remove" "$pDir"
-  [ -z "$pMerge" ] || "$pIccMerge/remove" "$pMerge"
+  [ -z "$pDir" ] || "$pIccPatch/remove" "$pDir" || :
+  [ -z "$pMerge" ] || "$pIccMerge/remove" "$pMerge" || :
   for pPipe in "${aInlets[@]}" $pOutlet; do
-    "$pIccPipes/remove" "$pPipe"
+    "$pIccPipes/remove" "$pPipe" || :
   done
   pDir=
   pMerge=
   aInlets=()
   pOutlet=
 }
-vArm 'vTake
-  [ ${#aBusy[@]} -eq 0 ] || kill "${aBusy[@]}" 2> /dev/null || :
+vArm '[ ${#aBusy[@]} -eq 0 ] || kill "${aBusy[@]}" 2> /dev/null || :
+  vTake
   [ -z "$pWork" ] || rm -rf "$pWork"'
 pWork=$(mktemp -d)
 mkfifo "$pWork/go"
 exec {fdGo}<> "$pWork/go"
 for ((iBusy = 0; iBusy < nLoad * $(nproc); iBusy++)); do
-  timeout 86400 yes > /dev/null &
+  timeout 86400 yes > /dev/null 2>&1 &
   aBusy+=($!)
 done
 [ "$nLoad" -eq 0 ] || sleep 1
@@ -101,7 +102,8 @@ vDrain() {
   local pEnd
   for pEnd in $(awk -v s="$osSeat" '$1 == s && $2 == 1 {print $3}' \
       "$pDir/patch"); do
-    timeout 86400 dd if="$pEnd/0" of=/dev/null bs=65536 status=none &
+    timeout 86400 dd if="$pEnd/0" of=/dev/null bs=65536 status=none \
+      2> /dev/null &
     aDrains+=($!)
   done
 }
@@ -143,6 +145,8 @@ vCase() {
   local nReading
   local osPerm
   local pEnd
+  local pidWriter
+  local nStatus
   if [ "$eHow" = no-tee ]; then
     for iSeat in 0 1 2; do
       aInlets+=("$("$pIccPipes/create" 2)")
@@ -186,12 +190,12 @@ vCase() {
     (
       nStatus=0
       timeout 60 head -c "$nTotal" "$pRead/0" > "$pWork/got" || nStatus=$?
-      echo "${EPOCHREALTIME/./}" > "$pWork/done"
+      echo "${EPOCHREALTIME//[!0-9]/}" > "$pWork/done"
       exit "$nStatus"
     ) &
     pidRead=$!
     sleep 0.2
-    nMs=${EPOCHREALTIME/./}
+    nMs=${EPOCHREALTIME//[!0-9]/}
     printf xxx >&"$fdGo"
     if [ "$eHow" = stalled ]; then
       sleep 1
@@ -209,7 +213,7 @@ vCase() {
     nMs=$((($(cat "$pWork/done") - nMs) / 1000))
     if [ "$eHow" = stalled ]; then
       sleep 0.3
-      kill "${aDrains[@]:nReading}"
+      kill "${aDrains[@]:nReading}" 2> /dev/null || :
       wait "${aDrains[@]:nReading}" 2> /dev/null || :
       aDrains=("${aDrains[@]:0:nReading}")
       for pEnd in $(awk '$1 == 2 && $2 == 1 {print $3}' "$pDir/patch"); do
@@ -251,7 +255,7 @@ vCase() {
   elif [ "$eHow" = reading ] && [ "$nSize" -eq 3000 ] && [ -n "$osFlag" ]
   then
     vFound $((nWhole == nTrials)) "$osCase"
-  elif [ "$eHow" != no-tee ] && [ "$nLoad" -eq 0 ]; then
+  elif [ "$nLoad" -eq 0 ]; then
     vFound $((nWhole == nTrials)) "$osCase"
   else
     vFound $((nWrong == 0)) "$osCase"

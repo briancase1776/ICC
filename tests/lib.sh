@@ -101,31 +101,31 @@ printf '%s\n' 'star 1 6 1' '0 0 s p' 'p 1 s 0' > star/patch
 [ "$(oLanes star p w)" = "$(printf 's/%s\n' 1 3 5)" ]
 [ "$(oLanes star p r)" = "$(printf 's/%s 0\n' 0 2 4)" ]
 # A wait on a seat's lanes, held open here as Pipes holds them: not yet
-# while one is empty, at once when the time is short, and at nine tenths
-# of three seconds, written with a leading zero that is still base ten,
-# osWho in front; done when every one has something, a limit that is not
-# a count read as the default; and what was on the lane still there. A
-# lane that is not a fifo is refused, not waited on.
+# while one is empty, at once given 0 seconds, and after three seconds,
+# written with a leading zero that is still base ten, osWho in front; done
+# when every one has something; seconds that are not a count, or none,
+# refused; and what was on the lane still there. A lane that is not a fifo
+# is refused, not waited on.
 mkdir in01 inp
 mkfifo in01/0 in01/1 inp/0 inp/1
 exec {fdIn01}<>in01/0 {fdInp}<>inp/0
-[ "$(BASH_MAX_TIMEOUT_MS=1000 vWaitFor meshp 0 2>&1)" = \
-  "not yet, nothing taken" ]
+[ "$(vWaitFor meshp 0 0 2>&1)" = "not yet, nothing taken" ]
 nStart=$SECONDS
-[ "$(osWho=hear BASH_MAX_TIMEOUT_MS=03000 vWaitFor meshp p 2>&1)" = \
-  "hear: not yet, nothing taken" ]
+[ "$(osWho=reader vWaitFor meshp p 03 2>&1)" = \
+  "reader: not yet, nothing taken" ]
 nWaited=$((SECONDS - nStart))
 [ "$nWaited" -ge 2 ]
 [ "$nWaited" -le 4 ]
 printf 'said\n' > in01/0
-(BASH_MAX_TIMEOUT_MS=1000 vWaitFor meshp 0)
-(BASH_MAX_TIMEOUT_MS=x vWaitFor meshp 0)
+(vWaitFor meshp 0 0)
+[ "$(vWaitFor meshp 0 x 2>&1)" = "seconds must be a whole number: x" ]
+[ "$(vWaitFor meshp 0 2>&1)" = "seconds must be a whole number: " ]
 read -r -t 1 -u "$fdIn01" osSaid
 [ "$osSaid" = said ]
 exec {fdIn01}<&- {fdInp}<&-
 mkdir nolane
 printf '%s\n' 'mesh-p 2 2 1' '0 1 gone 1' > nolane/patch
-[ "$(vWaitFor nolane 0 2>&1)" = "not a lane: gone/0" ]
+[ "$(vWaitFor nolane 0 0 2>&1)" = "not a lane: gone/0" ]
 # A lane nothing holds, as when its holder has died, is looked at and not
 # hung on; and a lane taken away while the wait is on is refused then,
 # within a look, and nothing is made where it was. Each runs in a shell of
@@ -135,13 +135,13 @@ mkdir lone going lonep goingp
 mkfifo lone/0 lone/1 going/0 going/1
 printf '%s\n' 'mesh-p 2 2 1' '0 1 lone 1' > lonep/patch
 printf '%s\n' 'mesh-p 2 2 1' '0 1 going 1' > goingp/patch
-[ "$(BASH_MAX_TIMEOUT_MS=1000 timeout 10 bash -c \
-  'source "$1"; vWaitFor lonep 0' - "$pIccLib/lib" 2>&1)" = \
+[ "$(timeout 10 bash -c \
+  'source "$1"; vWaitFor lonep 0 0' - "$pIccLib/lib" 2>&1)" = \
   "not yet, nothing taken" ]
 (sleep 1.5; rm going/0) &
 nStart=$SECONDS
-[ "$(BASH_MAX_TIMEOUT_MS=10000 timeout 10 bash -c \
-  'source "$1"; vWaitFor goingp 0' - "$pIccLib/lib" 2>&1)" = \
+[ "$(timeout 10 bash -c \
+  'source "$1"; vWaitFor goingp 0 9' - "$pIccLib/lib" 2>&1)" = \
   "not a lane: going/0" ]
 wait
 [ $((SECONDS - nStart)) -le 4 ]

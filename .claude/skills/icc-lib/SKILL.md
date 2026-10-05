@@ -39,12 +39,12 @@ into the other is ICC's to write.
     oLanes PATCH SEAT w|r the lanes SEAT writes, one per line; or those
                           it reads, each with the seats that write into
                           it: off Patch's map, as Pipes and Patch say
-    vWaitFor PATCH SEAT   wait until every lane SEAT reads has something
+    vWaitFor PATCH SEAT SECONDS
+                          wait until every lane SEAT reads has something
                           on it, taking nothing; or say "not yet, nothing
-                          taken" and exit 1 at nine tenths of
-                          BASH_MAX_TIMEOUT_MS, 600000 when it is unset
-                          or not a count; refuse a lane that is not a
-                          fifo, before every look
+                          taken" and exit 1 once SECONDS, a count, have
+                          gone, and 0 looks once; refuse a lane that is
+                          not a fifo, before every look
     vArm CLEANUP          arm CLEANUP on EXIT, and INT, TERM and HUP to
                           exit 1, before anything is made
     vStopOnSignal         INT, TERM and HUP exit 1 again, after a handler

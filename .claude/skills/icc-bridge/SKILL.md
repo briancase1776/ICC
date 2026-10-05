@@ -1,14 +1,13 @@
 ---
 name: icc-bridge
 description: >-
-  Currently unavailable: out and in are shelved with icc-frames. What it
-  says of the carriers across the session line, SendMessage, send_message
-  and a Routine, holds, and sent gives back a send_message's text as it
-  was sent. out and in take an icc-frames payload off an icc-pipes pipe
-  as text a message can carry, and put such text back on a pipe as the
-  payload it spells. The same bytes on the far wire as on the near one.
-  Who sends the message, how, to whom, and what the bytes mean, is the
-  caller's business.
+  What carries a message across the session line, SendMessage,
+  send_message or a Routine, and what each does to it; and sent, which
+  gives back a send_message's text as it was sent. out and in, currently
+  unavailable and shelved with icc-frames, take an icc-frames payload off
+  an icc-pipes pipe as text a message can carry, and put such text back
+  on a pipe as the payload it spells. Who sends the message, how, to
+  whom, and what the bytes mean, is the caller's business.
 ---
 
 # icc-bridge

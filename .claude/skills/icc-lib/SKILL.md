@@ -22,10 +22,13 @@ A session has no reason to call it. It is a skill so that it travels
 with the others: install the ICC skills together, into one skills
 directory.
 
-oLanes and vWaitFor are the two no piece calls. They are for a script
+A script outside ICC may source any of these, as one inside does.
+oLanes and vWaitFor are the two no piece calls: they are for a script
 that sits at a seat and wants its lanes, or waits on them, and they are
 here because the map is Patch's and the lanes are Pipes', so reading one
-into the other is ICC's to write.
+into the other is ICC's to write. All of them change with ICC's pieces.
+A script outside that sources one keeps up with it, not it with that
+script.
 
 ## The functions
 

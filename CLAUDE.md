@@ -35,7 +35,8 @@ rule below.
   need goes in one file they source by fixed path, as they reach
   everything else here; that is sharing within the repo, not a
   dependency. The same code written out in several places is how pieces
-  drift apart.
+  drift apart. Scripts outside ICC may source icc-lib too, as its
+  SKILL.md says. They keep up with it; it does not keep up with them.
 - **Small.** If a file is getting long, you are adding scope, not
   features.
 - **Keep the lines sharp.** Between one piece and the next, and between

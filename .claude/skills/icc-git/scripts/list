@@ -26,13 +26,11 @@ osWho=list
 # goes however list ends.
 pWork=
 vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
-pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
-git init -q --bare "$pWork" || exit 1
-vWireTip "$pWork" "$osRemote" "$osRef"
+vWireTip "$osRemote" "$osRef"
 [ -n "$osTip" ] || exit 0
 # NUL-ended into the scratch repo first, so a failure stops list before it
 # prints, and git quotes no path: a path with a byte git would quote is
 # printed as it is.
 git --git-dir="$pWork" ls-tree -r -z --name-only "$osTip" > "$pWork/paths" ||
   exit 1
-tr '\0' '\n' < "$pWork/paths"
+tr '\0' '\n' < "$pWork/paths" || exit 1

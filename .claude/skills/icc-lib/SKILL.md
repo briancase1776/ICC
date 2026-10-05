@@ -58,13 +58,13 @@ into the other is ICC's to write.
                           and remove both do: set pPath to PATH as
                           readlink -m spells it, and pLock to its
                           directory; refuse a newline
-    vWireTip WORK REMOTE REF
-                          fetch the tip of branch REF on REMOTE into
-                          the scratch repo WORK, as icc-git's send,
-                          read and list all do: set osTip to it, or
-                          to nothing when REF is not on REMOTE yet;
-                          refuse a REF git refuses, and a REMOTE not
-                          read
+    vWireTip REMOTE REF   fetch the tip of branch REF on REMOTE, as
+                          icc-git's send, read and list all do, into a
+                          scratch repo it makes and sets pWork to on
+                          the first call, clear of the caller's repo:
+                          set osTip to the tip, or to nothing when REF
+                          is not on REMOTE yet; refuse a REF git
+                          refuses, and a REMOTE not read
     vCutOffAt SIGNAL STUB COMMAND...
                           for the harnesses: send SIGNAL to COMMAND
                           while it waits in STUB, and check it exits 1

@@ -1,22 +1,28 @@
 #!/bin/bash
 ##
 # @file send
-# @brief Put stdin at a PATH new on a git wire, and print the commit.
+# @brief Put stdin at a PATH on a git wire, once, and for good.
 # @details send REMOTE REF PATH. The wire is the branch REF on REMOTE, and
 #          the first send makes it. The bytes on stdin go in as they are,
 #          as one file at PATH, in one commit on REF's tip, and the commit
-#          is pushed as a fast-forward. A PATH already on REF is refused:
-#          a path once sent is not changed by send. A push turned away
-#          because REF moved fetches the new tip, builds on it and pushes
-#          again, for as long as REF keeps moving; one turned away while
-#          REF has not moved is a fault, and git's words say why.
-#          It all happens in a scratch repo under /tmp, with an index of
-#          its own and no checkout, and the scratch repo goes when send
-#          does. The caller's own repo, branch and index are not touched.
-#          The commit is made as the caller's git config makes one, and
-#          its message is PATH.
+#          is pushed as a fast-forward. A PATH that holds these bytes
+#          already has nothing to do, so a send whose push landed and whose
+#          report was lost can be sent again. A PATH that holds anything
+#          else is refused: a path once sent is not changed by send.
+#          A push turned away because REF moved builds on the new tip and
+#          pushes again, for as long as REF keeps moving. One turned away
+#          while REF has not moved is looked at again after one second, two
+#          and four, since a remote can still be holding REF for a send not
+#          yet done; after that it is a fault, and git's words say why.
+#          It all happens in a scratch repo under /tmp, made by icc-lib's
+#          vWireTip, with an index of its own and no checkout, and the
+#          scratch repo goes when send does. The caller's own repo, branch
+#          and index are not touched. The commit is made as git's global
+#          and system config and the environment make one; the config of a
+#          repo the caller stands in is not read. It is not signed, and its
+#          message is PATH.
 # @stdin the bytes, as many as there are
-# @stdout the commit, once it is on REF
+# @stdout nothing
 # @stderr the reason, on refusal
 # @exit 0 the bytes are on REF at PATH; 1 they are not
 #
@@ -39,39 +45,63 @@ case $osPath in
     exit 1
     ;;
 esac
+# A closed stdin is refused before anything reads it. git, reading it,
+# would read the pipe a $( ) opens on the free fd 0, its own output, and
+# wait for ever. Copying fd 0 is the test: there is nothing to copy.
+{ : 3<&0; } 2> /dev/null || {
+  echo "send: stdin is closed" >&2
+  exit 1
+}
 # Armed before anything is made, as icc-lib's vArm says: the scratch repo
 # goes however send ends.
 pWork=
 vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
-pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
-git init -q --bare "$pWork" || exit 1
+vWireTip "$osRemote" "$osRef"
 export GIT_INDEX_FILE=$pWork/index
-vWireTip "$pWork" "$osRemote" "$osRef"
 osBlob=$(git --git-dir="$pWork" hash-object -w --stdin) || exit 1
+nWait=1
 while :; do
   if [ -n "$osTip" ]; then
-    if git --git-dir="$pWork" cat-file -e "$osTip:$osPath" 2>/dev/null; then
-      echo "send: $osPath is on the wire already" >&2
+    # What PATH holds on the tip: these bytes, and there is nothing to do;
+    # or anything else, a file or a directory, and it is not changed.
+    osHad=$(git --git-dir="$pWork" rev-parse -q --verify \
+      "$osTip:$osPath") || osHad=
+    [ "$osHad" != "$osBlob" ] || exit 0
+    if [ -n "$osHad" ]; then
+      echo "send: $osPath is taken on the wire" >&2
       exit 1
     fi
     git --git-dir="$pWork" read-tree "$osTip" || exit 1
   else
     git --git-dir="$pWork" read-tree --empty || exit 1
   fi
-  # git refuses a path it would not check out, and a file where a
-  # directory is or a directory where a file is, and says so.
+  # git refuses a path it would not check out, and a path under a file,
+  # and says so.
   git --git-dir="$pWork" update-index --add \
     --cacheinfo "100644,$osBlob,$osPath" || exit 1
   osTree=$(git --git-dir="$pWork" write-tree) || exit 1
   osCommit=$(git --git-dir="$pWork" commit-tree "$osTree" \
     ${osTip:+-p "$osTip"} -m "$osPath") || exit 1
   osSaid=$(git --git-dir="$pWork" push -q -- \
-    "$osRemote" "$osCommit:refs/heads/$osRef" 2>&1) && break
+    "$osRemote" "$osCommit:refs/heads/$osRef" 2>&1) && exit 0
+  # Turned away. Moved, and it builds on the new tip. Not moved, and the
+  # remote may still be holding REF for a send not yet done: look again
+  # after a wait, one second, then two, then four while REF stays put, and
+  # one again once it has moved. Seven seconds with REF not moving at all
+  # is a fault.
   osWas=$osTip
-  vWireTip "$pWork" "$osRemote" "$osRef"
+  vWireTip "$osRemote" "$osRef"
   if [ "$osTip" = "$osWas" ]; then
-    echo "send: $osSaid" >&2
-    exit 1
+    if [ "$nWait" -gt 4 ]; then
+      echo "send: $osSaid" >&2
+      exit 1
+    fi
+    sleep "$nWait"
+    vWireTip "$osRemote" "$osRef"
+  fi
+  if [ "$osTip" = "$osWas" ]; then
+    nWait=$((nWait * 2))
+  else
+    nWait=1
   fi
 done
-echo "$osCommit"

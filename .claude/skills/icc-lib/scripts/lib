@@ -401,34 +401,49 @@ vLockOf() {
 # @brief Fetch a git wire's tip into a scratch repo, or find the wire is
 #        not there yet.
 # @details Called, not captured, by icc-git's send, read and list, so the
-#          three reach a wire one way and refuse the same REFs. REF is a
-#          branch name, as git check-ref-format --branch takes one. Only
+#          three reach a wire one way and refuse the same REFs. The first
+#          call makes the scratch repo: git's variables that would point it
+#          at some other repo are cleared, so the caller's own repo is
+#          neither read nor written, and a bare repo is made under /tmp and
+#          set in pWork. Arm the cleanup first, as vArm says. REF is a
+#          branch name, as git check-ref-format --branch takes one in a
+#          repo with no history, so @{-1} and the like are refused. Only
 #          the tip is fetched, --depth=1: a send builds on it, and a read
-#          needs nothing older. A fetch that fails is put to ls-remote:
-#          its exit 2 is a branch not on REMOTE, which no send has made
-#          yet. Its exit 0 is a branch made between the two, by a send
-#          racing this one, and it is fetched once more: a branch is made
-#          once, so a second fetch that fails is a fault. Anything else is
-#          a REMOTE not read. A fault is said in fetch's own words. Both
-#          run in the scratch repo, so a remote's name from the caller's
-#          own repo is not one. Called again in the same repo, it fetches
-#          the tip as it is now.
-# @param $1 pWork - the scratch repo, as git init --bare made it
-# @param $2 osRemote - the remote, as git fetch takes one: a URL or a path
-# @param $3 osRef - the branch the wire is on
+#          needs nothing older. A fetch that fails is put to ls-remote: its
+#          exit 2 is a branch not on REMOTE, which no send has made yet.
+#          Its exit 0 is a branch made between the two, by a send racing
+#          this one, and it is fetched once more: a branch is made once, so
+#          a second fetch that fails is a fault. Anything else is a REMOTE
+#          not read. A fault is said in fetch's own words. Both run in the
+#          scratch repo, so a remote's name from the caller's own repo is
+#          not one. Called again, it fetches the tip as it is now.
+# @param $1 osRemote - the remote, as git fetch takes one: a URL or a path
+# @param $2 osRef - the branch the wire is on
 # @stderr the reason, on refusal
 # @global osWho - read, as nCount reads it
+# @global pWork - read and set: the scratch repo, made when it is empty
 # @global osTip - set, the tip's commit; empty when REF is not on REMOTE
 # @return 0; it exits 1 instead when REF is refused or REMOTE is not read
 ##
 vWireTip() {
-  local pWork=$1
-  local osRemote=$2
-  local osRef=$3
+  local osRemote=$1
+  local osRef=$2
   local osSaid
   local nStatus
   local iFetch
-  git check-ref-format --branch "$osRef" > /dev/null || exit 1
+  if [ -z "$pWork" ]; then
+    unset GIT_DIR GIT_WORK_TREE GIT_IMPLICIT_WORK_TREE GIT_COMMON_DIR \
+      GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_INDEX_FILE \
+      GIT_SHALLOW_FILE GIT_GRAFT_FILE GIT_NO_REPLACE_OBJECTS \
+      GIT_REPLACE_REF_BASE GIT_PREFIX
+    pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX) || exit 1
+    git init -q --bare "$pWork" || exit 1
+  fi
+  if ! git --git-dir="$pWork" check-ref-format --branch "$osRef" \
+      > /dev/null 2>&1; then
+    echo "${osWho:+$osWho: }REF is not a branch name: $osRef" >&2
+    exit 1
+  fi
   osTip=
   for iFetch in 1 2; do
     if osSaid=$(git --git-dir="$pWork" fetch -q --depth=1 -- \

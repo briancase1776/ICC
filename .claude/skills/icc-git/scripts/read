@@ -28,9 +28,7 @@ osWho=read
 # goes however read ends.
 pWork=
 vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
-pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
-git init -q --bare "$pWork" || exit 1
-vWireTip "$pWork" "$osRemote" "$osRef"
+vWireTip "$osRemote" "$osRef"
 if [ -z "$osTip" ]; then
   echo "read: $osRef is not on $osRemote" >&2
   exit 1

@@ -1,12 +1,13 @@
 ---
 name: icc-bridge
 description: >-
-  Currently unavailable.
-  Take an icc-frames payload off an icc-pipes pipe as text a message can
-  carry, a SendMessage or a Routine, and put such text back on a pipe as
-  the payload it spells. The same bytes on the far wire as on the near
-  one. Who sends the message, how, to whom, and what the bytes mean, is
-  the caller's business.
+  What carries a message across the session line, SendMessage,
+  send_message or a Routine, and what each does to it; and sent, which
+  gives back a send_message's text as it was sent. out and in, currently
+  unavailable and shelved with icc-frames, take an icc-frames payload off
+  an icc-pipes pipe as text a message can carry, and put such text back
+  on a pipe as the payload it spells. Who sends the message, how, to
+  whom, and what the bytes mean, is the caller's business.
 ---
 
 # icc-bridge
@@ -15,8 +16,13 @@ A bridge is a payload carried across the session line: off a pipe as
 text, in a message, onto a pipe. Pipes says what a lane is and Frames
 what a payload is; see their SKILL.md. Bridge says what the text is.
 The Claude holding the end sends the text, and hands what arrives to
-in. Two things in Claude Code carry a message: SendMessage, and a
-Routine bound to the other session. The facts about each are below.
+in. Three things in Claude Code carry a message: SendMessage,
+send_message, and a Routine bound to the other session. The facts about
+each are below.
+
+Shelved: out and in carry only Frames payloads, and Frames is shelved.
+They come back with it. The facts about the message and its carriers,
+and sent, do not depend on them, and hold.
 
 ## Operations
 
@@ -24,22 +30,25 @@ Routine bound to the other session. The facts about each are below.
                                    reads, print it as text
     scripts/in  DIR SIDE < text    take text, put the payload it spells
                                    on the lanes SIDE writes
+    scripts/sent < text > text     take a send_message's text as it
+                                   arrived, print it as it was sent
 
 DIR is what Pipes' create printed, or an end in a Patch map. SIDE is 0
 or 1, as Pipes says. Which side you are, and where the text goes, is
-agreed outside this skill. Both scripts run Frames' read and write from
+agreed outside this skill. out and in run Frames' read and write from
 beside this skill, `../../icc-frames/scripts` in the same skills
 directory. There is nothing to configure and nothing to set.
 
     timeout 5 scripts/out "$pDir" 1 > text  # off the wire, one tool call
     SendMessage to=ADDRESS message=text     # the Claude, not a script,
-                                            # or a Routine, below
+                                            # or send_message or a
+                                            # Routine, below
                                             # ... over there, a message arrives
     scripts/in "$pDir" 0 < text             # onto the wire, one tool call
 
-The scripts source icc-lib's shared functions from beside this skill,
+out and in source icc-lib's shared functions from beside this skill,
 `../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
-to be installed with it.
+to be installed with them. sent needs neither icc-lib nor Frames.
 
 ## The text
 
@@ -82,7 +91,42 @@ These hold whichever carries it. The skill adds nothing to them.
 - A subagent's message goes out under its parent session's name, and a
   reply lands in the parent's conversation, not the subagent's.
 - In a cloud session ListAgents lists nothing, so a cloud session has
-  no name to send to. Between two cloud sessions, a Routine carries it.
+  no name to send to. Between two cloud sessions, send_message or a
+  Routine carries it.
+
+## send_message
+
+The claude-code-remote server's tool. These are what it did between
+cloud sessions of one account.
+
+- The address is the other session's id, session_..., and list_sessions
+  lists them. It reaches sessions of the same account.
+- It arrives as a turn of its own, wrapped in `<cross-session-message
+  from-session="session_...">`, with two lines of the harness's in front
+  of the text. from-session is the session that sent it, and the address
+  a reply goes to. A session in the middle of a turn is told
+  notifications are pending, and ReadNotifications returns it. in takes
+  the text, not the wrapper.
+- The text does not arrive as it was sent. Every line comes indented
+  four spaces, an empty one too, and &, < and > come as &amp;, &lt; and
+  &gt;, so text that was already escaped arrives escaped again. Tabs,
+  quotes, backslashes, $ and trailing spaces come as they were sent. A
+  text that ended in a newline arrives with one more line, empty but for
+  the indent. Those are the changes seen, not a promise there are no
+  others.
+- sent undoes them. Hand it the lines inside the wrapper, after the
+  harness's two and the blank one, as they arrived: it takes the four
+  spaces off each and the three entities back, once, and prints the text
+  as it was sent, its last newline or none included. A line without the
+  four spaces refuses the whole text. in refuses the indent, so text
+  for in goes through sent first.
+- The sender's tool result echoes the message as it was delivered,
+  indent and escapes included. That says it arrived, not that it was
+  read.
+- Any session on the account can read another's transcript, the
+  messages in it included, with list_events. A message is not between
+  two sessions only.
+- The tool says a message is bounded to 64 KiB.
 
 ## A Routine
 
@@ -119,7 +163,8 @@ did, and they may change.
 
 ## In Claude Code
 
-Every Bash call is a fresh shell. out and in are one call each and
-hold nothing; the pipe holds itself, as Pipes says. A read on an empty
+Every Bash call is a fresh shell. out and in are one call each. Each
+keeps the payload in a temp file while it runs and removes it when it
+ends; the pipe holds itself, as Pipes says. A read on an empty
 wire waits, as Frames says: bound out with timeout. A message is a tool
 call of its own, between the two.

@@ -26,13 +26,15 @@ still means it.
 
 Nothing in the middle looked at a byte. Six lanes carry about 200K across
 a mesh that size; a bigger payload wants more lanes, and `write` refuses
-rather than hangs when you ask for more than the wire holds.
+rather than hangs when you ask for more than the wire holds. Frames,
+which does the slicing here, is shelved for now, and so are Bridge's
+out and in.
 
 ## The pieces
 
-    icc-bridge     the spelling  a payload as a message, and back
+    icc-bridge     the spelling  a message across the session line, and back
     icc-patch      the bay       shapes over N seats, and a map
-    icc-frames     the payload   slice, carry, reassemble
+    icc-frames     the payload   slice, carry, reassemble (shelved)
     icc-tee        the fitting   copy one pipe onto many
     icc-merge      the fitting   copy many pipes onto one
     icc-pipes      the lane      a bidirectional channel at a path
@@ -43,9 +45,9 @@ rather than hangs when you ask for more than the wire holds.
 
 Ten Claude Code skills in one repo, under one `.claude/skills/`.
 
-Bridge is the exception to the first paragraph: it carries a payload
-across the session line as a SendMessage or a Routine, and only a Claude
-can call those.
+Bridge is the exception to the first paragraph: it spells a payload as
+text that a SendMessage, send_message or a Routine carries across the
+session line, and only a Claude can send those.
 
 ## Running it
 

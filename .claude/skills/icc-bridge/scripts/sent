@@ -1,0 +1,53 @@
+#!/bin/bash
+##
+# @file sent
+# @brief Give back the text of a send_message as it was sent, from the text
+#        as it arrived.
+# @details sent < text. The text is what arrived inside the wrapper, after
+#          the harness's lines and the blank one: every line indented four
+#          spaces, and &, < and > as &amp;, &lt; and &gt;, as Bridge's
+#          SKILL.md says send_message delivers it. sent takes the four
+#          spaces off every line and the three entities back, once, and
+#          prints the lines with a newline between each and none after the
+#          last: a text that ended in a newline arrives with an empty
+#          indented line last, and so ends in one again. Whole or nothing:
+#          a line without the four spaces, or no line at all, refuses the
+#          text, and nothing is printed.
+# @stdin the text as it arrived
+# @stdout the text as it was sent
+# @stderr the reason, on refusal
+# @exit 0 the text is printed; 1 a line is not indented, or there is none
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+set -eu
+export LC_ALL=C
+awk '
+  substr($0, 1, 4) != "    " {
+    print "sent: a line without the four spaces; nothing printed" \
+      > "/dev/stderr"
+    bBad = 1
+    exit 1
+  }
+  {
+    aLine[NR] = substr($0, 5)
+  }
+  END {
+    if (bBad) {
+      exit 1
+    }
+    if (NR == 0) {
+      print "sent: no text; nothing printed" > "/dev/stderr"
+      exit 1
+    }
+    for (i = 1; i <= NR; i++) {
+      s = aLine[i]
+      gsub(/&lt;/, "<", s)
+      gsub(/&gt;/, ">", s)
+      gsub(/&amp;/, "\\&", s)
+      printf "%s%s", (i > 1 ? "\n" : ""), s
+    }
+  }'

@@ -207,8 +207,8 @@ exec 5>&-
 # what their read returned and hold nothing of their own, which is why Pipes
 # names dd and refuses cat. What dd cannot spell is an exact count. `count=`
 # counts reads, so it stops at the first short one and leaves the rest of the
-# frame behind, and the spelling that would not, iflag=fullblock, is the one
-# Pipes says never to add.
+# frame behind. iflag=fullblock would not, and on the hold, which ends, Pipes
+# allows it, as frame 0 uses it; head -c is the exact count without it.
 nLeft=$nSize
 nFirst=$(( nPipeBuf - ${#nSize} - 1 ))
 (( nFirst > nLeft )) && nFirst=$nLeft

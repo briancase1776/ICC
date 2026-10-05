@@ -10,7 +10,8 @@ instruction to that session.
 
 Ten skills under one `.claude/`, one harness apiece under `tests/`, and
 this file. Two of the skills serve the others: icc-lib is the functions
-they share, which each of them sources by fixed path, and icc-raspberry
+they share, which each of them sources by fixed path, with two more,
+oLanes and vWaitFor, for a script that sits at a seat; and icc-raspberry
 is the test data, a raspberry of sixteen kinds that the harnesses blow.
 
     ./tests/run.sh    every piece's harness, bottom up
@@ -34,7 +35,8 @@ rule below.
   need goes in one file they source by fixed path, as they reach
   everything else here; that is sharing within the repo, not a
   dependency. The same code written out in several places is how pieces
-  drift apart.
+  drift apart. Scripts outside ICC may source icc-lib too, as its
+  SKILL.md says. They keep up with it; it does not keep up with them.
 - **Small.** If a file is getting long, you are adding scope, not
   features.
 - **Keep the lines sharp.** Between one piece and the next, and between

@@ -234,8 +234,8 @@ oLanes() {
 # @fn vWaitFor()
 # @brief Wait until every lane a seat reads has something on it, taking
 #        nothing, or say not yet.
-# @details Called, not captured, by what reads a round, before it takes
-#          anything: a reader cut off while it waits has taken nothing and
+# @details Called, not captured, by what reads a seat's lanes, before it
+#          takes anything: a reader cut off while it waits has taken nothing and
 #          can be called again, where one cut off partway through its
 #          reading has lost what it took. read -t 0 looks at a lane without
 #          taking from it, as Merge's copier does. The lane is opened to
@@ -245,29 +245,32 @@ oLanes() {
 #          look it checks the lane is still a fifo and refuses it at once
 #          if not, so a lane taken away while it waits is refused then,
 #          and never opened: opened to read and write, a path that is gone
-#          would be made. It gives up at nine tenths of the time the
-#          caller's call may run, so it says so before the call is cut
-#          off: the milliseconds in BASH_MAX_TIMEOUT_MS, as Claude Code
-#          names that time, when nCount takes them as a count, and 600000,
-#          Claude Code's own, when not.
+#          would be made. It gives up after the seconds its caller gives
+#          it, looking about once a second, and 0 looks once. How long
+#          that should be, the caller knows and this does not.
 # @param $1 pPatch - the patch, as Patch's create printed it
 # @param $2 osSeat - the seat, as the map spells it
+# @param $3 nSeconds - how long to wait, a count as nCount takes one
 # @stderr "not yet, nothing taken" when the time runs out first; "not a
-#         lane" and the path, for one that is not a fifo or no longer is
+#         lane" and the path, for one that is not a fifo or no longer is;
+#         nCount's reason, for seconds that are not a count; awk's, when
+#         the map cannot be read
 # @global osWho - read, as nCount reads it
-# @global BASH_MAX_TIMEOUT_MS - read
-# @return 0 every lane has something on it; it exits 1 instead when the
-#         time runs out first or a lane is not a fifo
+# @return 0 every lane has something on it, or the seat reads none; it
+#         exits 1 instead when the time runs out first, a lane is not a
+#         fifo, the seconds are refused, or the map cannot be read
 ##
 vWaitFor() {
   local pPatch=$1
   local osSeat=$2
-  local nMs
+  local nSeconds
   local nEnd
   local pLane
-  nMs=$(nCount ms "${BASH_MAX_TIMEOUT_MS:-600000}" 2>/dev/null) ||
-    nMs=600000
-  nEnd=$((SECONDS + nMs * 9 / 10000))
+  local osLanes
+  nSeconds=$(nCount seconds "${3-}") || exit 1
+  osLanes=$(oLanes "$pPatch" "$osSeat" r) || exit 1
+  [ -n "$osLanes" ] || return 0
+  nEnd=$((SECONDS + nSeconds))
   while read -r pLane _; do
     while :; do
       [ -p "$pLane" ] || {
@@ -283,7 +286,7 @@ vWaitFor() {
       }
       sleep 1
     done
-  done < <(oLanes "$pPatch" "$osSeat" r)
+  done <<< "$osLanes"
 }
 
 ##
@@ -337,7 +340,7 @@ vDisarm() {
 #          nothing, and under set -e it ends the caller. Arm the cleanup
 #          first, as vArm says: the signal waits for the assignment, so
 #          the cleanup always knows pDir.
-# @param $1 osKind - what the directory is named for: icc-pipes, moot
+# @param $1 osKind - what the directory is named for: icc-pipes, icc-tee
 # @stdout the directory, one line
 # @global pDir - set, the directory made
 # @return 0; under set -e a mktemp or a print that fails ends the caller

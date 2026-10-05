@@ -3,9 +3,12 @@
 # @file pipes.sh
 # @brief Prove the pipe: make it, refuse bad counts, carry bytes, remove it.
 # @details Prove the pipe: create it, refuse a bad lane count, hand bytes
-#          from one process to another and back again on every pair,
-#          remove it. A create that cannot finish is made to fail four
-#          times: before its first fifo, after its last, on a hangup while
+#          from one process to another and back again on every pair;
+#          a lane holds 16 pages, and a short write keeps its page from
+#          a whole one; read -r takes a line and head -c N bytes, and
+#          neither takes more; remove it. A create that cannot finish is
+#          made to fail four times: before its first fifo, after its last,
+#          on a hangup while
 #          it waits on its first, and on a signal just after it makes its
 #          directory. Each has printed its directory the moment it made
 #          it, and that one is checked gone; nothing else in /tmp is
@@ -96,6 +99,27 @@ osOut=$(timeout 1 cat "$pDir/1") || nStatus=$?
 [ "$osOut" = bound ]
 [ "$nStatus" -eq 124 ]
 wait
+# A lane is 16 pages, and a short write keeps its page from a whole one:
+# after 100 bytes, fifteen 4096s go in and the sixteenth waits.
+printf '%0100d' 0 > "$pDir/2"
+for iPage in $(seq 15); do
+  timeout 1 dd if=/dev/zero of="$pDir/2" bs=4096 count=1 status=none
+done
+nStatus=0
+timeout 1 dd if=/dev/zero of="$pDir/2" bs=4096 count=1 status=none ||
+  nStatus=$?
+[ "$nStatus" -eq 124 ]
+[ "$(timeout 1 head -c 61540 "$pDir/2" | wc -c)" -eq 61540 ]
+read -t 0 <> "$pDir/2" && exit 1
+# read -r takes a line and head -c N bytes, and neither takes more: two
+# messages back to back, and the second reader finds the second whole.
+printf '5\nhello5\nworld' > "$pDir/2"
+for osWant in hello world; do
+  { IFS= read -r -t 1 nSize; osGot=$(timeout 1 head -c "$nSize"); } \
+    < "$pDir/2"
+  [ "$osGot" = "$osWant" ]
+done
+read -t 0 <> "$pDir/2" && exit 1
 scripts/remove "$pDir"
 [ ! -d "$pDir" ]
 vDisarm

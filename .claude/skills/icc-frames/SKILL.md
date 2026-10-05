@@ -13,6 +13,9 @@ Read and write for a pipe that icc-pipes made. Pipes says what a lane is
 and which lanes each side writes; see its SKILL.md. Frames says how a
 payload of any size goes down those lanes and comes back the same.
 
+Shelved: no caller needs a payload sliced over lanes now. It comes back
+when one does, and Bridge, which carries Frames payloads, with it.
+
 ## Operations
 
     scripts/write DIR SIDE < bytes    slice stdin into frames, put them on
@@ -60,9 +63,10 @@ That count is the only thing Frames adds. Bytes in, the same bytes out.
   read returned, as dd does, and what makes the read whole is that the
   count cannot go out until the payload is already in the chain. head -c
   and not dd on a lane because dd's `count=` counts reads and stops at
-  a short one, and the spelling that would not, iflag=fullblock, is the
-  one Pipes says never to add. No split has been seen in any trace
-  taken, under load or idle. Nothing in the code forbids one.
+  a short one, and the spelling that would not, iflag=fullblock, is one
+  Pipes says not to add to a dd that reads a lane. No split has been
+  seen in any trace taken, under load or idle. Nothing in the code
+  forbids one.
 - The hold, and not the lanes, is what this layer carries: n+1 times
   64K, n being the lanes this side writes. Write takes that much and
   then looks for one byte more; a byte there is a payload past the hold,

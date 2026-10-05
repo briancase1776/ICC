@@ -129,5 +129,7 @@ them.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The copier is its own process,
-so the merge outlives calls. Seats in one session share the container
-and its /tmp; sessions do not, so no merge crosses that line.
+so the merge outlives calls. Everything that shares /tmp can share a
+merge: every subagent of a session, and every session run on one
+machine. Sessions in separate containers share no /tmp, so no merge
+crosses that line.

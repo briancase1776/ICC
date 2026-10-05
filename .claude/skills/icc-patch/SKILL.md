@@ -62,7 +62,8 @@ to be installed with it.
              too, whose cable is p's alone. p holds that one read end
              and writes nothing
 
-These are the shapes there are. CLAUDE.md says how to add one.
+These are the shapes Patch makes. Any other is wired by hand from
+Pipes, Tee and Merge, and has no map.
 
 N counts seats other than p. Fewer seats, fewer cables, by the shape
 alone: a fitting with one end on a side is no fitting. mesh 2 is one
@@ -155,6 +156,29 @@ those pipes with the rest.
   and when they interleave, and nowhere else do two writers share a
   pipe. A star and a ring have no fittings, and a mesh no merge: every
   read end on a mesh has one writer, and nothing meets.
+- What writes into each inlet of p's merge is a seat's tee, not the
+  seat. The tee reads up to 8192 bytes at a time, writes them to the
+  seats' cables first and the merge's inlet last, and reads again, and
+  nothing makes the next chunk land before the merge looks again. So
+  the inlet can go empty partway through what a seat puts on, while
+  every seat reads, and the merge lets another inlet in, as Merge says.
+  Only a write of at most PIPE_BUF that the tee reads alone comes out
+  whole for certain. Measured on a mesh-p 3, three seats putting on at
+  once a short header and 3000 to 400000 bytes, printf into dd bs=4096,
+  every seat reading all along: with no load added, whole in 1000 of
+  1000 trials. With a busy loop for every CPU, 2199 of 2200; the one
+  cut came after the header, which printf writes on its own. With four
+  for every CPU, 8000 to 100000 bytes were cut in 26 of 1200, and 3000
+  and 400000 in none of 600. Every cut came after the first 4096 bytes,
+  with other seats' bytes inside it. Under that load, dd writing
+  straight into a merge's inlets, with no tee, was cut in none of 300.
+- A seat that does not read stops each tee that feeds it once its cable
+  from that tee fills; that tee puts nothing more into its inlet, and
+  the merge goes on to the others. On a mesh-p 3 at DEPTH 1, every seat
+  writing 100000 bytes and one reading nothing for a second: cut in 40
+  of 40, p getting the first 60K or so of each of the other two and the
+  rest once that seat read. At DEPTH 2, whose cable holds all 100000,
+  whole in 40 of 40.
 - Nothing a seat writes comes back to it through a fitting, and nothing
   p writes comes back to p, except on a ring-p 1, where the hop tee goes
   round to the one seat there is. On a mesh each read end carries one
@@ -178,8 +202,15 @@ those pipes with the rest.
   writer to wait on a seat that has not read yet, that seat's cable from
   the tee has to hold all that is written to it in the meantime. A lane
   is 16 pages deep, and a pipe in series adds 16 more and the tee
-  between them one: measured, 16, 33, 50 and 67 blocks of 4096 went
-  into one lane of 1, 2, 3 and 4 pipes in series before the next waited.
+  between them what it has read and not written yet: one page, or two,
+  since tee(1) reads up to 8192 at a time. Written a block of 4096 at a
+  time into a lane of the cable, nobody reading, a cable DEPTH pipes
+  deep took 17 DEPTH - 1 blocks before the next waited, every time:
+  16, 33, 50, 67, 84, 135, 203 and 407 at 1, 2, 3, 4, 5, 8, 12 and 24.
+  Into the seat's write end instead, through its own pipe and tee
+  first, 17 DEPTH + 16. One dd writing as fast as the lanes take it can
+  leave two pages in a tee, and took up to 18 DEPTH - 2. These are
+  whole pages; shorter writes fill less of one, as Pipes says.
 - A seat may sit in more than one patch. A ring and a mesh over the same
   seats is two patches.
 - list says up when every pipe and fitting says up. If one is down, the
@@ -192,6 +223,7 @@ those pipes with the rest.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The pipes and fittings are their own
-processes, as their skills say, so a patch outlives calls. Seats in one
-session share the container and its /tmp; sessions do not, so no patch
-crosses that line.
+processes, as their skills say, so a patch outlives calls. Everything
+that shares /tmp can share a patch: every subagent of a session, and
+every session run on one machine. Sessions in separate containers share
+no /tmp, so no patch crosses that line.

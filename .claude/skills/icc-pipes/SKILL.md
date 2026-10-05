@@ -74,12 +74,31 @@ blocks at 139264, every run, which is the two lanes and one page. cat
 takes 163840 in four runs of six and blocks in the other two. Only one
 of them answers the same way twice.
 
-Do not add `iflag=fullblock`. It makes dd wait for a whole block
-before passing anything on: latency on a lane that dribbles, a stall
-on one that stops.
+Do not add `iflag=fullblock` to a dd that reads a lane. A lane never
+ends, so dd waits for a whole block before passing anything on, and
+only a whole block or a signal ends the wait: latency on a lane that
+dribbles, a stall on one that stops, and what dd holds when the signal
+comes is lost. Fed 100 bytes every 50 ms, the first 100 went on with
+the 41st, 2 s late; cut off, it had taken 2000 and put none on, or
+of 6000 put on 4096.
+
+What does end, a file or a pipe whose writer has exited, ends the wait,
+and every write but the last is a whole block. `printf '%s' "$osBytes"
+| dd bs=4096 iflag=fullblock of="$pDir/0"` did that in 800 runs over
+40 sizes from 10 to 300000 bytes. bash's printf writes 4096 at a time
+already, and the same 800 came out the same without the flag.
 
 One write under PIPE_BUF needs no copier at all.
 `printf '%s' "$osBytes" > "$pDir/0"` is a single write and lands whole.
+
+To take N bytes off a lane and leave what follows for the next reader,
+`head -c N`: it never asks for more than it has still to give. A line
+is `read -r`, which on a lane reads a byte at a time and stops at the
+newline. Not `dd count=1`, which takes what one read returns: 100
+bytes when 100 are there, 4096 across two writes when both are. Two
+messages back to back down one lane, each a count line and N bytes:
+one reader took a line and N bytes, and the next found the second
+whole, for N of 1, 4095, 4096, 4097 and 100000, 200 runs each.
 
 ## Facts about the pipe
 
@@ -89,10 +108,18 @@ Linux and POSIX differ, both are given; this skill is Linux.
 - A write of at most PIPE_BUF bytes lands whole. Larger writes can
   interleave with another writer's. PIPE_BUF is 4096 on Linux; POSIX
   promises only 512. `getconf PIPE_BUF /tmp` says.
-- Each lane buffers 64K on Linux; POSIX promises only PIPE_BUF. A write
-  past the buffer blocks until someone reads. Lanes fill and drain
-  independently, so N lanes is N times the bytes in flight. More lanes
-  is more bandwidth, nothing else.
+- Each lane buffers 64K on Linux, as 16 pages; POSIX promises only
+  PIPE_BUF. A write past the buffer blocks until someone reads. Lanes
+  fill and drain independently, so N lanes is N times the bytes in
+  flight. More lanes is more bandwidth, nothing else.
+- 64K is what whole pages fill. A write goes on the end of the lane's
+  last page only while the lane is not empty and what the write has
+  past whole pages fits there; otherwise it starts a page. So a short
+  write followed by a whole one keeps a page to itself, and the room a
+  read frees at the front of a page is not filled again. Nobody
+  reading, three runs each: writes of 4096 held 65536, of 100 64000, of
+  2049 32784, and one of 100 then 4096s 61540. Reads do not go by
+  pages: a read of 4096 on a page of 100 and one of 4096 returned 4096.
 - A read on an empty lane blocks, and never sees EOF while the pipe is
   up, because the hold keeps a writer open. Bound every read (timeout,
   nonblocking) or the call hangs.
@@ -118,8 +145,10 @@ Linux and POSIX differ, both are given; this skill is Linux.
   descriptors, not its argv, so `pkill -f` on the path finds nothing
   but the shell that expanded it. Find a holder under /proc/PID/fd,
   as list does.
-- If the hold dies (list says down), opens and writes can block.
-  remove it and create it again.
+- While the hold is up, no open blocks: `<`, `>` and `<>` each opened
+  at once, 200 of 200. If the hold dies (list says down), `<` and `>`
+  block, `<>` still opens, and writes can block. remove it and create
+  it again.
 - The hold is a server. It ignores HUP, as one run under nohup does, so
   a pipe outlives the terminal or shell it was made from. TERM, which
   remove sends, ends it.
@@ -127,9 +156,9 @@ Linux and POSIX differ, both are given; this skill is Linux.
 ## In Claude Code
 
 Every Bash call is a fresh shell. The hold is its own process, so the
-pipe outlives calls. A foreground read that does not return hangs the
-tool call until the harness times it out.
+pipe outlives calls. A foreground read that does not return keeps the
+tool call from returning; bound it.
 
-Seats in one session share the container, so they share
-/tmp. Sessions do not share a container; no pipe crosses
-that line.
+Everything that shares /tmp can share a pipe: every subagent of a
+session, and every session run on one machine. Sessions in separate
+containers share no /tmp, so no pipe crosses that line.

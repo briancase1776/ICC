@@ -59,6 +59,17 @@ pieces below it. From Frames up, that is a payload bigger than one lane
 holds, pushed through pipes, fittings and shapes, and compared byte for
 byte at the far end.
 
+    ./tests/cal/run.sh
+
+The calibrations: what the SKILL.md files say was measured, measured
+again, a lane's pages and reads, a cable's depth, and what p's merge
+makes of three seats at once, with no load added and under it. Every
+run is appended to its record in `tests/cal/data/`, with the date, the
+commit and the machine, and nothing in a record is ever taken out, so
+a figure can be looked up years later. They take an hour or more and
+load the machine, so `run.sh` does not run them. It checks only that
+no record has lost a line.
+
 ## What it will not do
 
 It does not know what your bytes mean or who is at the other end. It will

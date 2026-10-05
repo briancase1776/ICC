@@ -3,7 +3,10 @@
 # @file run.sh
 # @brief Run every piece's harness, bottom up.
 # @details Each one proves its own piece against the pieces below it, in
-#          this same tree. The run stops at the first harness that fails.
+#          this same tree, and then cal proves the calibration records only
+#          ever grew. The calibrations themselves are not run here;
+#          tests/cal/run.sh runs them. The run stops at the first harness
+#          that fails.
 # @stdin nothing
 # @stdout each piece's name, then what its harness printed
 # @stderr whatever a failing harness printed
@@ -17,7 +20,8 @@
 ##
 set -eu
 cd "$(dirname "$0")/.."
-for osPiece in lib raspberry pipes lock git frames tee merge patch bridge; do
+for osPiece in lib raspberry pipes lock git frames tee merge patch bridge \
+    cal; do
   printf '%-10s' "$osPiece"
   "tests/$osPiece.sh"
 done

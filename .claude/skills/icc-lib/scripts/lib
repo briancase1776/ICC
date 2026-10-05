@@ -11,8 +11,8 @@
 #          off Patch's map and waited on without taking from them, cleanup
 #          armed before anything is made, a piece's directory made and
 #          printed at once, servers started deaf to a hangup, a lock named
-#          for its path, a git wire's tip fetched, and the harnesses'
-#          cut-off and refusal checks.
+#          for its path, a git wire's tip fetched, the harnesses' cut-off
+#          and refusal checks, and the calibrations' ok and off.
 #          Sourcing turns on extglob, which the lane glob needs when this
 #          file is read.
 #          A function that refuses says why on stderr and exits 1. Called
@@ -550,5 +550,32 @@ vRefused() {
   if "${aCommand[@]}" 2>/dev/null; then
     echo "not refused: ${aCommand[*]}" >&2
     exit 1
+  fi
+}
+
+##
+# @fn vFound()
+# @brief For the calibrations: print what a case found, marked as what a
+#        SKILL.md says or not.
+# @details One line, ok or off in front, so a record read years later says
+#          at a glance which cases came out as written then. The
+#          calibration counts the off ones, and once every case has run
+#          exits 1 if there are any.
+# @param $1 bAsSaid - 1 when what was found is what the SKILL.md says, 0
+#        when not
+# @param $2... aFound - what was found, joined with a space into one line
+# @stdout "ok   " or "off  ", then what was found
+# @global nOff - read and set: one more for each off
+# @return 0
+##
+vFound() {
+  local bAsSaid=$1
+  shift
+  local osFound="$*"
+  if [ "$bAsSaid" -eq 1 ]; then
+    echo "ok   $osFound"
+  else
+    echo "off  $osFound"
+    nOff=$((nOff + 1))
   fi
 }

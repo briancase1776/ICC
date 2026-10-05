@@ -19,8 +19,9 @@
 #          command that arms first and failing one that does not; and cut
 #          off in a command it names, passing one that printed what it made
 #          and failing one that printed nothing; a lock named one way for
-#          every spelling of its path, and a newline refused; and a refusal
-#          passed and a success stopped. Runs in a directory of its own.
+#          every spelling of its path, and a newline refused; a refusal
+#          passed and a success stopped; and a calibration's case marked ok
+#          or off, and the off ones counted. Runs in a directory of its own.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -231,6 +232,14 @@ pHere=$(pwd -P)
 # vRefused passes a command that is refused, and stops at one that is not.
 (vRefused false)
 (vRefused true) 2>/dev/null && exit 1
+# vFound marks a case ok or off, joins what it found into one line, and
+# counts the off ones.
+nOff=0
+[ "$(vFound 1 held 16 of 16)" = "ok   held 16 of 16" ]
+[ "$(vFound 0 held 15 of 16)" = "off  held 15 of 16" ]
+vFound 0 held 15 of 16 > /dev/null
+vFound 1 held 16 of 16 > /dev/null
+[ "$nOff" -eq 1 ]
 cd /
 rm -rf "$pWork"
 vDisarm

@@ -5,9 +5,9 @@ description: >-
   a seat's lanes read off Patch's map and waited on without taking from
   them, cleanup armed before anything is made, a piece's directory made
   and printed at once, servers deaf to a hangup, a lock named for its
-  path, a git wire's tip fetched, and the harnesses' cut-off and refusal
-  checks. Not for a session to call; the other ICC skills need it beside
-  them, in the same skills directory.
+  path, a git wire's tip fetched, the harnesses' cut-off and refusal
+  checks, and the calibrations' ok and off. Not for a session to call;
+  the other ICC skills need it beside them, in the same skills directory.
 ---
 
 # icc-lib
@@ -77,6 +77,10 @@ script.
                           first mktemp
     vRefused COMMAND...   for the harnesses: run COMMAND, and stop when
                           it is not refused
+    vFound 1|0 FOUND...   for the calibrations: print what a case found
+                          on one line, ok in front when it is what a
+                          SKILL.md says and off when not, and count the
+                          off ones in nOff
 
 A function that refuses says why on stderr and exits 1. Called in
 `$( )`, as the n functions are, that ends only the substitution, and

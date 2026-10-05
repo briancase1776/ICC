@@ -8,13 +8,24 @@ instruction to that session.
 
 ## This repo
 
-Ten skills under one `.claude/`, one harness apiece under `tests/`, and
-this file. Two of the skills serve the others: icc-lib is the functions
-they share, which each of them sources by fixed path, with two more,
-oLanes and vWaitFor, for a script that sits at a seat; and icc-raspberry
-is the test data, a raspberry of sixteen kinds that the harnesses blow.
+Ten skills under one `.claude/`, one harness apiece under `tests/`, the
+calibrations under `tests/cal/` with their records, and this file. Two
+of the skills serve the others: icc-lib is the functions they share,
+which each of them sources by fixed path, with two more, oLanes and
+vWaitFor, for a script that sits at a seat; and icc-raspberry is the
+test data, a raspberry of sixteen kinds that the harnesses blow.
 
-    ./tests/run.sh    every piece's harness, bottom up
+    ./tests/run.sh        every piece's harness, bottom up
+    ./tests/cal/run.sh    every calibration: an hour or more, on demand
+
+A calibration measures again what a SKILL.md says was measured, and
+appends what it found to its record in `tests/cal/data/`, with the date,
+the ICC commit and the machine. A record is a cal certificate, to be
+looked up years after the run: a run is only ever added to it, and
+nothing in it is changed or taken out, a run that came out off
+included. Commit the record with the run. `tests/cal.sh`, the last
+harness run.sh runs, looks at every commit that touched a record for a
+line taken out.
 
 Pieces reach each other by fixed path: a script in
 `.claude/skills/icc-patch/scripts/` finds Pipes at

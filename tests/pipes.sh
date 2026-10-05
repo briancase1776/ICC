@@ -103,7 +103,7 @@ wait
 # after 100 bytes, fifteen 4096s go in and the sixteenth waits.
 printf '%0100d' 0 > "$pDir/2"
 for iPage in $(seq 15); do
-  dd if=/dev/zero of="$pDir/2" bs=4096 count=1 status=none
+  timeout 1 dd if=/dev/zero of="$pDir/2" bs=4096 count=1 status=none
 done
 nStatus=0
 timeout 1 dd if=/dev/zero of="$pDir/2" bs=4096 count=1 status=none ||

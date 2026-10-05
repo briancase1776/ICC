@@ -68,13 +68,33 @@ echo 'not the alphabet' | "$pIccBridge/in" "$pPipeA" 0 2>/dev/null && exit 1
 timeout 1 "$pIccBridge/out" "$pPipeA" 1 > text 2>/dev/null && exit 1
 [ ! -s text ]
 # sent: two messages a session sent itself, as they were sent and as they
-# arrived, the second ending in a newline.
-printf 'one\nline two\thas a tab, and ends with two spaces  \n  starts with two spaces\nquotes \042 and \047 and backslash \134 and \044HOME and \140tick\140\n< > & &lt; &gt; &amp; &quot; &#39;\n\nlast line after a blank, no newline at the end' \
-  > said
-printf '    one\n    line two\thas a tab, and ends with two spaces  \n      starts with two spaces\n    quotes \042 and \047 and backslash \134 and \044HOME and \140tick\140\n    &lt; &gt; &amp; &amp;lt; &amp;gt; &amp;amp; &amp;quot; &amp;#39;\n    \n    last line after a blank, no newline at the end\n' \
-  | "$pIccBridge/sent" | cmp - said
+# arrived, the second ending in a newline. sent is last in each pipeline, so
+# its own status counts.
+{
+  printf 'one\n'
+  printf 'line two\thas a tab, and ends with two spaces  \n'
+  printf '  starts with two spaces\n'
+  printf 'quotes \042 and \047 and backslash \134 and '
+  printf '\044HOME and \140tick\140\n'
+  printf '< > & &lt; &gt; &amp; &quot; &#39;\n'
+  printf '\n'
+  printf 'last line after a blank, no newline at the end'
+} > said
+{
+  printf '    one\n'
+  printf '    line two\thas a tab, and ends with two spaces  \n'
+  printf '      starts with two spaces\n'
+  printf '    quotes \042 and \047 and backslash \134 and '
+  printf '\044HOME and \140tick\140\n'
+  printf '    &lt; &gt; &amp; &amp;lt; &amp;gt; &amp;amp; '
+  printf '&amp;quot; &amp;#39;\n'
+  printf '    \n'
+  printf '    last line after a blank, no newline at the end\n'
+} | "$pIccBridge/sent" > got
+cmp got said
 printf 'two\n' > said
-printf '    two\n    \n' | "$pIccBridge/sent" | cmp - said
+printf '    two\n    \n' | "$pIccBridge/sent" > got
+cmp got said
 # Random text through the same changes comes back the same, whether or not
 # it ends in a newline.
 for osEnd in '' '\n'; do
@@ -82,7 +102,8 @@ for osEnd in '' '\n'; do
   printf "$osEnd" >> said
   { cat said; printf '\n'; } |
     sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/^/    /' |
-    "$pIccBridge/sent" | cmp - said
+    "$pIccBridge/sent" > got
+  cmp got said
 done
 [ -z "$(printf '    in\nout\n' | "$pIccBridge/sent" 2>/dev/null)" ]
 printf '    in\nout\n' | "$pIccBridge/sent" 2>/dev/null && exit 1

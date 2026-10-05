@@ -109,12 +109,14 @@ printf '%s\n' 'star 1 6 1' '0 0 s p' 'p 1 s 0' > star/patch
 mkdir in01 inp
 mkfifo in01/0 in01/1 inp/0 inp/1
 exec {fdIn01}<>in01/0 {fdInp}<>inp/0
-[ "$(vWaitFor meshp 0 0 2>&1)" = "not yet, nothing taken" ]
+[ "$(timeout 0.9 bash -c \
+  'source "$1"; vWaitFor meshp 0 0' - "$pIccLib/lib" 2>&1)" = \
+  "not yet, nothing taken" ]
 nStart=$SECONDS
 [ "$(osWho=reader vWaitFor meshp p 03 2>&1)" = \
   "reader: not yet, nothing taken" ]
 nWaited=$((SECONDS - nStart))
-[ "$nWaited" -ge 2 ]
+[ "$nWaited" -ge 3 ]
 [ "$nWaited" -le 4 ]
 printf 'said\n' > in01/0
 (vWaitFor meshp 0 0)
@@ -126,6 +128,11 @@ exec {fdIn01}<&- {fdInp}<&-
 mkdir nolane
 printf '%s\n' 'mesh-p 2 2 1' '0 1 gone 1' > nolane/patch
 [ "$(vWaitFor nolane 0 0 2>&1)" = "not a lane: gone/0" ]
+# A map that cannot be read is refused, with awk's reason, not taken for a
+# seat that reads nothing.
+mkdir nomap
+[ -n "$(vWaitFor nomap 0 0 2>&1)" ]
+(vWaitFor nomap 0 0 2>/dev/null) && exit 1
 # A lane nothing holds, as when its holder has died, is looked at and not
 # hung on; and a lane taken away while the wait is on is refused then,
 # within a look, and nothing is made where it was. Each runs in a shell of

@@ -252,11 +252,12 @@ oLanes() {
 # @param $3 nSeconds - how long to wait, a count as nCount takes one
 # @stderr "not yet, nothing taken" when the time runs out first; "not a
 #         lane" and the path, for one that is not a fifo or no longer is;
-#         nCount's reason, for seconds that are not a count
+#         nCount's reason, for seconds that are not a count; awk's, when
+#         the map cannot be read
 # @global osWho - read, as nCount reads it
-# @return 0 every lane has something on it; it exits 1 instead when the
-#         time runs out first, a lane is not a fifo, or the seconds are
-#         refused
+# @return 0 every lane has something on it, or the seat reads none; it
+#         exits 1 instead when the time runs out first, a lane is not a
+#         fifo, the seconds are refused, or the map cannot be read
 ##
 vWaitFor() {
   local pPatch=$1
@@ -264,7 +265,10 @@ vWaitFor() {
   local nSeconds
   local nEnd
   local pLane
+  local osLanes
   nSeconds=$(nCount seconds "${3-}") || exit 1
+  osLanes=$(oLanes "$pPatch" "$osSeat" r) || exit 1
+  [ -n "$osLanes" ] || return 0
   nEnd=$((SECONDS + nSeconds))
   while read -r pLane _; do
     while :; do
@@ -281,7 +285,7 @@ vWaitFor() {
       }
       sleep 1
     done
-  done < <(oLanes "$pPatch" "$osSeat" r)
+  done <<< "$osLanes"
 }
 
 ##
@@ -335,7 +339,7 @@ vDisarm() {
 #          nothing, and under set -e it ends the caller. Arm the cleanup
 #          first, as vArm says: the signal waits for the assignment, so
 #          the cleanup always knows pDir.
-# @param $1 osKind - what the directory is named for: icc-pipes, moot
+# @param $1 osKind - what the directory is named for: icc-pipes, icc-tee
 # @stdout the directory, one line
 # @global pDir - set, the directory made
 # @return 0; under set -e a mktemp or a print that fails ends the caller

@@ -35,7 +35,7 @@ and sent, do not depend on them, and hold.
 
 DIR is what Pipes' create printed, or an end in a Patch map. SIDE is 0
 or 1, as Pipes says. Which side you are, and where the text goes, is
-agreed outside this skill. Both scripts run Frames' read and write from
+agreed outside this skill. out and in run Frames' read and write from
 beside this skill, `../../icc-frames/scripts` in the same skills
 directory. There is nothing to configure and nothing to set.
 
@@ -46,9 +46,9 @@ directory. There is nothing to configure and nothing to set.
                                             # ... over there, a message arrives
     scripts/in "$pDir" 0 < text             # onto the wire, one tool call
 
-The scripts source icc-lib's shared functions from beside this skill,
+out and in source icc-lib's shared functions from beside this skill,
 `../../icc-lib/scripts/lib` in the same skills directory, so icc-lib has
-to be installed with it.
+to be installed with them. sent needs neither icc-lib nor Frames.
 
 ## The text
 

@@ -78,8 +78,8 @@ Do not add `iflag=fullblock` to a dd that reads a lane. A lane never
 ends, so dd waits for a whole block before passing anything on, and
 only a whole block or a signal ends the wait: latency on a lane that
 dribbles, a stall on one that stops, and what dd holds when the signal
-comes is lost. Fed 100 bytes every 50 ms, the first 100 went on 2.5 s
-late, with the 41st; cut off, it had taken 2000 and put none on, or
+comes is lost. Fed 100 bytes every 50 ms, the first 100 went on with
+the 41st, 2 s late; cut off, it had taken 2000 and put none on, or
 of 6000 put on 4096.
 
 What does end, a file or a pipe whose writer has exited, ends the wait,
@@ -115,11 +115,11 @@ Linux and POSIX differ, both are given; this skill is Linux.
 - 64K is what whole pages fill. A write goes on the end of the lane's
   last page only while the lane is not empty and what the write has
   past whole pages fits there; otherwise it starts a page. So a short
-  write followed by a whole one keeps a page to itself, and a page read
-  partway is not filled again. Nobody reading, three runs each: writes
-  of 4096 held 65536, of 100 64000, of 2049 32784, and one of 100 then
-  4096s 61540. Reads do not go by pages: a read of 4096 on a page of
-  100 and one of 4096 returned 4096.
+  write followed by a whole one keeps a page to itself, and the room a
+  read frees at the front of a page is not filled again. Nobody
+  reading, three runs each: writes of 4096 held 65536, of 100 64000, of
+  2049 32784, and one of 100 then 4096s 61540. Reads do not go by
+  pages: a read of 4096 on a page of 100 and one of 4096 returned 4096.
 - A read on an empty lane blocks, and never sees EOF while the pipe is
   up, because the hold keeps a writer open. Bound every read (timeout,
   nonblocking) or the call hangs.

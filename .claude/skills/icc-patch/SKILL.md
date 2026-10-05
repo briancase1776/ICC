@@ -63,7 +63,7 @@ to be installed with it.
              and writes nothing
 
 These are the shapes Patch makes. Any other is wired by hand from
-Pipes, Tee and Merge, which are all a patch is.
+Pipes, Tee and Merge, and has no map.
 
 N counts seats other than p. Fewer seats, fewer cables, by the shape
 alone: a fitting with one end on a side is no fitting. mesh 2 is one

@@ -1,0 +1,932 @@
+@ run 2026-10-04T23:53:16Z to 2026-10-05T00:15:53Z, b1.sh, b2.sh, b2b.sh, b3.sh, b3dd.sh, c.sh, c_strace.sh and d.sh
+@ icc 0198a45096680a88bcce5db545741df7e37e4322, and the commits after it on its branch through 25a499b6f183c10d3e037477843bb348c980ca5f, none of which changed a script measured
+@ box 4 cpus, load not noted, Linux 6.18.44, bash 5.2.21, coreutils 9.4; another session's measurements ran on the same machine
+@ note the first entries, taken before tests/cal was written: the night's own measuring scripts, then what they left, each file whole under its "@ file" line; where what a script printed was not kept, the measuring agent's report of it is under "@ report"
+@ file b1.sh, last written 2026-10-04T23:56:26Z
+#!/bin/bash
+# B1: dd between two lanes, the source dribbling 100 bytes every 50 ms,
+# 20 dribbles (2000 bytes), or 60 dribbles (6000 bytes). With and without
+# iflag=fullblock. Count what reaches the far lane while dd runs, and after
+# dd is cut off.
+S=/home/user/ICC/.claude/skills
+W=$1; nDribbles=$2; osFlag=$3
+A=$($S/icc-pipes/scripts/create 2)
+B=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$A"; $S/icc-pipes/scripts/remove "$B"' EXIT
+head -c 100 /dev/zero | tr '\0' x > "$W/c100"
+# the copier, under strace, cut off at 4 s
+( timeout -s INT 4 strace -tt -e trace=read,write -o "$W/b1_${nDribbles}_${osFlag:-none}.st" \
+    dd if="$A/0" of="$B/0" bs=4096 $osFlag 2> "$W/b1_dd.err" ) &
+pidC=$!
+sleep 0.3
+for ((i=0;i<nDribbles;i++)); do dd if="$W/c100" of="$A/0" bs=4096 status=none; sleep 0.05; done
+sleep 0.5
+# how much is on B now, while the copier still runs? (take it off)
+nOnB=$(timeout 0.3 dd if="$B/0" bs=65536 status=none | wc -c)
+nOnA=$(timeout 0.3 dd if="$A/0" bs=65536 status=none | wc -c)
+wait $pidC
+nAfterB=$(timeout 0.3 dd if="$B/0" bs=65536 status=none | wc -c)
+nAfterA=$(timeout 0.3 dd if="$A/0" bs=65536 status=none | wc -c)
+echo "dribbles=$nDribbles flag=${osFlag:-none} written=$((nDribbles*100)) onB_while_running=$nOnB onA_while_running=$nOnA onB_after_cutoff=$nAfterB onA_after_cutoff=$nAfterA lost=$((nDribbles*100 - nOnB - nOnA - nAfterB - nAfterA))"
+echo "  dd says: $(tr '\n' ';' < $W/b1_dd.err)"
+f="$W/b1_${nDribbles}_${osFlag:-none}.st"
+echo "  reads on lane: $(grep -c '^[0-9:.]* read(0' $f), writes on lane: $(grep -c '^[0-9:.]* write(1' $f), write sizes: $(grep '^[0-9:.]* write(1' $f | sed -E 's/.*= ([0-9]+)$/\1/' | sort -n | uniq -c | tr '\n' ' ')"
+@ file b2.sh, last written 2026-10-04T23:57:20Z
+#!/bin/bash
+# B2: printf of N bytes | dd bs=4096 [iflag=fullblock] of=LANE, a reader
+# (head -c N) draining the lane. Per run: did dd finish (rc), did the reader
+# get the N bytes intact, dd's records out, and (under strace) every write
+# size dd made on the lane.
+S=/home/user/ICC/.claude/skills
+W=$1; nT=$2; eStrace=$3; osFlag=$4; shift 4
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+[ -f "$W/txt" ] || head -c 240000 /dev/urandom | base64 -w0 | head -c 300000 > "$W/txt"
+osAll=$(cat "$W/txt")
+for nSize in "$@"; do
+  osBytes=${osAll:0:nSize}
+  printf '%s' "$osBytes" > "$W/want"
+  nFin=0; nIntact=0; declare -A hOut=(); declare -A hShape=()
+  for ((i=0;i<nT;i++)); do
+    timeout 20 head -c "$nSize" "$P/0" > "$W/got" & pidR=$!
+    if [ "$eStrace" = y ]; then
+      printf '%s' "$osBytes" | timeout 15 strace -o "$W/b2.st" -e trace=write dd bs=4096 $osFlag of="$P/0" 2> "$W/b2.err"; rc=${PIPESTATUS[1]}
+    else
+      printf '%s' "$osBytes" | timeout 15 dd bs=4096 $osFlag of="$P/0" 2> "$W/b2.err"; rc=${PIPESTATUS[1]}
+    fi
+    wait $pidR
+    [ "$rc" -eq 0 ] && nFin=$((nFin+1))
+    cmp -s "$W/got" "$W/want" && nIntact=$((nIntact+1))
+    osOut=$(grep 'records out' "$W/b2.err" | cut -d' ' -f1)
+    hOut[$osOut]=$(( ${hOut[$osOut]:-0} + 1 ))
+    if [ "$eStrace" = y ]; then
+      # shape: sizes of writes to fd 1 (the lane), in order, run-length coded
+      osShape=$(grep '^write(1,' "$W/b2.st" | sed -E 's/.*= ([0-9-]+)$/\1/' | uniq -c | awk '{printf "%sx%s ", $1, $2}')
+      hShape[$osShape]=$(( ${hShape[$osShape]:-0} + 1 ))
+    fi
+  done
+  osO=; for k in "${!hOut[@]}"; do osO="$osO $k(x${hOut[$k]})"; done
+  echo "N=$nSize flag=${osFlag:-none} strace=$eStrace trials=$nT finished=$nFin intact=$nIntact records_out:$osO"
+  for k in "${!hShape[@]}"; do echo "     writes: $k (x${hShape[$k]})"; done
+  unset hOut hShape
+done
+@ file b2b.sh, last written 2026-10-05T00:02:02Z
+#!/bin/bash
+# B2b: an anonymous pipe that ends, fed in chunks that are not 4096, into
+# dd bs=4096 [iflag=fullblock] of=LANE, a reader draining the lane.
+S=/home/user/ICC/.claude/skills
+W=$1; nT=$2
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+osAll=$(head -c 20000 "$W/txt")
+fDribble() { local i; for ((i=0;i<100;i++)); do printf '%s' "${osAll:i*100:100}"; sleep 0.005; done; }   # 10000 bytes
+fOdd()     { printf '%s' "${osAll:0:1000}"; printf '%s' "${osAll:1000:9000}"; }                         # 10000 bytes
+printf '%s' "${osAll:0:10000}" > "$W/want10k"
+for fWriter in fDribble fOdd; do
+  for osFlag in '' 'iflag=fullblock'; do
+    declare -A h=(); nFin=0; nIntact=0
+    for ((i=0;i<nT;i++)); do
+      timeout 20 head -c 10000 "$P/0" > "$W/got10k" & pidR=$!
+      $fWriter | timeout 15 dd bs=4096 $osFlag of="$P/0" 2> "$W/b2b.err"; rc=${PIPESTATUS[1]}
+      wait $pidR
+      [ "$rc" -eq 0 ] && nFin=$((nFin+1)); cmp -s "$W/got10k" "$W/want10k" && nIntact=$((nIntact+1))
+      k=$(grep 'records out' "$W/b2b.err" | cut -d' ' -f1); h[$k]=$(( ${h[$k]:-0} + 1 ))
+    done
+    o=; for k in "${!h[@]}"; do o="$o $k(x${h[$k]})"; done
+    echo "writer=$fWriter flag=${osFlag:-none} trials=$nT finished=$nFin intact=$nIntact records_out:$o"
+    unset h
+  done
+done
+@ file b3.sh, last written 2026-10-04T23:58:03Z
+#!/bin/bash
+S=/home/user/ICC/.claude/skills
+W=$1
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+echo "lane buffer: $(python3 -c "import fcntl,os,sys; fd=os.open(sys.argv[1], os.O_RDONLY|os.O_NONBLOCK); print(fcntl.fcntl(fd, 1032))" "$P/0") bytes (F_GETPIPE_SZ)"
+for k in 1 2 3; do echo "--- run $k"; timeout 60 python3 $W/b3.py "$P/0"; done
+@ file b3.py, last written 2026-10-04T23:58:03Z
+import os, sys, errno
+lane = sys.argv[1]
+def fill(pattern, pre=(), reads=()):
+    """write pre writes, then repeat pattern until a write would block; return bytes held"""
+    fd = os.open(lane, os.O_WRONLY | os.O_NONBLOCK)
+    rfd = os.open(lane, os.O_RDONLY | os.O_NONBLOCK)
+    held = 0; nwrites = 0
+    try:
+        for step in pre:
+            if step[0] == 'w':
+                held += os.write(fd, b'x' * step[1]); nwrites += 1
+            else:
+                held -= len(os.read(rfd, step[1]))
+        i = 0
+        while True:
+            s = pattern[i % len(pattern)]
+            try:
+                n = os.write(fd, b'x' * s)
+            except BlockingIOError:
+                break
+            if n != s:  # partial (only possible for s > PIPE_BUF)
+                held += n; nwrites += 1; break
+            held += n; nwrites += 1; i += 1
+    finally:
+        # drain and verify
+        got = 0
+        while True:
+            try:
+                b = os.read(rfd, 65536)
+            except BlockingIOError:
+                break
+            if not b: break
+            got += len(b)
+        os.close(fd); os.close(rfd)
+    assert got == held, (got, held)
+    return held, nwrites
+cases = []
+for s in (1, 10, 100, 1000, 1365, 1366, 2048, 2049, 3000, 4000, 4095, 4096):
+    cases.append((f"repeat {s}-byte writes", [s], ()))
+for s in (1, 7, 100, 4095):
+    cases.append((f"one {s}-byte write, then 4096s", [4096], (('w', s),)))
+cases.append(("'300000\\n' (7) then 4089 then 4096s (Frames' count+frame 0)", [4096], (('w', 7), ('w', 4089))))
+cases.append(("'300000\\n' (7) then 4090 then 4096s (one byte too many)", [4096], (('w', 7), ('w', 4090))))
+cases.append(("alternate 100 and 4096", [100, 4096], ()))
+cases.append(("4096, read 100 off it, then 100s", [100], (('w', 4096), ('r', 100))))
+cases.append(("100, read 100 (lane empty), then 100s", [100], (('w', 100), ('r', 100))))
+cases.append(("repeat 4097-byte writes (past PIPE_BUF)", [4097], ()))
+cases.append(("repeat 8192-byte writes", [8192], ()))
+for name, pat, pre in cases:
+    held, nw = fill(pat, pre)
+    print(f"{name:62s} held={held:6d}  writes={nw}")
+# reads span pages: one 100-byte page then one 4096 page, read(4096)
+fd = os.open(lane, os.O_WRONLY | os.O_NONBLOCK); rfd = os.open(lane, os.O_RDONLY | os.O_NONBLOCK)
+os.write(fd, b'a'*100); os.write(fd, b'b'*4096)
+r = os.read(rfd, 4096); r2 = os.read(rfd, 65536)
+print(f"pages of 100 and 4096, read(4096) returns {len(r)} ({r.count(b'a')} a + {r.count(b'b')} b), next read {len(r2)}")
+os.close(fd); os.close(rfd)
+@ file b3dd.sh, last written 2026-10-04T23:58:18Z
+#!/bin/bash
+# one dd per write, timeout 0.5 detects the write that would block
+S=/home/user/ICC/.claude/skills
+W=$1
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+head -c 100 /dev/zero > "$W/z100"; head -c 4096 /dev/zero > "$W/z4096"
+for k in 1 2 3; do
+  n=0; while timeout 0.5 dd if="$W/z100" of="$P/0" bs=4096 status=none; do n=$((n+1)); done
+  got=$(timeout 0.5 dd if="$P/0" bs=65536 status=none | wc -c)
+  echo "run $k: 100-byte dd writes that went in: $n ($((n*100)) bytes); drained $got"
+  timeout 0.5 dd if="$W/z100" of="$P/0" bs=4096 status=none
+  n=0; while timeout 0.5 dd if="$W/z4096" of="$P/0" bs=4096 status=none; do n=$((n+1)); done
+  got=$(timeout 0.5 dd if="$P/0" bs=65536 status=none | wc -c)
+  echo "run $k: one 100-byte dd write, then 4096-byte dd writes that went in: $n ($((100 + n*4096)) bytes); drained $got"
+done
+@ file c.sh, last written 2026-10-04T23:53:53Z
+#!/bin/bash
+# C: read -r -u FD for the count line, then head -c N <&FD for the payload.
+# Two messages back to back on one lane; reader 1 takes message 1, a separate
+# reader 2 takes message 2. Any overread by reader 1 shows as a bad message 2.
+S=/home/user/ICC/.claude/skills
+W=$1; nT=$2; shift 2
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+head -c 300000 /dev/urandom > "$W/rnd"
+for nSize in "$@"; do
+  head -c "$nSize" "$W/rnd" > "$W/m1"
+  tail -c "$nSize" "$W/rnd" > "$W/m2"
+  nOk=0; nBad=0
+  for ((i=0;i<nT;i++)); do
+    # writer: both messages, back to back, as dd bs=4096 passes them on
+    ( { printf '%s\n' "$nSize"; cat "$W/m1"; printf '%s\n' "$nSize"; cat "$W/m2"; } |
+        timeout 10 dd of="$P/0" bs=4096 status=none ) &
+    pidW=$!
+    # reader 1
+    timeout 10 bash -c '
+      exec {fd}< "$1/0"
+      read -r -u "$fd" n || exit 3
+      [ "$n" = "$2" ] || exit 4
+      head -c "$n" <&"$fd" > "$3/o1"' _ "$P" "$nSize" "$W"; rc1=$?
+    # reader 2, a fresh process
+    timeout 10 bash -c '
+      exec {fd}< "$1/0"
+      read -r -u "$fd" n || exit 3
+      [ "$n" = "$2" ] || { echo "reader2 got count [$n]" >&2; exit 4; }
+      head -c "$n" <&"$fd" > "$3/o2"' _ "$P" "$nSize" "$W"; rc2=$?
+    wait $pidW; rcW=$?
+    # nothing may be left on the lane
+    nLeft=$(timeout 0.2 dd if="$P/0" bs=65536 status=none | wc -c)
+    if [ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] && [ $rcW -eq 0 ] && cmp -s "$W/o1" "$W/m1" && cmp -s "$W/o2" "$W/m2" && [ "$nLeft" -eq 0 ]; then
+      nOk=$((nOk+1))
+    else
+      nBad=$((nBad+1)); echo "BAD size=$nSize i=$i rc1=$rc1 rc2=$rc2 rcW=$rcW left=$nLeft" >&2
+    fi
+  done
+  echo "size=$nSize trials=$nT ok=$nOk bad=$nBad"
+done
+@ file c_strace.sh, last written 2026-10-04T23:56:03Z
+#!/bin/bash
+S=/home/user/ICC/.claude/skills
+W=$1
+P=$($S/icc-pipes/scripts/create 2)
+trap '$S/icc-pipes/scripts/remove "$P"' EXIT
+for nSize in 1 4095 4096 4097 100000; do
+  head -c "$nSize" /dev/urandom > "$W/s1"
+  ( { printf '%s\n' "$nSize"; cat "$W/s1"; printf 'NEXT\n'; } | timeout 10 dd of="$P/0" bs=4096 status=none ) &
+  pidW=$!
+  timeout 10 strace -f -e trace=read -o "$W/st_$nSize" bash -c '
+      exec {fd}< "$1/0"
+      read -r -u "$fd" n
+      head -c "$n" <&"$fd" > "$2/so"' _ "$P" "$W"
+  wait $pidW
+  rest=$(timeout 0.3 dd if="$P/0" bs=4096 status=none)
+  cmp -s "$W/so" "$W/s1" && c=same || c=DIFF
+  # reads on the lane fd: bash's fd from exec {fd}< is 10+; head's is 0
+  echo "size=$nSize payload $c, left on lane after: [$rest]"
+  # summarise reads of the line reader (1-byte reads) and head's reads
+  awk -v n="$nSize" '/read\((1[0-9]|0),/ { match($0,/read\(([0-9]+), .*, ([0-9]+)\) += ([0-9-]+)/,m); key=m[1]" ask="m[2]" got="m[3]; c[key]++ } END { for (k in c) print "   fd " k " x" c[k] }' "$W/st_$nSize" | sort
+done
+@ file d.sh, last written 2026-10-04T23:53:16Z
+#!/bin/bash
+# D: does '<' (O_RDONLY) on a lane block, hold up vs hold killed?
+S=/home/user/ICC/.claude/skills
+P=$($S/icc-pipes/scripts/create 2)
+echo "pipe $P"
+$S/icc-pipes/scripts/list | grep -F "$P"
+nT=200
+for eMode in '<' '>' '<>'; do
+  n0=0; nBlock=0; nOther=0
+  for ((i=0;i<nT;i++)); do
+    timeout 1 bash -c "exec 3$eMode '$P/0'"; rc=$?
+    case $rc in 0) n0=$((n0+1));; 124) nBlock=$((nBlock+1));; *) nOther=$((nOther+1));; esac
+  done
+  echo "hold up   open $eMode : ok=$n0 blocked(124)=$nBlock other=$nOther of $nT"
+done
+# also time it
+t0=$(date +%s%N); for ((i=0;i<200;i++)); do exec 4< "$P/0"; exec 4<&-; done; t1=$(date +%s%N)
+echo "hold up: 200 in-shell '<' opens took $(( (t1-t0)/1000 )) us total"
+pidHold=$(cat "$P/pid")
+kill "$pidHold"; sleep 0.2
+$S/icc-pipes/scripts/list | grep -F "$P"
+nT=20
+for eMode in '<' '>' '<>'; do
+  n0=0; nBlock=0; nOther=0
+  for ((i=0;i<nT;i++)); do
+    timeout 0.5 bash -c "exec 3$eMode '$P/0'"; rc=$?
+    case $rc in 0) n0=$((n0+1));; 124) nBlock=$((nBlock+1));; *) nOther=$((nOther+1));; esac
+  done
+  echo "hold dead open $eMode : ok=$n0 blocked(124)=$nBlock other=$nOther of $nT"
+done
+# hold dead but another process has the lane open <> : does '<' block?
+exec 5<> "$P/0"
+n0=0; nBlock=0
+for ((i=0;i<20;i++)); do timeout 0.5 bash -c "exec 3< '$P/0'"; rc=$?; [ $rc -eq 0 ] && n0=$((n0+1)); [ $rc -eq 124 ] && nBlock=$((nBlock+1)); done
+echo "hold dead, this shell holds <> : '<' ok=$n0 blocked=$nBlock of 20"
+exec 5<&-
+$S/icc-pipes/scripts/remove "$P"; echo "remove rc=$?"
+$S/icc-pipes/scripts/list | grep -F "$P" || echo "gone from list"
+@ file b2_N, last written 2026-10-04T23:57:35Z
+10 100 1000 4095 4096 4097 8191 8192 8193 12288 50000 65535 65536 65537 100000 131072 200000 262144 299999 300000 4804 48758 50585 51423 68464 73340 73540 78719 81206 86903 102346 156656 236953 244362 249905 253909 258368 258993 275226 288127 
+@ file b2_full_strace.out, last written 2026-10-04T23:57:47Z
+N=10 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x10  (x10)
+N=100 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x100  (x10)
+N=1000 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x1000  (x10)
+N=4095 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x4095  (x10)
+N=4096 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 1+0(x10)
+     writes: 1x4096  (x10)
+N=4097 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x1  (x10)
+N=8191 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x4095  (x10)
+N=8192 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 2+0(x10)
+     writes: 2x4096  (x10)
+N=8193 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 2+1(x10)
+     writes: 2x4096 1x1  (x10)
+N=12288 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 3+0(x10)
+     writes: 3x4096  (x10)
+N=50000 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x848  (x10)
+N=65535 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 15+1(x10)
+     writes: 15x4096 1x4095  (x10)
+N=65536 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 16+0(x10)
+     writes: 16x4096  (x10)
+N=65537 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 16+1(x10)
+     writes: 16x4096 1x1  (x10)
+N=100000 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 24+1(x10)
+     writes: 24x4096 1x1696  (x10)
+N=131072 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 32+0(x10)
+     writes: 32x4096  (x10)
+N=200000 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 48+1(x10)
+     writes: 48x4096 1x3392  (x10)
+N=262144 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 64+0(x10)
+     writes: 64x4096  (x10)
+N=299999 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 73+1(x10)
+     writes: 73x4096 1x991  (x10)
+N=300000 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 73+1(x10)
+     writes: 73x4096 1x992  (x10)
+N=4804 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x708  (x10)
+N=48758 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 11+1(x10)
+     writes: 11x4096 1x3702  (x10)
+N=50585 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x1433  (x10)
+N=51423 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x2271  (x10)
+N=68464 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 16+1(x10)
+     writes: 16x4096 1x2928  (x10)
+N=73340 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 17+1(x10)
+     writes: 17x4096 1x3708  (x10)
+N=73540 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 17+1(x10)
+     writes: 17x4096 1x3908  (x10)
+N=78719 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 19+1(x10)
+     writes: 19x4096 1x895  (x10)
+N=81206 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 19+1(x10)
+     writes: 19x4096 1x3382  (x10)
+N=86903 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 21+1(x10)
+     writes: 21x4096 1x887  (x10)
+N=102346 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 24+1(x10)
+     writes: 24x4096 1x4042  (x10)
+N=156656 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 38+1(x10)
+     writes: 38x4096 1x1008  (x10)
+N=236953 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 57+1(x10)
+     writes: 57x4096 1x3481  (x10)
+N=244362 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 59+1(x10)
+     writes: 59x4096 1x2698  (x10)
+N=249905 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 61+1(x10)
+     writes: 61x4096 1x49  (x10)
+N=253909 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 61+1(x10)
+     writes: 61x4096 1x4053  (x10)
+N=258368 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 63+1(x10)
+     writes: 63x4096 1x320  (x10)
+N=258993 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 63+1(x10)
+     writes: 63x4096 1x945  (x10)
+N=275226 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 67+1(x10)
+     writes: 67x4096 1x794  (x10)
+N=288127 flag=iflag=fullblock strace=y trials=10 finished=10 intact=10 records_out: 70+1(x10)
+     writes: 70x4096 1x1407  (x10)
+@ file b2.st, last written 2026-10-04T23:57:59Z
+write(1, "7kwKXQHZqRh/R/HRQvrJbVGe3SV+sxAz"..., 4096) = 4096
+write(1, "QgwlRi52K2big31xsueebazBOLxPnfMr"..., 4096) = 4096
+write(1, "iMaGNaPDfMvG+Ib1RaY+0RXp3uIpDwxj"..., 4096) = 4096
+write(1, "8/0dM87o133HyZqHzaMv5bwR632blFyi"..., 4096) = 4096
+write(1, "1stSRmXfR/qoSI6G3V8kI2EHxN6i7iJa"..., 4096) = 4096
+write(1, "D5kpLBDwfJegYv2R9F8jY6aP8QkyzomS"..., 4096) = 4096
+write(1, "VGIIFUpURyyUpkb8P+MZ+mc01jbYIrX/"..., 4096) = 4096
+write(1, "KSt1i2jrRMwKPjd+Uu1Z4v/GDduqALbb"..., 4096) = 4096
+write(1, "vNZeHSNPTHZO4e9Mrxka/F/bHiUQQrah"..., 4096) = 4096
+write(1, "5OEs/74Szrvd2sFEFMWTNBAneCqN0jRj"..., 4096) = 4096
+write(1, "4Ka5LZc0+dwa8d05r26pscMMFC+MtgYH"..., 4096) = 4096
+write(1, "5HhOQrcALeI9PpRepXR1ZegMGMMWb2oW"..., 4096) = 4096
+write(1, "+mcYntWjv9/SDMUiMe0UM0vMseSSUXSt"..., 4096) = 4096
+write(1, "X0YG/wqRlWSlI56yToBHGLy9SvTdGxbu"..., 4096) = 4096
+write(1, "HhM7WzoIenAMwTbZbpX3AkHLYclqW6kB"..., 4096) = 4096
+write(1, "ArAB7/zOo5S96NbGpAb6mWVFbP5PNXD2"..., 4096) = 4096
+write(1, "GOVcJkHnXiNcIJIM0tfjImo2hodm00Ni"..., 4096) = 4096
+write(1, "SbpfozuHt1VjF/gWYh8f1Xz7oJMpPIX7"..., 4096) = 4096
+write(1, "3BkQ3bpjQoGAHc9RbYFR3p+rZNoIbmFV"..., 4096) = 4096
+write(1, "lI823DFJXtygvwO0P1DhojvcPkSaBcAl"..., 4096) = 4096
+write(1, "WnaaSMPuAFfdtqdclKu3UfjZZas/79+n"..., 4096) = 4096
+write(1, "+umnwxuwjq6ovgWNLDwllzfE+XKClpcE"..., 4096) = 4096
+write(1, "N7OXtpNA7xDoBL/r8CHG/TI5gN+6CabP"..., 4096) = 4096
+write(1, "U9POzD0Dtif4BCnLFq5NDkp7RFtOiNpo"..., 4096) = 4096
+write(1, "lI9BKWz06eBSkflkB5rHvcRcj2mCEPDY"..., 4096) = 4096
+write(1, "+/vmmKPfmLplVlKtX9Ak6QppO3kMj1q+"..., 4096) = 4096
+write(1, "K3db7AgD1ufpijKtjH3VCAIGjHjy1FQE"..., 4096) = 4096
+write(1, "jr8+2K91sHyhQgpweTutGzs5rOLLO9PE"..., 4096) = 4096
+write(1, "ZyS3MksD8euN0hql9jVn/6DQ+g9HHh0f"..., 4096) = 4096
+write(1, "w6aHsUSoxBj1FmgnRyLCXFYIxtM6juE7"..., 4096) = 4096
+write(1, "SBe3xonL0gDXJuf0ICWLFs056FLkL3Oz"..., 4096) = 4096
+write(1, "BwUyH18MGmRWDgExGGYKorT5mqKnkQt6"..., 4096) = 4096
+write(1, "QgW6jw1O9b4863ctP3SBM1YDyRF5TmEp"..., 4096) = 4096
+write(1, "sOdzerV9q5uyEfzTmA0IC5H98M+FxPlC"..., 4096) = 4096
+write(1, "bxzJFCmSx5ZssDj2mj1YqO1bXOljd77b"..., 4096) = 4096
+write(1, "GbkYNa7sjYFlcX3pcWL6lr8t44+JlVwR"..., 4096) = 4096
+write(1, "6SKP1u9ZvYZSMLoHNawbmeKnOQxdPfxD"..., 4096) = 4096
+write(1, "/sI4KS25o36wgEy0fjZC/BEFYn25MEv4"..., 4096) = 4096
+write(1, "JBJ4J0wAAOZfhLHx4slY/z594mOiKRw1"..., 4096) = 4096
+write(1, "At2tyx7gc7JGxQhjrfnmuvqX+WLpKG8m"..., 4096) = 4096
+write(1, "4i4UPxNufRjlxxwBXumAIGL0HIF/PZj5"..., 4096) = 4096
+write(1, "UL2l1jPviUdTOHgGWmqBG0BDuFxdWapH"..., 4096) = 4096
+write(1, "9bimhocBuiPSAvwJR7yGTKA/R31y6dvX"..., 4096) = 4096
+write(1, "EAdaWNmml/ujEEfy7e6/HP1MvtHqEDmg"..., 4096) = 4096
+write(1, "0EXYLTKshf5cikmwUzmOBp4bImJ950Nj"..., 4096) = 4096
+write(1, "NfIrN2mRkCPuLeWHbQL6e3yKgWlrf2i8"..., 4096) = 4096
+write(1, "kyHLZNPMADmsT4hoi/s7N+OL65BtJS0V"..., 4096) = 4096
+write(1, "MCkFbRq/FhB/vRr5e0rJ2WK0QMWu/g46"..., 4096) = 4096
+write(1, "Cauufl5W5M3TPeYLuuFNpf4X98uzWQUq"..., 4096) = 4096
+write(1, "1a2N5XsXLt4o3XKHdRtwTn364vTiR3aO"..., 4096) = 4096
+write(1, "7jYNM4cXFCyD5qSEWw0jB6f1yj7biuCF"..., 4096) = 4096
+write(1, "+N3pBnK89Ep2H3FXPSaktea95QBWNUaY"..., 4096) = 4096
+write(1, "zfeW5oDN6+9xihqD6CEJ5FA2Hhwdq1i5"..., 4096) = 4096
+write(1, "LGUMgFQ8gALgsF2eYl/9waXam6M4Sk+K"..., 4096) = 4096
+write(1, "u3u9o2TW6xwzPI7EJ/U0vuxfkO7djhX5"..., 4096) = 4096
+write(1, "pXeX6PYfYfNLHEPcUja1R/6ekIKmINr9"..., 4096) = 4096
+write(1, "SB6raYN9PusM58QLwCPi9DjbvJkKgbxY"..., 4096) = 4096
+write(1, "nMkE5kZHmihfZZpq4G2Ow433yb+501ut"..., 4096) = 4096
+write(1, "Xaua2Ni08GXv7dONqr+NTWOdA9zY5EC1"..., 4096) = 4096
+write(1, "wUF4hrU9Rb5Nmvsv3FFi5zXYrTdDfVpN"..., 4096) = 4096
+write(1, "HuSxLYhJp8KxQHRAlLeIl1Dz75VBfLuP"..., 4096) = 4096
+write(1, "hnp+8X8m9qAawU5SQjOTSji7KVJADoh8"..., 4096) = 4096
+write(1, "4kHQXKdcnLUGGFai7H1FWGk9Oed7Cafa"..., 4096) = 4096
+write(1, "WlfGYKYrkDPfkU50cYKN5KfFUVysFcTV"..., 4096) = 4096
+write(1, "1UePSE4P1oRkf+wA+phs8Ry/n7feY9AI"..., 4096) = 4096
+write(1, "SbXYXzUSS6yOou9FOuIiMu1L3bLpG/6E"..., 4096) = 4096
+write(1, "QxCqU4gpu5+q07jxOVUI9JgBULSO3vGx"..., 4096) = 4096
+write(1, "3flJ11sEmuj3yk/O9Jv8325RAqLq1VN4"..., 4096) = 4096
+write(1, "AIZS40tSrgWQVh2XEoqJ9WRNkNB6Cy4m"..., 4096) = 4096
+write(1, "R1QocG2wjVUzv9twyhNwO3nsp3q+jJv7"..., 4096) = 4096
+write(1, "MM+2T1bMME7Dhhn1IsweGZdr6qeCo0UP"..., 1407) = 1407
+write(2, "70+1 records in\n70+1 records out"..., 33) = 33
+write(2, "288127 bytes (288 kB, 281 KiB) c"..., 62) = 62
+write(2, "\n", 1)                       = 1
++++ exited with 0 +++
+@ file b2_none_strace.out, last written 2026-10-04T23:57:59Z
+N=10 flag=none strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x10  (x10)
+N=100 flag=none strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x100  (x10)
+N=1000 flag=none strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x1000  (x10)
+N=4095 flag=none strace=y trials=10 finished=10 intact=10 records_out: 0+1(x10)
+     writes: 1x4095  (x10)
+N=4096 flag=none strace=y trials=10 finished=10 intact=10 records_out: 1+0(x10)
+     writes: 1x4096  (x10)
+N=4097 flag=none strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x1  (x10)
+N=8191 flag=none strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x4095  (x10)
+N=8192 flag=none strace=y trials=10 finished=10 intact=10 records_out: 2+0(x10)
+     writes: 2x4096  (x10)
+N=8193 flag=none strace=y trials=10 finished=10 intact=10 records_out: 2+1(x10)
+     writes: 2x4096 1x1  (x10)
+N=12288 flag=none strace=y trials=10 finished=10 intact=10 records_out: 3+0(x10)
+     writes: 3x4096  (x10)
+N=50000 flag=none strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x848  (x10)
+N=65535 flag=none strace=y trials=10 finished=10 intact=10 records_out: 15+1(x10)
+     writes: 15x4096 1x4095  (x10)
+N=65536 flag=none strace=y trials=10 finished=10 intact=10 records_out: 16+0(x10)
+     writes: 16x4096  (x10)
+N=65537 flag=none strace=y trials=10 finished=10 intact=10 records_out: 16+1(x10)
+     writes: 16x4096 1x1  (x10)
+N=100000 flag=none strace=y trials=10 finished=10 intact=10 records_out: 24+1(x10)
+     writes: 24x4096 1x1696  (x10)
+N=131072 flag=none strace=y trials=10 finished=10 intact=10 records_out: 32+0(x10)
+     writes: 32x4096  (x10)
+N=200000 flag=none strace=y trials=10 finished=10 intact=10 records_out: 48+1(x10)
+     writes: 48x4096 1x3392  (x10)
+N=262144 flag=none strace=y trials=10 finished=10 intact=10 records_out: 64+0(x10)
+     writes: 64x4096  (x10)
+N=299999 flag=none strace=y trials=10 finished=10 intact=10 records_out: 73+1(x10)
+     writes: 73x4096 1x991  (x10)
+N=300000 flag=none strace=y trials=10 finished=10 intact=10 records_out: 73+1(x10)
+     writes: 73x4096 1x992  (x10)
+N=4804 flag=none strace=y trials=10 finished=10 intact=10 records_out: 1+1(x10)
+     writes: 1x4096 1x708  (x10)
+N=48758 flag=none strace=y trials=10 finished=10 intact=10 records_out: 11+1(x10)
+     writes: 11x4096 1x3702  (x10)
+N=50585 flag=none strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x1433  (x10)
+N=51423 flag=none strace=y trials=10 finished=10 intact=10 records_out: 12+1(x10)
+     writes: 12x4096 1x2271  (x10)
+N=68464 flag=none strace=y trials=10 finished=10 intact=10 records_out: 16+1(x10)
+     writes: 16x4096 1x2928  (x10)
+N=73340 flag=none strace=y trials=10 finished=10 intact=10 records_out: 17+1(x10)
+     writes: 17x4096 1x3708  (x10)
+N=73540 flag=none strace=y trials=10 finished=10 intact=10 records_out: 17+1(x10)
+     writes: 17x4096 1x3908  (x10)
+N=78719 flag=none strace=y trials=10 finished=10 intact=10 records_out: 19+1(x10)
+     writes: 19x4096 1x895  (x10)
+N=81206 flag=none strace=y trials=10 finished=10 intact=10 records_out: 19+1(x10)
+     writes: 19x4096 1x3382  (x10)
+N=86903 flag=none strace=y trials=10 finished=10 intact=10 records_out: 21+1(x10)
+     writes: 21x4096 1x887  (x10)
+N=102346 flag=none strace=y trials=10 finished=10 intact=10 records_out: 24+1(x10)
+     writes: 24x4096 1x4042  (x10)
+N=156656 flag=none strace=y trials=10 finished=10 intact=10 records_out: 38+1(x10)
+     writes: 38x4096 1x1008  (x10)
+N=236953 flag=none strace=y trials=10 finished=10 intact=10 records_out: 57+1(x10)
+     writes: 57x4096 1x3481  (x10)
+N=244362 flag=none strace=y trials=10 finished=10 intact=10 records_out: 59+1(x10)
+     writes: 59x4096 1x2698  (x10)
+N=249905 flag=none strace=y trials=10 finished=10 intact=10 records_out: 61+1(x10)
+     writes: 61x4096 1x49  (x10)
+N=253909 flag=none strace=y trials=10 finished=10 intact=10 records_out: 61+1(x10)
+     writes: 61x4096 1x4053  (x10)
+N=258368 flag=none strace=y trials=10 finished=10 intact=10 records_out: 63+1(x10)
+     writes: 63x4096 1x320  (x10)
+N=258993 flag=none strace=y trials=10 finished=10 intact=10 records_out: 63+1(x10)
+     writes: 63x4096 1x945  (x10)
+N=275226 flag=none strace=y trials=10 finished=10 intact=10 records_out: 67+1(x10)
+     writes: 67x4096 1x794  (x10)
+N=288127 flag=none strace=y trials=10 finished=10 intact=10 records_out: 70+1(x10)
+     writes: 70x4096 1x1407  (x10)
+@ file b2_full_plain.out, last written 2026-10-05T00:01:38Z
+N=10 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=100 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=1000 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=4095 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=4096 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 1+0(x10)
+N=4097 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=8191 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=8192 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 2+0(x10)
+N=8193 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 2+1(x10)
+N=12288 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 3+0(x10)
+N=50000 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=65535 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 15+1(x10)
+N=65536 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 16+0(x10)
+N=65537 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 16+1(x10)
+N=100000 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 24+1(x10)
+N=131072 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 32+0(x10)
+N=200000 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 48+1(x10)
+N=262144 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 64+0(x10)
+N=299999 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 73+1(x10)
+N=300000 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 73+1(x10)
+N=4804 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=48758 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 11+1(x10)
+N=50585 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=51423 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=68464 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 16+1(x10)
+N=73340 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 17+1(x10)
+N=73540 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 17+1(x10)
+N=78719 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 19+1(x10)
+N=81206 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 19+1(x10)
+N=86903 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 21+1(x10)
+N=102346 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 24+1(x10)
+N=156656 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 38+1(x10)
+N=236953 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 57+1(x10)
+N=244362 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 59+1(x10)
+N=249905 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 61+1(x10)
+N=253909 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 61+1(x10)
+N=258368 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 63+1(x10)
+N=258993 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 63+1(x10)
+N=275226 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 67+1(x10)
+N=288127 flag=iflag=fullblock strace=n trials=10 finished=10 intact=10 records_out: 70+1(x10)
+@ file b2.err, last written 2026-10-05T00:01:43Z
+70+1 records in
+70+1 records out
+288127 bytes (288 kB, 281 KiB) copied, 0.0011195 s, 257 MB/s
+@ file b2_none_plain.out, last written 2026-10-05T00:01:43Z
+N=10 flag=none strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=100 flag=none strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=1000 flag=none strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=4095 flag=none strace=n trials=10 finished=10 intact=10 records_out: 0+1(x10)
+N=4096 flag=none strace=n trials=10 finished=10 intact=10 records_out: 1+0(x10)
+N=4097 flag=none strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=8191 flag=none strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=8192 flag=none strace=n trials=10 finished=10 intact=10 records_out: 2+0(x10)
+N=8193 flag=none strace=n trials=10 finished=10 intact=10 records_out: 2+1(x10)
+N=12288 flag=none strace=n trials=10 finished=10 intact=10 records_out: 3+0(x10)
+N=50000 flag=none strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=65535 flag=none strace=n trials=10 finished=10 intact=10 records_out: 15+1(x10)
+N=65536 flag=none strace=n trials=10 finished=10 intact=10 records_out: 16+0(x10)
+N=65537 flag=none strace=n trials=10 finished=10 intact=10 records_out: 16+1(x10)
+N=100000 flag=none strace=n trials=10 finished=10 intact=10 records_out: 24+1(x10)
+N=131072 flag=none strace=n trials=10 finished=10 intact=10 records_out: 32+0(x10)
+N=200000 flag=none strace=n trials=10 finished=10 intact=10 records_out: 48+1(x10)
+N=262144 flag=none strace=n trials=10 finished=10 intact=10 records_out: 64+0(x10)
+N=299999 flag=none strace=n trials=10 finished=10 intact=10 records_out: 73+1(x10)
+N=300000 flag=none strace=n trials=10 finished=10 intact=10 records_out: 73+1(x10)
+N=4804 flag=none strace=n trials=10 finished=10 intact=10 records_out: 1+1(x10)
+N=48758 flag=none strace=n trials=10 finished=10 intact=10 records_out: 11+1(x10)
+N=50585 flag=none strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=51423 flag=none strace=n trials=10 finished=10 intact=10 records_out: 12+1(x10)
+N=68464 flag=none strace=n trials=10 finished=10 intact=10 records_out: 16+1(x10)
+N=73340 flag=none strace=n trials=10 finished=10 intact=10 records_out: 17+1(x10)
+N=73540 flag=none strace=n trials=10 finished=10 intact=10 records_out: 17+1(x10)
+N=78719 flag=none strace=n trials=10 finished=10 intact=10 records_out: 19+1(x10)
+N=81206 flag=none strace=n trials=10 finished=10 intact=10 records_out: 19+1(x10)
+N=86903 flag=none strace=n trials=10 finished=10 intact=10 records_out: 21+1(x10)
+N=102346 flag=none strace=n trials=10 finished=10 intact=10 records_out: 24+1(x10)
+N=156656 flag=none strace=n trials=10 finished=10 intact=10 records_out: 38+1(x10)
+N=236953 flag=none strace=n trials=10 finished=10 intact=10 records_out: 57+1(x10)
+N=244362 flag=none strace=n trials=10 finished=10 intact=10 records_out: 59+1(x10)
+N=249905 flag=none strace=n trials=10 finished=10 intact=10 records_out: 61+1(x10)
+N=253909 flag=none strace=n trials=10 finished=10 intact=10 records_out: 61+1(x10)
+N=258368 flag=none strace=n trials=10 finished=10 intact=10 records_out: 63+1(x10)
+N=258993 flag=none strace=n trials=10 finished=10 intact=10 records_out: 63+1(x10)
+N=275226 flag=none strace=n trials=10 finished=10 intact=10 records_out: 67+1(x10)
+N=288127 flag=none strace=n trials=10 finished=10 intact=10 records_out: 70+1(x10)
+@ file b2b.err, last written 2026-10-05T00:02:32Z
+2+1 records in
+2+1 records out
+10000 bytes (10 kB, 9.8 KiB) copied, 5.4647e-05 s, 183 MB/s
+@ file b1_20_none.st, last written 2026-10-05T00:15:38Z
+00:15:34.403201 read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
+00:15:34.408226 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.685923 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.686008 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.740172 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.740241 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.795351 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.795424 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.850002 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.850108 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.903806 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.905178 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:34.957506 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:34.957540 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.010937 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.010973 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.065404 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.065439 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.119763 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.119800 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.175874 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.175911 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.231705 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.231738 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.287900 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.287935 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.343848 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.343887 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.399902 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.399940 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.455817 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.455850 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.511890 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.511925 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.567834 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.567868 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.623757 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.623800 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.683768 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.683802 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:35.739791 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:35.739827 read(0, 0x557c347af000, 4096) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+00:15:38.385188 --- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=22489, si_uid=0} ---
+00:15:38.385220 --- SIGCONT {si_signo=SIGCONT, si_code=SI_USER, si_pid=22489, si_uid=0} ---
+00:15:38.385299 write(2, "0+20 records in\n0+20 records out"..., 33) = 33
+00:15:38.385346 write(2, "2000 bytes (2.0 kB, 2.0 KiB) cop"..., 56) = 56
+00:15:38.385366 write(2, "\n", 1)       = 1
+00:15:38.385415 --- SIGINT {si_signo=SIGINT, si_code=SI_TKILL, si_pid=22498, si_uid=0} ---
+00:15:38.385570 +++ killed by SIGINT +++
+@ file b1_60_none.st, last written 2026-10-05T00:15:43Z
+00:15:39.195681 read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
+00:15:39.196462 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.479894 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.479941 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.535510 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.535556 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.592043 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.592096 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.648135 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.648191 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.704237 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.704290 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.763892 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.764235 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.819836 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.819872 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.875934 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.876220 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.931960 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.931993 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:39.988116 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:39.988159 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.044181 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.044225 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.100090 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.100138 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.156113 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.156195 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.212345 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.212406 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.272701 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.272769 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.330016 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.330068 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.384214 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.384525 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.444481 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.444867 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.499996 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.500034 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.556314 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.556361 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.616419 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.616495 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.672379 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.672454 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.732253 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.732306 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.792310 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.792361 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.852012 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.852050 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.912306 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.912350 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:40.972036 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:40.972088 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.028203 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.028248 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.088033 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.088070 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.144065 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.144111 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.204631 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.204672 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.268039 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.268075 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.328088 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.328132 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.388146 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.388193 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.448066 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.448115 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.508216 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.508315 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.568437 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.568488 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.627994 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.628036 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.688286 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.688328 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.752061 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.752098 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.812911 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.812949 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.875972 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.876013 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.936039 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.936079 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:41.997768 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:41.997817 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.066058 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.066102 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.128100 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.128144 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.184406 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.184467 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.244651 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.244690 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.308019 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.308061 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.364098 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.364141 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.423997 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.424033 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.480001 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.480047 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.536025 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.536074 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.592075 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.592146 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.652022 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.652065 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.709853 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.709893 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.768408 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.768479 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.828105 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.828148 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.884205 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.884242 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:42.940055 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 100) = 100
+00:15:42.940092 read(0, 0x55d362604000, 4096) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+00:15:43.180697 --- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=23546, si_uid=0} ---
+00:15:43.180780 --- SIGCONT {si_signo=SIGCONT, si_code=SI_USER, si_pid=23546, si_uid=0} ---
+00:15:43.180867 write(2, "0+60 records in\n0+60 records out"..., 33) = 33
+00:15:43.180917 write(2, "6000 bytes (6.0 kB, 5.9 KiB) cop"..., 56) = 56
+00:15:43.180938 write(2, "\n", 1)       = 1
+00:15:43.180990 --- SIGINT {si_signo=SIGINT, si_code=SI_TKILL, si_pid=23555, si_uid=0} ---
+00:15:43.181132 +++ killed by SIGINT +++
+@ file b1_20_iflag=fullblock.st, last written 2026-10-05T00:15:48Z
+00:15:44.920122 read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
+00:15:44.920941 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:45.212048 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3996) = 100
+00:15:45.267857 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3896) = 100
+00:15:45.323873 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3796) = 100
+00:15:45.379947 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3696) = 100
+00:15:45.434169 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3596) = 100
+00:15:45.487468 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3496) = 100
+00:15:45.541086 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3396) = 100
+00:15:45.600073 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3296) = 100
+00:15:45.660056 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3196) = 100
+00:15:45.720131 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3096) = 100
+00:15:45.780236 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2996) = 100
+00:15:45.839897 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2896) = 100
+00:15:45.895786 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2796) = 100
+00:15:45.949474 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2696) = 100
+00:15:46.004094 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2596) = 100
+00:15:46.060162 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2496) = 100
+00:15:46.115042 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2396) = 100
+00:15:46.170475 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2296) = 100
+00:15:46.225421 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2196) = 100
+00:15:46.279795 read(0, 0x55d4fc1457d0, 2096) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+00:15:48.908771 --- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=24536, si_uid=0} ---
+00:15:48.908808 --- SIGCONT {si_signo=SIGCONT, si_code=SI_USER, si_pid=24536, si_uid=0} ---
+00:15:48.908884 write(2, "0+0 records in\n0+0 records out\n", 31) = 31
+00:15:48.908932 write(2, "0 bytes copied, 3.98799 s, 0.0 k"..., 35) = 35
+00:15:48.908951 write(2, "\n", 1)       = 1
+00:15:48.908998 --- SIGINT {si_signo=SIGINT, si_code=SI_TKILL, si_pid=24544, si_uid=0} ---
+00:15:48.909163 +++ killed by SIGINT +++
+@ file b1_dd.err, last written 2026-10-05T00:15:53Z
+1+0 records in
+1+0 records out
+4096 bytes (4.1 kB, 4.0 KiB) copied, 3.97351 s, 1.0 kB/s
+@ file b1_60_iflag=fullblock.st, last written 2026-10-05T00:15:53Z
+00:15:49.729487 read(3, "\177ELF\2\1\1\3\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\220\243\2\0\0\0\0\0"..., 832) = 832
+00:15:49.735383 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 100
+00:15:50.015980 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3996) = 100
+00:15:50.075941 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3896) = 100
+00:15:50.136278 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3796) = 100
+00:15:50.196212 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3696) = 100
+00:15:50.256069 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3596) = 100
+00:15:50.315882 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3496) = 100
+00:15:50.376236 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3396) = 100
+00:15:50.431955 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3296) = 100
+00:15:50.488090 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3196) = 100
+00:15:50.544221 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3096) = 100
+00:15:50.600240 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2996) = 100
+00:15:50.656006 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2896) = 100
+00:15:50.716040 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2796) = 100
+00:15:50.771991 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2696) = 100
+00:15:50.828188 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2596) = 100
+00:15:50.888345 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2496) = 100
+00:15:50.944169 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2396) = 100
+00:15:51.000043 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2296) = 100
+00:15:51.056254 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2196) = 100
+00:15:51.111765 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2096) = 100
+00:15:51.169211 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1996) = 100
+00:15:51.222775 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1896) = 100
+00:15:51.277596 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1796) = 100
+00:15:51.331460 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1696) = 100
+00:15:51.387850 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1596) = 100
+00:15:51.443935 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1496) = 100
+00:15:51.500067 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1396) = 100
+00:15:51.559968 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1296) = 100
+00:15:51.619999 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1196) = 100
+00:15:51.679893 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 1096) = 100
+00:15:51.740031 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 996) = 100
+00:15:51.795657 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 896) = 100
+00:15:51.849217 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 796) = 100
+00:15:51.903789 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 696) = 100
+00:15:51.958355 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 596) = 100
+00:15:52.013904 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 496) = 100
+00:15:52.068015 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 396) = 100
+00:15:52.124243 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 296) = 100
+00:15:52.180369 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 196) = 100
+00:15:52.235834 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 96) = 96
+00:15:52.293051 write(1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4096) = 4096
+00:15:52.293109 read(0, "xxxx", 4096)   = 4
+00:15:52.293132 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 4092) = 100
+00:15:52.352544 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3992) = 100
+00:15:52.415984 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3892) = 100
+00:15:52.476278 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3792) = 100
+00:15:52.531990 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3692) = 100
+00:15:52.587955 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3592) = 100
+00:15:52.643788 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3492) = 100
+00:15:52.699972 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3392) = 100
+00:15:52.759854 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3292) = 100
+00:15:52.820598 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3192) = 100
+00:15:52.880211 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 3092) = 100
+00:15:52.944219 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2992) = 100
+00:15:53.004337 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2892) = 100
+00:15:53.060303 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2792) = 100
+00:15:53.120530 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2692) = 100
+00:15:53.176950 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2592) = 100
+00:15:53.232532 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2492) = 100
+00:15:53.292793 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2392) = 100
+00:15:53.353403 read(0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"..., 2292) = 100
+00:15:53.407875 read(0, 0x5571a1598770, 2192) = ? ERESTARTSYS (To be restarted if SA_RESTART is set)
+00:15:53.708646 --- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=25746, si_uid=0} ---
+00:15:53.708787 write(2, "1+0 records in\n1+0 records out\n", 31) = 31
+00:15:53.708861 write(2, "4096 bytes (4.1 kB, 4.0 KiB) cop"..., 56) = 56
+00:15:53.708899 write(2, "\n", 1)       = 1
+00:15:53.709006 --- SIGINT {si_signo=SIGINT, si_code=SI_TKILL, si_pid=25752, si_uid=0} ---
+00:15:53.709222 +++ killed by SIGINT +++
+@ report the measuring agent, of b1.sh, b2.sh, b2b.sh, b3.sh, b3dd.sh, c.sh and d.sh
+question: B1. dd reading a lane that dribbles 100 bytes at a time, with and without iflag=fullblock: does fullblock hold bytes back?
+answer: Yes. Without the flag, 'dd if=A/0 of=B/0 bs=4096' passed every 100 bytes on as it came: '0+20 records in, 0+20 records out' (and 0+60 for 60 dribbles), 20 writes of 100, nothing lost. That confirms icc-pipes SKILL.md:63-66. With iflag=fullblock and 20 dribbles (2000 bytes), dd wrote nothing ('0+0 records out'). When timeout cut it off it had taken all 2000 bytes off lane A and put none on lane B: 2000 lost. With 60 dribbles (6000 bytes) it wrote one 4096 block and lost 1904. In the one run traced with timestamps, the first 100 bytes were read at t and written out 2.46 s later, when the 41st dribble completed the block. Identical in 4 of 4 runs per case.
+mechanism: A lane never reaches EOF: the hold keeps every lane open O_RDWR (icc-pipes/scripts/create:47 builds the '<>' redirections, :54 opens them, :56-59 starts 'sleep infinity' holding them). fullblock's read loop therefore ends only at a whole block or a signal, and a dd killed by a signal discards the partial block it was holding. icc-pipes/SKILL.md:77-79 states the latency and the stall but not the loss.
+method: Script b1.sh: two fresh 2-lane pipes. 'timeout -s INT 4 strace -tt -e trace=read,write dd if=A/0 of=B/0 bs=4096 [iflag=fullblock]'. The dribbler ran 'dd if=c100 of=A/0 bs=4096 status=none; sleep 0.05' 20 or 60 times. Afterwards both lanes were drained with 'timeout 0.3 dd bs=65536' and counted. 4 runs of each of the 4 cases (flag x 20/60 dribbles).
+confidence: high
+
+question: B2. printf of N bytes | dd bs=4096 iflag=fullblock of=LANE (anonymous pipe that ends): whole 4096 writes and a short last one, and it finishes, every time? Short writes without fullblock?
+answer: With fullblock: yes, in 800 of 800 runs over 40 sizes from 10 to 300000 bytes (10 runs each, half under strace). dd exited 0, the reader got the N bytes intact, and records out was floor(N/4096) full plus 1 partial exactly when N%4096 != 0. The traced write sizes were all 4096 but the last (e.g. N=300000: 73x4096 then 1x992; N=65537: 16x4096 then 1x1). Without fullblock the same 800 runs came out identical: the only short write was the last one. The reason is that bash's printf itself writes 4096-byte chunks (traced: N=20000 is 4x4096 then 3616), so every page dd reads is full. Where the writer does not chunk at 4096, the flags differ: a writer of 100 pieces of 100 bytes gave '0+100 records out' without fullblock and '2+1' with it, 20 of 20 runs each. A writer of one 1000 then one 9000 gave 2+1 both ways in 20 of 20, because dd's read spanned the pages. Every run finished and was intact.
+mechanism: The anonymous pipe reports EOF when printf exits, so fullblock's loop ends there and dd writes the remainder as its last write. Without the flag, dd writes exactly what each read returned (icc-pipes/SKILL.md:63-66). bash's printf writes through a 4096 stdio buffer (traced), so the reads come back whole whenever dd reads.
+method: Script b2.sh. Reader: 'timeout 20 head -c N LANE > got &'. Writer: 'printf %s "$osBytes" | timeout 15 [strace -e trace=write] dd bs=4096 [iflag=fullblock] of=LANE'. The bytes were base64 text from /dev/urandom. N = 10 100 1000 4095 4096 4097 8191 8192 8193 12288 50000 65535 65536 65537 100000 131072 200000 262144 299999 300000 plus 20 random values in 10..300000. 10 runs per N, per flag, with and without strace (1600 runs). Then b2b.sh: 2 writers x 2 flags x 20 runs. Not measured: other upstream writers such as cat, head or a loaded machine's printf.
+confidence: high
+
+question: B3. Does a short write take a page of a lane to itself (icc-frames SKILL.md:39-44)? Many small writes vs full ones: how many bytes does a lane hold?
+answer: It depends on the next write. A write is appended to the lane's last page only while the lane is not empty and its part past whole pages fits behind what is there. Otherwise it starts a new page, and a write of whole pages always starts one. So a short write followed by a 4096 write keeps its page to itself. Nobody reading, bytes held until the next write would block, the same in 3 of 3 runs: 4096s 65536; 1s 65536; 10s 65440; 100s 64000; 1000s 64000; 1365s 65520; 1366s 43712; 2048s 65536; 2049s 32784; 3000s 48000; 4000s 64000; 4095s 65520; one 1 then 4096s 61441; one 7 then 4096s 61447; one 100 then 4096s 61540; one 4095 then 4096s 65535; 7 then 4089 then 4096s 65536 (Frames' count line plus frame 0 share a page); 7 then 4090 then 4096s 61441; 100 and 4096 by turns 33568; 4096, 100 read off, then 100s 63996 (a page read partway is not refilled); 100, read 100 (lane empty), then 100s 64000; 4097s 45066; 8192s 65536. Reads do not go by pages: read(4096) on a page of 100 and a page of 4096 returned 4096 (100 + 3996). The shell way agreed in 3 of 3 runs: one dd per write with timeout 0.5 gave 640 x 100 = 64000, and one 100 then 15 x 4096 = 61540.
+mechanism: This is a kernel behavior (Linux pipe_write's merge into the last buffer), inferred from the measurements. Kernel source was not read here. icc-pipes/SKILL.md:92 says only 'Each lane buffers 64K', which holds only for writes that fill pages.
+method: b3.sh: a fresh 2-lane pipe. python3 b3.py opened lane 0 O_WRONLY|O_NONBLOCK, wrote each pattern until EAGAIN, and drained it with a nonblocking reader to check the count. 3 runs. b3dd.sh cross-checked with one 'timeout 0.5 dd if=chunk of=LANE bs=4096 status=none' per write, 3 runs.
+confidence: high
+
+question: C. 'read -r -u FD' for one line, then 'head -c N <&FD': does either take more off a FIFO than it returns?
+answer: No. The test wrote two messages back to back down one lane, each a count line and N bytes. Reader 1 took a line and N bytes; a separate reader 2 then found the second message whole, and nothing was left on the lane. That held in 200 of 200 runs each for N = 1, 4095, 4096, 4097 and 100000 (1000 of 1000). Under strace, read -r -u read the lane one byte per read(fd, 1) (e.g. 5 one-byte reads for '4097\n'). head -c never asked for more than it had left: N=4097 was one read(0, 4097) returning 4097 (across pages); N=100000 was 12 x read(8192) then read(1696); N=4095, 4096 and 1 each one read of exactly N. By contrast 'dd bs=4096 count=1' takes whatever one read returns: 100 when only a 100-byte write was there, 4096 when 100 and 4096 were both there (3 of 3).
+mechanism: bash's read cannot seek back on a pipe, so it reads one byte at a time (traced). GNU head -c asks for min(its buffer, bytes left) (traced). icc-frames/scripts/read:45 ('read -r nSize 0<> lane'), :68 and :73 ('head -c "$nWant" 0<> lane') rely on exactly this. icc-pipes/SKILL.md says nothing about taking exactly N bytes.
+method: c.sh: the writer was '{ printf %s\\n N; cat m1; printf %s\\n N; cat m2; } | timeout 10 dd of=LANE bs=4096 status=none &'. Each reader was 'timeout 10 bash -c "exec {fd}< LANE; read -r -u $fd n; head -c $n <&$fd > o"', compared with cmp, then the lane was checked empty with 'timeout 0.2 dd'. 200 runs per size. c_strace.sh: 'strace -f -e trace=read' on one reader per size. A dd count=1 check ran 3 times.
+confidence: high
+
+question: D. Opening a lane read-only with '<' while the hold is up: does it ever block? With the hold killed?
+answer: With the hold up, never: 'timeout 1 bash -c "exec 3< LANE"' opened at once 200 of 200 times, and '>' and '<>' also 200 of 200 each (200 in-shell '<' opens took 6.1 ms in all). After the hold was killed (list said down), '<' blocked 20 of 20 and '>' blocked 20 of 20 (timeout 0.5, rc 124), while '<>' opened 20 of 20. With the hold dead but another process holding the lane '<>', '<' opened 20 of 20.
+mechanism: icc-pipes/scripts/create:47 and :54 open every lane '<>' in the shell that becomes the hold (sleep infinity, :56-59). A FIFO's read-only open waits for a writer and its write-only open waits for a reader, and an O_RDWR holder is both. icc-pipes/SKILL.md:121 says only that 'opens and writes can block'.
+method: d.sh: a fresh 2-lane pipe. 200 runs per open mode with the hold up. Then 'kill $(cat DIR/pid)' and 20 runs per mode with timeout 0.5, then 20 more with 'exec 5<> lane' held by the test shell. Then icc-pipes remove and list.
+confidence: high
+
+@ end 2026-10-05T00:15:53Z

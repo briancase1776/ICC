@@ -1,0 +1,105 @@
+@ run 2026-10-05T00:02:41Z to 2026-10-05T00:13:21Z, a_sweep.sh
+@ icc 0198a45096680a88bcce5db545741df7e37e4322, and the commits after it on its branch through 25a499b6f183c10d3e037477843bb348c980ca5f, none of which changed a script measured
+@ box 4 cpus, load not noted, Linux 6.18.44, bash 5.2.21, coreutils 9.4; another session's measurements ran on the same machine
+@ note the first entries, taken before tests/cal was written: the night's own measuring scripts, then what they left, each file whole under its "@ file" line; where what a script printed was not kept, the measuring agent's report of it is under "@ report"
+@ file a.sh, last written 2026-10-04T23:59:45Z
+#!/bin/bash
+# A: capacity of one lane of a seat's cable DEPTH pipes deep, nobody reading.
+# mesh 3, LANES 2, DEPTH D. Cable 0->1 and cable 0->2 are walked from the
+# tail the seat holds back to the head (the outlet of seat 0's tee).
+#  mode a: one dd per 4096 block into the head's lane 0, timeout 1 on each;
+#          the first that times out is the one that waited.
+#  mode b: one dd streaming 4096 blocks into cable 0->2's head, cut off by
+#          SIGINT after 3 s; its records out is what went in.
+#  mode c: one dd per block into seat 1's write end: the write pipe, seat 1's
+#          two-outlet tee, then its cables to 0 and 2.
+# Every mode then drains the tail and checks the bytes are the ones written.
+S=/home/user/ICC/.claude/skills
+W=$1; nDepth=$2; iTrial=$3
+T=$(mktemp -d "$W/a.XXXXXX")
+pPatch=
+trap '[ -n "$pPatch" ] && $S/icc-patch/scripts/remove "$pPatch"; rm -rf "$T"' EXIT
+t0=$SECONDS
+pPatch=$($S/icc-patch/scripts/create mesh 3 2 "$nDepth")
+tMake=$((SECONDS - t0))
+$S/icc-patch/scripts/list | grep -qx "$pPatch up mesh 3 2 $nDepth" || { echo "patch not up"; exit 1; }
+# one-outlet tees of this patch: DST -> SRC
+declare -A hSrcOf=()
+while read -r pPiece pScripts; do
+  case $pPiece in /tmp/icc-tee-*) ;; *) continue;; esac
+  mapfile -t a < "$pPiece/tee"
+  [ "${#a[@]}" -eq 3 ] && hSrcOf[${a[2]}]=${a[0]}
+done < "$pPatch/made"
+fChain() { # writer reader -> chain head..tail on stdout
+  local w=$1 r=$2 p
+  p=$(awk -v w="$w" -v r="$r" 'NR>1 && $1==r && $2==1 && $4==w {print $3}' "$pPatch/patch")
+  local a=("$p")
+  while [ -n "${hSrcOf[$p]:-}" ]; do p=${hSrcOf[$p]}; a=("$p" "${a[@]}"); done
+  printf '%s\n' "${a[@]}"
+}
+head -c $((700*4096)) /dev/urandom > "$T/src"
+fDrain() { # tail nBlocks [outfile]
+  local o=${3:-$T/out}
+  timeout 3 dd if="$1/0" bs=4096 status=none > "$o"
+  local nGot; nGot=$(wc -c < "$o")
+  if [ "$nGot" -eq $(( $2 * 4096 )) ] && cmp -s "$o" <(head -c "$nGot" "$T/src"); then echo intact; else echo "DRAINED $nGot WANT $(( $2 * 4096 ))"; fi
+}
+mapfile -t aC1 < <(fChain 0 1)
+mapfile -t aC2 < <(fChain 0 2)
+[ "${#aC1[@]}" -eq "$nDepth" ] && [ "${#aC2[@]}" -eq "$nDepth" ] || { echo "chain length ${#aC1[@]}/${#aC2[@]} != $nDepth"; exit 1; }
+# mode a
+n=0
+while timeout 1 dd if="$T/src" of="${aC1[0]}/0" bs=4096 skip=$n count=1 status=none; do n=$((n+1)); done
+nA=$n; sA=$(fDrain "${aC1[-1]}" "$nA")
+# mode b
+timeout -s INT 3 dd if="$T/src" of="${aC2[0]}/0" bs=4096 2> "$T/err"
+nB=$(grep 'records out' "$T/err" | cut -d+ -f1); pB=$(grep 'records out' "$T/err" | cut -d+ -f2 | cut -d' ' -f1)
+sB=$(fDrain "${aC2[-1]}" "$nB")
+# mode c: seat 1's write end
+pW1=$(awk 'NR>1 && $1==1 && $2==0 {print $3}' "$pPatch/patch")
+n=0
+while timeout 1 dd if="$T/src" of="$pW1/0" bs=4096 skip=$n count=1 status=none; do n=$((n+1)); done
+nC=$n
+mapfile -t aC10 < <(fChain 1 0); mapfile -t aC12 < <(fChain 1 2)
+fDrain "${aC10[-1]}" "$nC" "$T/o0" > "$T/s0" & fDrain "${aC12[-1]}" "$nC" "$T/o2" > "$T/s2" & wait
+sC0=$(cat "$T/s0"); sC2=$(cat "$T/s2")
+echo "D=$nDepth trial=$iTrial made_in=${tMake}s 17D-1=$((17*nDepth-1)) | a(dd per block, cable 0->1)=$nA [$sA] | b(one dd streaming, cable 0->2)=$nB full +$pB partial [$sB] | c(dd per block, seat 1 write end)=$nC [to0 $sC0, to2 $sC2] 17(D+1)-1=$((17*nDepth+16))"
+@ file a_sweep.sh, last written 2026-10-05T00:02:41Z
+#!/bin/bash
+W=$1
+for d in 1 2 3 4 5 8 12 24; do for t in 1 2 3; do timeout 400 "$W/a.sh" "$W" "$d" "$t"; done; done
+echo SWEEP DONE
+@ file a_sweep.out, last written 2026-10-05T00:13:21Z
+D=1 trial=1 made_in=1s 17D-1=16 | a(dd per block, cable 0->1)=16 [intact] | b(one dd streaming, cable 0->2)=16 full +0 partial [intact] | c(dd per block, seat 1 write end)=33 [to0 intact, to2 intact] 17(D+1)-1=33
+D=1 trial=2 made_in=1s 17D-1=16 | a(dd per block, cable 0->1)=16 [intact] | b(one dd streaming, cable 0->2)=16 full +0 partial [intact] | c(dd per block, seat 1 write end)=33 [to0 intact, to2 intact] 17(D+1)-1=33
+D=1 trial=3 made_in=0s 17D-1=16 | a(dd per block, cable 0->1)=16 [intact] | b(one dd streaming, cable 0->2)=16 full +0 partial [intact] | c(dd per block, seat 1 write end)=33 [to0 intact, to2 intact] 17(D+1)-1=33
+D=2 trial=1 made_in=1s 17D-1=33 | a(dd per block, cable 0->1)=33 [intact] | b(one dd streaming, cable 0->2)=34 full +0 partial [intact] | c(dd per block, seat 1 write end)=50 [to0 intact, to2 intact] 17(D+1)-1=50
+D=2 trial=2 made_in=1s 17D-1=33 | a(dd per block, cable 0->1)=33 [intact] | b(one dd streaming, cable 0->2)=34 full +0 partial [intact] | c(dd per block, seat 1 write end)=50 [to0 intact, to2 intact] 17(D+1)-1=50
+D=2 trial=3 made_in=0s 17D-1=33 | a(dd per block, cable 0->1)=33 [intact] | b(one dd streaming, cable 0->2)=34 full +0 partial [intact] | c(dd per block, seat 1 write end)=50 [to0 intact, to2 intact] 17(D+1)-1=50
+D=3 trial=1 made_in=0s 17D-1=50 | a(dd per block, cable 0->1)=50 [intact] | b(one dd streaming, cable 0->2)=52 full +0 partial [intact] | c(dd per block, seat 1 write end)=67 [to0 intact, to2 intact] 17(D+1)-1=67
+D=3 trial=2 made_in=1s 17D-1=50 | a(dd per block, cable 0->1)=50 [intact] | b(one dd streaming, cable 0->2)=51 full +0 partial [intact] | c(dd per block, seat 1 write end)=67 [to0 intact, to2 intact] 17(D+1)-1=67
+D=3 trial=3 made_in=1s 17D-1=50 | a(dd per block, cable 0->1)=50 [intact] | b(one dd streaming, cable 0->2)=51 full +0 partial [intact] | c(dd per block, seat 1 write end)=67 [to0 intact, to2 intact] 17(D+1)-1=67
+D=4 trial=1 made_in=2s 17D-1=67 | a(dd per block, cable 0->1)=67 [intact] | b(one dd streaming, cable 0->2)=70 full +0 partial [intact] | c(dd per block, seat 1 write end)=84 [to0 intact, to2 intact] 17(D+1)-1=84
+D=4 trial=2 made_in=1s 17D-1=67 | a(dd per block, cable 0->1)=67 [intact] | b(one dd streaming, cable 0->2)=69 full +0 partial [intact] | c(dd per block, seat 1 write end)=84 [to0 intact, to2 intact] 17(D+1)-1=84
+D=4 trial=3 made_in=1s 17D-1=67 | a(dd per block, cable 0->1)=67 [intact] | b(one dd streaming, cable 0->2)=69 full +0 partial [intact] | c(dd per block, seat 1 write end)=84 [to0 intact, to2 intact] 17(D+1)-1=84
+D=5 trial=1 made_in=2s 17D-1=84 | a(dd per block, cable 0->1)=84 [intact] | b(one dd streaming, cable 0->2)=85 full +0 partial [intact] | c(dd per block, seat 1 write end)=101 [to0 intact, to2 intact] 17(D+1)-1=101
+D=5 trial=2 made_in=2s 17D-1=84 | a(dd per block, cable 0->1)=84 [intact] | b(one dd streaming, cable 0->2)=88 full +0 partial [intact] | c(dd per block, seat 1 write end)=101 [to0 intact, to2 intact] 17(D+1)-1=101
+D=5 trial=3 made_in=2s 17D-1=84 | a(dd per block, cable 0->1)=84 [intact] | b(one dd streaming, cable 0->2)=87 full +0 partial [intact] | c(dd per block, seat 1 write end)=101 [to0 intact, to2 intact] 17(D+1)-1=101
+D=8 trial=1 made_in=3s 17D-1=135 | a(dd per block, cable 0->1)=135 [intact] | b(one dd streaming, cable 0->2)=141 full +0 partial [intact] | c(dd per block, seat 1 write end)=152 [to0 intact, to2 intact] 17(D+1)-1=152
+D=8 trial=2 made_in=4s 17D-1=135 | a(dd per block, cable 0->1)=135 [intact] | b(one dd streaming, cable 0->2)=141 full +0 partial [intact] | c(dd per block, seat 1 write end)=152 [to0 intact, to2 intact] 17(D+1)-1=152
+D=8 trial=3 made_in=4s 17D-1=135 | a(dd per block, cable 0->1)=135 [intact] | b(one dd streaming, cable 0->2)=141 full +0 partial [intact] | c(dd per block, seat 1 write end)=152 [to0 intact, to2 intact] 17(D+1)-1=152
+D=12 trial=1 made_in=5s 17D-1=203 | a(dd per block, cable 0->1)=203 [intact] | b(one dd streaming, cable 0->2)=212 full +0 partial [intact] | c(dd per block, seat 1 write end)=220 [to0 intact, to2 intact] 17(D+1)-1=220
+D=12 trial=2 made_in=5s 17D-1=203 | a(dd per block, cable 0->1)=203 [intact] | b(one dd streaming, cable 0->2)=210 full +0 partial [intact] | c(dd per block, seat 1 write end)=220 [to0 intact, to2 intact] 17(D+1)-1=220
+D=12 trial=3 made_in=6s 17D-1=203 | a(dd per block, cable 0->1)=203 [intact] | b(one dd streaming, cable 0->2)=212 full +0 partial [intact] | c(dd per block, seat 1 write end)=220 [to0 intact, to2 intact] 17(D+1)-1=220
+D=24 trial=1 made_in=10s 17D-1=407 | a(dd per block, cable 0->1)=407 [intact] | b(one dd streaming, cable 0->2)=429 full +0 partial [intact] | c(dd per block, seat 1 write end)=424 [to0 intact, to2 intact] 17(D+1)-1=424
+D=24 trial=2 made_in=11s 17D-1=407 | a(dd per block, cable 0->1)=407 [intact] | b(one dd streaming, cable 0->2)=428 full +0 partial [intact] | c(dd per block, seat 1 write end)=424 [to0 intact, to2 intact] 17(D+1)-1=424
+D=24 trial=3 made_in=10s 17D-1=407 | a(dd per block, cable 0->1)=407 [intact] | b(one dd streaming, cable 0->2)=429 full +0 partial [intact] | c(dd per block, seat 1 write end)=424 [to0 intact, to2 intact] 17(D+1)-1=424
+SWEEP DONE
+@ report the measuring agent, of a.sh
+question: A. Cable capacity at depth: does 17 D - 1 hold at DEPTH 5, 8, 12 and 24?
+answer: Yes for a writer that puts one 4096 block at a time, exactly, every run. The number of 4096 blocks that went into lane 0 of a seat's cable before the next write waited, nobody reading, 3 runs at each depth: D=1:16,16,16; 2:33x3; 3:50x3; 4:67x3; 5:84x3; 8:135x3; 12:203x3; 24:407x3. That is 17D-1 in 24 of 24 runs, and it reproduces the SKILL's 16/33/50/67. Writing one dd per block into the seat's write end instead (its pipe, its two-outlet tee, then the cable) gave 17D+16 in 24 of 24: 33, 50, 67, 84, 101, 152, 220, 424. One streaming dd (a single dd if=file, cut off by SIGINT after 3 s, its 'records out' counted) got more than 17D-1 at every D past 1, and never more than 18D-2: D=1:16,16,16; 2:34,34,34; 3:52,51,51; 4:70,69,69; 5:85,88,87; 8:141,141,141; 12:212,210,212; 24:429,428,429. In every run the tail drained exactly n*4096 bytes, byte for byte what was written.
+mechanism: icc-patch/scripts/create:223-241 (vSeries): a cable is nDepth pipes, each after the first fed by a one-outlet vTee. icc-tee/scripts/create:114 makes each joint tee(1) ('exec tee -a -- "${aOuts[@]}" < "$pSrc/$iLane"'). Traced, GNU tee 9.4 reads up to 8192 at a time (5 reads of 8192 for a 40960-byte input). A lane is 16 pages (F_GETPIPE_SZ 65536). A tee stuck in a write holds what it read and has not yet written. When the writer leaves one page at a time, every tee reads 4096, so a cable holds 16D + (D-1) = 17D-1 pages. When the writer runs ahead, a tee can read 8192 into a full outlet and hold two pages, which gives 16D + 2(D-1) = 18D-2 at most. Mode c adds the write pipe (16) and the seat tee (1) at icc-patch/scripts/create:304-319. A tee waits on its fullest outlet (icc-tee/SKILL.md:66-70), so the two cables from one tee had to be drained together for the check to pass.
+method: Script a.sh, run 3 times per depth (DEPTH 1,2,3,4,5,8,12,24). Each run made '.../icc-patch/scripts/create mesh 3 2 D' and checked list said up. It walked cable 0->1 and cable 0->2 from the tail named in the map ('1 1 TAIL 0') back through each tee file's SRC to the head, and checked the chain length was D. Mode a: 'while timeout 1 dd if=src of=HEAD/0 bs=4096 skip=$n count=1 status=none; do n=$((n+1)); done'. Mode b: 'timeout -s INT 3 dd if=src of=HEAD/0 bs=4096', taking dd's records out. Mode c: mode a into seat 1's write end. Each mode then drained the tail(s) with 'timeout 3 dd bs=4096' and compared with cmp. Then patch remove. The source was /dev/urandom blocks. Conditions: Linux 6.18.44, 4 CPUs, root, coreutils 9.4, bash 5.2.21. A sibling agent's mesh-p load tests ran in the same container during most of the sweep: separate pipes, shared CPU. Not measured: LANES>2, lanes other than 0, ring-p cables, p's N*DEPTH merge cable, a streaming writer on an idle machine.
+confidence: high
+
+@ end 2026-10-05T00:13:21Z

@@ -32,7 +32,7 @@ out and in.
 
 ## The pieces
 
-    icc-bridge     the spelling  a payload as a message, and back (out, in shelved)
+    icc-bridge     the spelling  a message across the session line, and back
     icc-patch      the bay       shapes over N seats, and a map
     icc-frames     the payload   slice, carry, reassemble (shelved)
     icc-tee        the fitting   copy one pipe onto many

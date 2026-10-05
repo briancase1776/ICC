@@ -11,7 +11,8 @@
 #          off Patch's map and waited on without taking from them, cleanup
 #          armed before anything is made, a piece's directory made and
 #          printed at once, servers started deaf to a hangup, a lock named
-#          for its path, and the harnesses' cut-off and refusal checks.
+#          for its path, a git wire's tip fetched, and the harnesses'
+#          cut-off and refusal checks.
 #          Sourcing turns on extglob, which the lane glob needs when this
 #          file is read.
 #          A function that refuses says why on stderr and exits 1. Called
@@ -393,6 +394,56 @@ vLockOf() {
   esac
   osKey=$(printf '%s' "$pPath" | sha256sum) || exit 1
   pLock=/tmp/icc-lock-${osKey%% *}
+}
+
+##
+# @fn vWireTip()
+# @brief Fetch a git wire's tip into a scratch repo, or find the wire is
+#        not there yet.
+# @details Called, not captured, by icc-git's send, read and list, so the
+#          three reach a wire one way and refuse the same REFs. REF is a
+#          branch name, as git check-ref-format --branch takes one. Only
+#          the tip is fetched, --depth=1: a send builds on it, and a read
+#          needs nothing older. A fetch that fails is put to ls-remote:
+#          its exit 2 is a branch not on REMOTE, which no send has made
+#          yet. Its exit 0 is a branch made between the two, by a send
+#          racing this one, and it is fetched once more: a branch is made
+#          once, so a second fetch that fails is a fault. Anything else is
+#          a REMOTE not read. A fault is said in fetch's own words. Both
+#          run in the scratch repo, so a remote's name from the caller's
+#          own repo is not one. Called again in the same repo, it fetches
+#          the tip as it is now.
+# @param $1 pWork - the scratch repo, as git init --bare made it
+# @param $2 osRemote - the remote, as git fetch takes one: a URL or a path
+# @param $3 osRef - the branch the wire is on
+# @stderr the reason, on refusal
+# @global osWho - read, as nCount reads it
+# @global osTip - set, the tip's commit; empty when REF is not on REMOTE
+# @return 0; it exits 1 instead when REF is refused or REMOTE is not read
+##
+vWireTip() {
+  local pWork=$1
+  local osRemote=$2
+  local osRef=$3
+  local osSaid
+  local nStatus
+  local iFetch
+  git check-ref-format --branch "$osRef" > /dev/null || exit 1
+  osTip=
+  for iFetch in 1 2; do
+    if osSaid=$(git --git-dir="$pWork" fetch -q --depth=1 -- \
+        "$osRemote" "refs/heads/$osRef" 2>&1); then
+      osTip=$(git --git-dir="$pWork" rev-parse FETCH_HEAD) || exit 1
+      return 0
+    fi
+    nStatus=0
+    git --git-dir="$pWork" ls-remote --exit-code -- \
+      "$osRemote" "refs/heads/$osRef" > /dev/null 2>&1 || nStatus=$?
+    [ "$nStatus" -ne 2 ] || return 0
+    [ "$nStatus" -eq 0 ] || break
+  done
+  echo "${osWho:+$osWho: }$osSaid" >&2
+  exit 1
 }
 
 ##

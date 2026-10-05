@@ -1,0 +1,38 @@
+#!/bin/bash
+##
+# @file list
+# @brief Print every path on a git wire, one a line.
+# @details list REMOTE REF. The wire is the branch REF on REMOTE. Only
+#          REF's tip is fetched, into a scratch repo under /tmp that goes
+#          when list does. Every file on REF is printed by its path, one a
+#          line, in git's order: by the bytes of the path. A REF no send
+#          has made yet is a wire with nothing on it, and prints nothing.
+# @stdin nothing
+# @stdout the paths, one a line
+# @stderr the reason, on refusal
+# @exit 0 the paths are printed; 1 they are not
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+osRemote=${1:?usage: list REMOTE REF}
+osRef=${2:?usage: list REMOTE REF}
+set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+osWho=list
+# Armed before anything is made, as icc-lib's vArm says: the scratch repo
+# goes however list ends.
+pWork=
+vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
+pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
+git init -q --bare "$pWork" || exit 1
+vWireTip "$pWork" "$osRemote" "$osRef"
+[ -n "$osTip" ] || exit 0
+# NUL-ended into the scratch repo first, so a failure stops list before it
+# prints, and git quotes no path: a path with a byte git would quote is
+# printed as it is.
+git --git-dir="$pWork" ls-tree -r -z --name-only "$osTip" > "$pWork/paths" ||
+  exit 1
+tr '\0' '\n' < "$pWork/paths"

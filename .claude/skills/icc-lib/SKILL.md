@@ -5,9 +5,9 @@ description: >-
   a seat's lanes read off Patch's map and waited on without taking from
   them, cleanup armed before anything is made, a piece's directory made
   and printed at once, servers deaf to a hangup, a lock named for its
-  path, and the harnesses' cut-off and refusal checks. Not for a session
-  to call; the other ICC skills need it beside them, in the same skills
-  directory.
+  path, a git wire's tip fetched, and the harnesses' cut-off and refusal
+  checks. Not for a session to call; the other ICC skills need it beside
+  them, in the same skills directory.
 ---
 
 # icc-lib
@@ -58,6 +58,13 @@ into the other is ICC's to write.
                           and remove both do: set pPath to PATH as
                           readlink -m spells it, and pLock to its
                           directory; refuse a newline
+    vWireTip WORK REMOTE REF
+                          fetch the tip of branch REF on REMOTE into
+                          the scratch repo WORK, as icc-git's send,
+                          read and list all do: set osTip to it, or
+                          to nothing when REF is not on REMOTE yet;
+                          refuse a REF git refuses, and a REMOTE not
+                          read
     vCutOffAt SIGNAL STUB COMMAND...
                           for the harnesses: send SIGNAL to COMMAND
                           while it waits in STUB, and check it exits 1

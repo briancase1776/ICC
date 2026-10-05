@@ -1,0 +1,38 @@
+#!/bin/bash
+##
+# @file read
+# @brief Print a PATH on a git wire, byte for byte, as it is on REF now.
+# @details read REMOTE REF PATH. The wire is the branch REF on REMOTE.
+#          Only REF's tip is fetched, into a scratch repo under /tmp that
+#          goes when read does, and PATH's bytes are printed as they were
+#          sent. A REF not on REMOTE is refused, and so is a PATH not on
+#          REF. Nothing is taken off the wire: every reader reads the same
+#          bytes, as often as it likes.
+# @stdin nothing
+# @stdout PATH's bytes
+# @stderr the reason, on refusal
+# @exit 0 the bytes are printed; 1 they are not
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+osRemote=${1:?usage: read REMOTE REF PATH}
+osRef=${2:?usage: read REMOTE REF PATH}
+osPath=${3:?usage: read REMOTE REF PATH}
+set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+osWho=read
+# Armed before anything is made, as icc-lib's vArm says: the scratch repo
+# goes however read ends.
+pWork=
+vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
+pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
+git init -q --bare "$pWork" || exit 1
+vWireTip "$pWork" "$osRemote" "$osRef"
+if [ -z "$osTip" ]; then
+  echo "read: $osRef is not on $osRemote" >&2
+  exit 1
+fi
+git --git-dir="$pWork" cat-file blob "$osTip:$osPath" || exit 1

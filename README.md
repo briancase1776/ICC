@@ -36,11 +36,12 @@ rather than hangs when you ask for more than the wire holds.
     icc-tee        the fitting   copy one pipe onto many
     icc-merge      the fitting   copy many pipes onto one
     icc-pipes      the lane      a bidirectional channel at a path
+    icc-git        the post      a branch that keeps what is sent to it
     icc-lock       the key       a path to one holder at a time
     icc-lib        the bench     the functions every other piece sources
     icc-raspberry  the egg       test data: sixteen kinds, from urandom
 
-Nine Claude Code skills in one repo, under one `.claude/skills/`.
+Ten Claude Code skills in one repo, under one `.claude/skills/`.
 
 Bridge is the exception to the first paragraph: it carries a payload
 across the session line as a SendMessage or a Routine, and only a Claude

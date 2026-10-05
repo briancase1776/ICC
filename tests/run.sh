@@ -17,7 +17,7 @@
 ##
 set -eu
 cd "$(dirname "$0")/.."
-for osPiece in lib raspberry pipes lock frames tee merge patch bridge; do
+for osPiece in lib raspberry pipes lock git frames tee merge patch bridge; do
   printf '%-10s' "$osPiece"
   "tests/$osPiece.sh"
 done

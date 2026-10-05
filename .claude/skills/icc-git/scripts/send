@@ -1,0 +1,77 @@
+#!/bin/bash
+##
+# @file send
+# @brief Put stdin at a PATH new on a git wire, and print the commit.
+# @details send REMOTE REF PATH. The wire is the branch REF on REMOTE, and
+#          the first send makes it. The bytes on stdin go in as they are,
+#          as one file at PATH, in one commit on REF's tip, and the commit
+#          is pushed as a fast-forward. A PATH already on REF is refused:
+#          a path once sent is not changed by send. A push turned away
+#          because REF moved fetches the new tip, builds on it and pushes
+#          again, for as long as REF keeps moving; one turned away while
+#          REF has not moved is a fault, and git's words say why.
+#          It all happens in a scratch repo under /tmp, with an index of
+#          its own and no checkout, and the scratch repo goes when send
+#          does. The caller's own repo, branch and index are not touched.
+#          The commit is made as the caller's git config makes one, and
+#          its message is PATH.
+# @stdin the bytes, as many as there are
+# @stdout the commit, once it is on REF
+# @stderr the reason, on refusal
+# @exit 0 the bytes are on REF at PATH; 1 they are not
+#
+# Copyright (c) 2026 Brian Case. All rights reserved.
+# AI contributor: Claude (Anthropic)
+#
+# MIT Licence. See LICENCE.TXT
+##
+osRemote=${1:?usage: send REMOTE REF PATH}
+osRef=${2:?usage: send REMOTE REF PATH}
+osPath=${3:?usage: send REMOTE REF PATH}
+set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
+osWho=send
+# list prints a path a line, so a path with a newline in it would read as
+# two.
+case $osPath in
+  *$'\n'*)
+    echo "send: PATH has a newline in it" >&2
+    exit 1
+    ;;
+esac
+# Armed before anything is made, as icc-lib's vArm says: the scratch repo
+# goes however send ends.
+pWork=
+vArm '[ -n "$pWork" ] && rm -rf "$pWork" || :'
+pWork=$(mktemp -d /tmp/icc-git-XXXXXXXX)
+git init -q --bare "$pWork" || exit 1
+export GIT_INDEX_FILE=$pWork/index
+vWireTip "$pWork" "$osRemote" "$osRef"
+osBlob=$(git --git-dir="$pWork" hash-object -w --stdin) || exit 1
+while :; do
+  if [ -n "$osTip" ]; then
+    if git --git-dir="$pWork" cat-file -e "$osTip:$osPath" 2>/dev/null; then
+      echo "send: $osPath is on the wire already" >&2
+      exit 1
+    fi
+    git --git-dir="$pWork" read-tree "$osTip" || exit 1
+  else
+    git --git-dir="$pWork" read-tree --empty || exit 1
+  fi
+  # git refuses a path it would not check out, and a file where a
+  # directory is or a directory where a file is, and says so.
+  git --git-dir="$pWork" update-index --add \
+    --cacheinfo "100644,$osBlob,$osPath" || exit 1
+  osTree=$(git --git-dir="$pWork" write-tree) || exit 1
+  osCommit=$(git --git-dir="$pWork" commit-tree "$osTree" \
+    ${osTip:+-p "$osTip"} -m "$osPath") || exit 1
+  osSaid=$(git --git-dir="$pWork" push -q -- \
+    "$osRemote" "$osCommit:refs/heads/$osRef" 2>&1) && break
+  osWas=$osTip
+  vWireTip "$pWork" "$osRemote" "$osRef"
+  if [ "$osTip" = "$osWas" ]; then
+    echo "send: $osSaid" >&2
+    exit 1
+  fi
+done
+echo "$osCommit"

@@ -14,7 +14,8 @@
 #          every path that differed from it; an @ box line saying
 #          what machine; everything the calibration printed; and an @ end
 #          line saying when it ended, with what status, and the load then.
-#          A run cut off has no @ end. A record is a cal certificate: it is
+#          A run cut off has no @ end, and the run after it starts on a
+#          line of its own. A record is a cal certificate: it is
 #          committed, nothing in it is ever changed or taken out, and
 #          tests/cal.sh checks that.
 # @stdin nothing
@@ -58,6 +59,11 @@ vRun() {
     osChanged=
     osTree=unknown
   fi
+  # A run cut off, the machine gone from under it, can end halfway along a
+  # line. The next starts on a line of its own, so that line stays as it was
+  # left and this run's @ run is not read as part of it.
+  [ ! -s "$pRecord" ] || [ -z "$(tail -c 1 "$pRecord")" ] ||
+    echo >> "$pRecord"
   {
     echo "@ run $(date -u +%Y-%m-%dT%H:%M:%SZ) $osName $*"
     echo "@ icc $osCommit $osTree"

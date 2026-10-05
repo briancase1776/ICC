@@ -930,3 +930,71 @@ method: d.sh: a fresh 2-lane pipe. 200 runs per open mode with the hold up. Then
 confidence: high
 
 @ end 2026-10-05T00:15:53Z
+@ run 2026-10-05T16:57:04Z lane 
+@ icc f0c73846c81e8d7a047ee8c6175e75d46acfe3ed clean
+@ box 4 cpus, load 1.66 1.48 0.71, Linux 6.18.44-fc-v70 x86_64, bash 5.2.21(1)-release, coreutils 9.4, Intel(R) Xeon(R) Processor @ 2.80GHz
+ok   ended 10 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 10 no flag: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 100 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 100 no flag: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 1000 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 1000 no flag: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 4095 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 4095 no flag: 10 runs, 10 finished, 10 whole, 10 0+1 records out
+ok   ended 4096 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 1+0 records out
+ok   ended 4096 no flag: 10 runs, 10 finished, 10 whole, 10 1+0 records out
+ok   ended 4097 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 1+1 records out
+ok   ended 4097 no flag: 10 runs, 10 finished, 10 whole, 10 1+1 records out
+ok   ended 8191 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 1+1 records out
+ok   ended 8191 no flag: 10 runs, 10 finished, 10 whole, 10 1+1 records out
+ok   ended 8192 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 2+0 records out
+ok   ended 8192 no flag: 10 runs, 10 finished, 10 whole, 10 2+0 records out
+ok   ended 8193 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 2+1 records out
+ok   ended 8193 no flag: 10 runs, 10 finished, 10 whole, 10 2+1 records out
+ok   ended 12288 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 3+0 records out
+ok   ended 12288 no flag: 10 runs, 10 finished, 10 whole, 10 3+0 records out
+ok   ended 50000 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 12+1 records out
+ok   ended 50000 no flag: 10 runs, 10 finished, 10 whole, 10 12+1 records out
+ok   ended 65535 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 15+1 records out
+ok   ended 65535 no flag: 10 runs, 10 finished, 10 whole, 10 15+1 records out
+ok   ended 65536 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 16+0 records out
+ok   ended 65536 no flag: 10 runs, 10 finished, 10 whole, 10 16+0 records out
+ok   ended 65537 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 16+1 records out
+ok   ended 65537 no flag: 10 runs, 10 finished, 10 whole, 10 16+1 records out
+ok   ended 100000 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 24+1 records out
+ok   ended 100000 no flag: 10 runs, 10 finished, 10 whole, 10 24+1 records out
+ok   ended 131072 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 32+0 records out
+ok   ended 131072 no flag: 10 runs, 10 finished, 10 whole, 10 32+0 records out
+ok   ended 200000 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 48+1 records out
+ok   ended 200000 no flag: 10 runs, 10 finished, 10 whole, 10 48+1 records out
+ok   ended 262144 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 64+0 records out
+ok   ended 262144 no flag: 10 runs, 10 finished, 10 whole, 10 64+0 records out
+ok   ended 299999 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 73+1 records out
+ok   ended 299999 no flag: 10 runs, 10 finished, 10 whole, 10 73+1 records out
+ok   ended 300000 iflag=fullblock: 10 runs, 10 finished, 10 whole, 10 73+1 records out
+ok   ended 300000 no flag: 10 runs, 10 finished, 10 whole, 10 73+1 records out
+ok   pieces of 100, iflag=fullblock: 10 runs, 10 whole, 10 2+1 out
+ok   pieces of 100, no flag: 10 runs, 10 whole, 10 0+100 out
+ok   lane fed 2000, iflag=fullblock: 10 runs, 10 went on 0 and lost 2000, 0+0 records out; on, after the cut, left, out: 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0 0/0/0/0+0
+ok   lane fed 2000, no flag: 10 runs, 10 went on 2000 and lost 0, 0+20 records out; on, after the cut, left, out: 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20 2000/0/0/0+20
+ok   lane fed 6000, iflag=fullblock: 10 runs, 10 went on 4096 and lost 1904, 1+0 records out; on, after the cut, left, out: 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0 4096/0/0/1+0
+ok   lane fed 6000, no flag: 10 runs, 10 went on 6000 and lost 0, 0+60 records out; on, after the cut, left, out: 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60 6000/0/0/0+60
+ok   exact 1: 10 runs, both whole and nothing left in 10
+ok   exact 4095: 10 runs, both whole and nothing left in 10
+ok   exact 4096: 10 runs, both whole and nothing left in 10
+ok   exact 4097: 10 runs, both whole and nothing left in 10
+ok   exact 100000: 10 runs, both whole and nothing left in 10
+ok   dd count=1 after writes of 1 and 4096: took 4096, left 1
+ok   pages, writes of 4096: 10 runs, 10 held 65536; held and drained: 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536 65536/65536
+ok   pages, writes of 100: 10 runs, 10 held 64000; held and drained: 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000 64000/64000
+ok   pages, writes of 2049: 10 runs, 10 held 32784; held and drained: 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784 32784/32784
+ok   pages, one of 100, then 4096s: 10 runs, 10 held 61540; held and drained: 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540 61540/61540
+ok   pages, one of 4096, 100 read off, then 100s: 10 runs, 10 held 63996; held and drained: 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996 63996/63996
+ok   open <, hold up: 200 tries, 200 opened
+ok   open >, hold up: 200 tries, 200 opened
+ok   open <>, hold up: 200 tries, 200 opened
+ok   open <, hold down: 10 tries, 0 opened
+ok   open >, hold down: 10 tries, 0 opened
+ok   open <>, hold down: 10 tries, 10 opened
+0 off
+@ end 2026-10-05T17:01:44Z status 0, load 0.37 0.73 0.58

@@ -103,3 +103,32 @@ method: Script a.sh, run 3 times per depth (DEPTH 1,2,3,4,5,8,12,24). Each run m
 confidence: high
 
 @ end 2026-10-05T00:13:21Z
+@ run 2026-10-05T17:01:44Z cable 
+@ icc f0c73846c81e8d7a047ee8c6175e75d46acfe3ed clean
+@ box 4 cpus, load 0.37 0.73 0.58, Linux 6.18.44-fc-v70 x86_64, bash 5.2.21(1)-release, coreutils 9.4, Intel(R) Xeon(R) Processor @ 2.80GHz
+ok   depth 1 run 1: a dd a block, 16 of 16 at the cable and 33 of 33 at the write end; one dd streaming, 16+0 of 16 to 16; up 1, deep 1, given back whole 1 1 1
+ok   depth 1 run 2: a dd a block, 16 of 16 at the cable and 33 of 33 at the write end; one dd streaming, 16+0 of 16 to 16; up 1, deep 1, given back whole 1 1 1
+ok   depth 1 run 3: a dd a block, 16 of 16 at the cable and 33 of 33 at the write end; one dd streaming, 16+0 of 16 to 16; up 1, deep 1, given back whole 1 1 1
+ok   depth 2 run 1: a dd a block, 33 of 33 at the cable and 50 of 50 at the write end; one dd streaming, 33+0 of 33 to 34; up 1, deep 1, given back whole 1 1 1
+ok   depth 2 run 2: a dd a block, 33 of 33 at the cable and 50 of 50 at the write end; one dd streaming, 34+0 of 33 to 34; up 1, deep 1, given back whole 1 1 1
+ok   depth 2 run 3: a dd a block, 33 of 33 at the cable and 50 of 50 at the write end; one dd streaming, 34+0 of 33 to 34; up 1, deep 1, given back whole 1 1 1
+ok   depth 3 run 1: a dd a block, 50 of 50 at the cable and 67 of 67 at the write end; one dd streaming, 52+0 of 50 to 52; up 1, deep 1, given back whole 1 1 1
+ok   depth 3 run 2: a dd a block, 50 of 50 at the cable and 67 of 67 at the write end; one dd streaming, 52+0 of 50 to 52; up 1, deep 1, given back whole 1 1 1
+ok   depth 3 run 3: a dd a block, 50 of 50 at the cable and 67 of 67 at the write end; one dd streaming, 51+0 of 50 to 52; up 1, deep 1, given back whole 1 1 1
+ok   depth 4 run 1: a dd a block, 67 of 67 at the cable and 84 of 84 at the write end; one dd streaming, 69+0 of 67 to 70; up 1, deep 1, given back whole 1 1 1
+ok   depth 4 run 2: a dd a block, 67 of 67 at the cable and 84 of 84 at the write end; one dd streaming, 69+0 of 67 to 70; up 1, deep 1, given back whole 1 1 1
+ok   depth 4 run 3: a dd a block, 67 of 67 at the cable and 84 of 84 at the write end; one dd streaming, 70+0 of 67 to 70; up 1, deep 1, given back whole 1 1 1
+ok   depth 5 run 1: a dd a block, 84 of 84 at the cable and 101 of 101 at the write end; one dd streaming, 88+0 of 84 to 88; up 1, deep 1, given back whole 1 1 1
+ok   depth 5 run 2: a dd a block, 84 of 84 at the cable and 101 of 101 at the write end; one dd streaming, 87+0 of 84 to 88; up 1, deep 1, given back whole 1 1 1
+ok   depth 5 run 3: a dd a block, 84 of 84 at the cable and 101 of 101 at the write end; one dd streaming, 88+0 of 84 to 88; up 1, deep 1, given back whole 1 1 1
+ok   depth 8 run 1: a dd a block, 135 of 135 at the cable and 152 of 152 at the write end; one dd streaming, 141+0 of 135 to 142; up 1, deep 1, given back whole 1 1 1
+ok   depth 8 run 2: a dd a block, 135 of 135 at the cable and 152 of 152 at the write end; one dd streaming, 141+0 of 135 to 142; up 1, deep 1, given back whole 1 1 1
+ok   depth 8 run 3: a dd a block, 135 of 135 at the cable and 152 of 152 at the write end; one dd streaming, 142+0 of 135 to 142; up 1, deep 1, given back whole 1 1 1
+ok   depth 12 run 1: a dd a block, 203 of 203 at the cable and 220 of 220 at the write end; one dd streaming, 213+0 of 203 to 214; up 1, deep 1, given back whole 1 1 1
+ok   depth 12 run 2: a dd a block, 203 of 203 at the cable and 220 of 220 at the write end; one dd streaming, 214+0 of 203 to 214; up 1, deep 1, given back whole 1 1 1
+ok   depth 12 run 3: a dd a block, 203 of 203 at the cable and 220 of 220 at the write end; one dd streaming, 212+0 of 203 to 214; up 1, deep 1, given back whole 1 1 1
+ok   depth 24 run 1: a dd a block, 407 of 407 at the cable and 424 of 424 at the write end; one dd streaming, 428+0 of 407 to 430; up 1, deep 1, given back whole 1 1 1
+ok   depth 24 run 2: a dd a block, 407 of 407 at the cable and 424 of 424 at the write end; one dd streaming, 428+0 of 407 to 430; up 1, deep 1, given back whole 1 1 1
+ok   depth 24 run 3: a dd a block, 407 of 407 at the cable and 424 of 424 at the write end; one dd streaming, 428+0 of 407 to 430; up 1, deep 1, given back whole 1 1 1
+0 off
+@ end 2026-10-05T17:09:47Z status 0, load 0.66 0.45 0.46

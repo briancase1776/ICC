@@ -74,12 +74,13 @@ done
 # Until the merge is whole it is not a merge: a create that cannot finish
 # takes its copier and its directory with it, and exits 1. Armed before
 # anything is made, as icc-lib's vArm says. pidCopier stays empty until
-# there is a copier. It is killed from here and not from the pid file,
+# there is a copier. It is stopped from here, with the dd it may have
+# running, as icc-lib's vStopCopier says, and not from the pid file,
 # because the file can be gone by then: a remove can take this directory
 # while an open below is still waiting.
 pDir=
 pidCopier=
-vArm '[ -z "$pidCopier" ] || kill "$pidCopier" 2>/dev/null || :
+vArm '[ -z "$pidCopier" ] || vStopCopier "$pidCopier"
       [ -n "$pDir" ] && rm -rf "$pDir" || :
       exit 1'
 pMakeDir icc-merge
@@ -144,8 +145,10 @@ nPerSrc=${#aOuts[@]}
           read -t 0 -u "$fdIn" || continue
           # Block after block, each at most PIPE_BUF so it lands whole on the
           # outlet, each written before the next is read, up to 16, a lane's
-          # 64K in pages: no turn gives an outlet lane more than it holds, so
-          # the copier goes on to the next lane before it waits on a full one.
+          # 64K in pages: a turn never fills an outlet lane that was empty
+          # when it began, so a payload put on while the outlet was drained
+          # cannot fill one lane and wait there with the others empty. A lane
+          # that already holds unread bytes can still fill, and stall it.
           # iflag=nonblock makes the read that finds the lane empty fail, in
           # dd's words, the one failure the copier goes on from; any other
           # could not write the outlet, and a dd that read nothing met the end

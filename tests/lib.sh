@@ -20,8 +20,9 @@
 #          off in a command it names, passing one that printed what it made
 #          and failing one that printed nothing; a lock named one way for
 #          every spelling of its path, and a newline refused; a refusal
-#          passed and a success stopped; and a calibration's case marked ok
-#          or off, and the off ones counted. Runs in a directory of its own.
+#          passed and a success stopped; a copier stopped with the child
+#          it has running; and a calibration's case marked ok or off, and
+#          the off ones counted. Runs in a directory of its own.
 # @stdin nothing
 # @stdout ok, once every check has passed
 # @stderr whatever a failing check printed
@@ -232,6 +233,24 @@ pHere=$(pwd -P)
 # vRefused passes a command that is refused, and stops at one that is not.
 (vRefused false)
 (vRefused true) 2>/dev/null && exit 1
+# vStopCopier takes a copier and the child it has running, where a TERM
+# alone leaves the child, and says nothing of a pid that is gone.
+bash -c 'sleep 30; :' &
+pidCopier=$!
+sleep 0.2
+pidChild=$(pgrep -P "$pidCopier")
+[ -n "$pidChild" ]
+vStopCopier "$pidCopier"
+wait "$pidCopier" 2>/dev/null || :
+sleep 0.2
+case $(ps -o stat= -p "$pidChild" 2>/dev/null) in
+  ''|Z*)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+vStopCopier "$pidCopier"
 # vFound marks a case ok or off, joins what it found into one line, and
 # counts the off ones.
 nOff=0

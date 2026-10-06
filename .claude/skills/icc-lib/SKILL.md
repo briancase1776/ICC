@@ -4,8 +4,8 @@ description: >-
   The bash functions every ICC skill sources: counts and pipes checked,
   a seat's lanes read off Patch's map and waited on without taking from
   them, cleanup armed before anything is made, a piece's directory made
-  and printed at once, servers deaf to a hangup, a lock named for its
-  path, a git wire's tip fetched, the harnesses' cut-off and refusal
+  and printed at once, servers deaf to a hangup, a copier stopped with
+  the dd it has running, a lock named for its path, a git wire's tip fetched, the harnesses' cut-off and refusal
   checks, and the calibrations' ok and off. Not for a session to call;
   the other ICC skills need it beside them, in the same skills directory.
 ---
@@ -57,6 +57,10 @@ script.
                           print it at once, before anything goes in it
     vServe                first thing in a hold or a copier: no traps,
                           and deaf to HUP, as a server under nohup is
+    vStopCopier PID       stop a copier so that neither it nor the dd it
+                          has running moves another byte: STOP it, KILL
+                          its children, TERM it, CONT it, as Merge's
+                          create and remove both do
     vLockOf PATH          name the lock on PATH, as icc-lock's create
                           and remove both do: set pPath to PATH as
                           readlink -m spells it, and pLock to its

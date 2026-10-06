@@ -26,6 +26,7 @@
 ##
 pArg=${1:?usage: remove DIR}
 set -eu
+source "$(dirname "$0")/../../icc-lib/scripts/lib"
 # Canonical first. A path is what it resolves to, not how it is spelled, and
 # the test below is about the path: /tmp/icc-merge-XXXXXXXX/../tree matches
 # the name and is not one.
@@ -82,16 +83,11 @@ while read -r pidCopier; do
   # file, and it is still ours if it has the first SRC's lane SIDE on fd 0.
   # That mark is not this merge's alone -- a second merge from the same inlet
   # has a copier that looks the same -- so it is the pid file that says which
-  # is ours. The copier forks a dd for every turn it gives a lane, and a dd
-  # still running when the copier dies is left behind, waiting on a full
-  # outlet for as long as nobody reads it. So the copier is stopped where it
-  # stands, so it forks nothing more, its dd is killed, and then the copier.
+  # is ours. It is stopped as icc-lib's vStopCopier says, with the dd it has
+  # running, which a TERM alone would leave to go on with its turn.
   [ "$(readlink "/proc/$pidCopier/fd/0" 2>/dev/null)" = \
     "${aSrcs[0]}/$eSide" ] || continue
-  kill -STOP "$pidCopier" 2>/dev/null || continue
-  pkill -KILL -P "$pidCopier" 2>/dev/null || :
-  kill -TERM "$pidCopier" 2>/dev/null || :
-  kill -CONT "$pidCopier" 2>/dev/null || :
+  vStopCopier "$pidCopier"
 done < "$pDir/pid"
 # merge and pid are what create made; take those and nothing else. rmdir
 # refuses a directory with anything left in it, so a wrong path costs a

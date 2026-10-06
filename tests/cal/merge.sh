@@ -2,7 +2,8 @@
 ##
 # @file merge.sh
 # @brief Calibrate what Patch's SKILL.md says of a tee into p's merge, with
-#        load added and without.
+#        load added and without, and what Merge's says of how fast it
+#        moves 4 MiB.
 # @details merge.sh [LOAD [TRIALS]]. LOAD, a count, default 0, is how many
 #          busy loops run for every CPU throughout; TRIALS, a count more
 #          than zero, default 100, how many trials each case has. A case
@@ -32,7 +33,8 @@
 # @stdin nothing
 # @stdout one line per trial, and one per case
 # @stderr whatever failed outside a trial
-# @exit 0 every case came out as Patch says; 1 one did not
+# @exit 0 every case came out as Patch's and Merge's SKILL.md say; 1 one
+#       did not
 #
 # Copyright (c) 2026 Brian Case. All rights reserved.
 # AI contributor: Claude (Anthropic)
@@ -299,7 +301,8 @@ vRate() {
     timeout 120 head -c 4194304 "$pOutlet/0" > "$pWork/got" &
     pidRead=$!
     nMs=${EPOCHREALTIME//[!0-9]/}
-    dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 status=none
+    timeout 120 dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 \
+      status=none || :
     wait "$pidRead" || :
     nMs=$(((${EPOCHREALTIME//[!0-9]/} - nMs) / 1000))
     aMs+=("$nMs")
@@ -315,7 +318,8 @@ vRate() {
     "${aInlets[0]}")
   timeout 120 head -c 4194304 "$pOutlet/0" > "$pWork/got" &
   pidRead=$!
-  dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 status=none
+  timeout 120 dd if="$pWork/big" of="${aInlets[0]}/0" bs=4096 status=none ||
+    :
   wait "$pidRead" || :
   ! cmp -s "$pWork/big" "$pWork/got" || bCounted=1
   nForked=$(wc -l < "$pWork/bin/forked")

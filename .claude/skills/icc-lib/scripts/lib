@@ -10,9 +10,10 @@
 #          it one way: counts checked, pipes checked, a seat's lanes read
 #          off Patch's map and waited on without taking from them, cleanup
 #          armed before anything is made, a piece's directory made and
-#          printed at once, servers started deaf to a hangup, a lock named
-#          for its path, a git wire's tip fetched, the harnesses' cut-off
-#          and refusal checks, and the calibrations' ok and off.
+#          printed at once, servers started deaf to a hangup, a copier
+#          stopped with the dd it has running, a lock named for its path,
+#          a git wire's tip fetched, the harnesses' cut-off and refusal
+#          checks, and the calibrations' ok and off.
 #          Sourcing turns on extglob, which the lane glob needs when this
 #          file is read.
 #          A function that refuses says why on stderr and exits 1. Called
@@ -367,6 +368,28 @@ pMakeDir() {
 vServe() {
   trap - EXIT INT TERM
   trap '' HUP
+}
+
+##
+# @fn vStopCopier()
+# @brief Stop a copier and the dd it has running, so that neither moves
+#        another byte.
+# @details A copier that forks a dd for each turn and is ended by a TERM
+#          alone leaves that dd behind, and once its outlet is read the dd
+#          goes on with its turn, up to 16 blocks off an inlet whose merge
+#          is gone. So the copier is stopped where it stands, so it forks
+#          nothing more, its children are killed, then it is sent TERM, and
+#          only then let go on, to die of it. As Merge's create and remove
+#          both stop theirs.
+# @param $1 pidCopier - the copier's pid
+# @return 0, whether there was such a process or not
+##
+vStopCopier() {
+  local pidCopier=$1
+  kill -STOP "$pidCopier" 2>/dev/null || return 0
+  pkill -KILL -P "$pidCopier" 2>/dev/null || :
+  kill -TERM "$pidCopier" 2>/dev/null || :
+  kill -CONT "$pidCopier" 2>/dev/null || :
 }
 
 ##
